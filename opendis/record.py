@@ -3,8 +3,10 @@
 This module defines classes for various record types used in DIS PDUs.
 """
 
+from abc import abstractmethod
 from collections.abc import Sequence
 from ctypes import _SimpleCData, BigEndianStructure, c_uint
+from typing import Protocol, TypeVar, runtime_checkable
 from .types import (
     bf_enum,
     bf_int,
@@ -13,6 +15,32 @@ from .types import (
 
 from .DataInputStream import DataInputStream
 from .DataOutputStream import DataOutputStream
+
+
+R = TypeVar("R", bound="Record")
+
+
+@runtime_checkable
+class Record(Protocol):
+    """Abstract base class for all record types.
+
+    All record types must implement the following methods:
+    - marshalledSize(): Returns the size of the record in bytes when serialized.
+    - serialize(outputStream): Serializes the record to the given DataOutputStream.
+    - parse(inputStream): Parses the record from the given DataInputStream.
+    """
+
+    @abstractmethod
+    def marshalledSize(self) -> int:
+        raise NotImplementedError
+
+    @abstractmethod
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        """Serialize this record to the given output stream."""
+
+    @abstractmethod
+    def parse(self, inputStream: DataInputStream) -> None:
+        """Parse a record from the given input stream."""
 
 
 def _bitfield(
@@ -52,7 +80,7 @@ def _bitfield(
     return Bitfield
 
 
-class NetId:
+class NetId(Record):
     """Annex C, Table C.5
 
     Represents an Operational Net in the format of NXX.XYY, where:
@@ -98,7 +126,7 @@ class NetId:
         self.padding = record_bitfield.padding
 
 
-class SpreadSpectrum:
+class SpreadSpectrum(Record):
     """6.2.59 Modulation Type Record, Table 90
 
     Modulation used for radio transmission is characterized in a generic
