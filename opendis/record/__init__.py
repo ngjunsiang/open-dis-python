@@ -890,7 +890,7 @@ __SVTypeMap: dict[enum32, type["StandardVariableRecord"]] = {
     4500: DirectedEnergyDamageDescription,
     # Add other known SV record types here as they are implemented
 }
-def getSVClass(recordType: enum32, expectedType: type["StandardVariableRecord"] | None) -> type["StandardVariableRecord"]:
+def getSVClass(recordType: enum32, expectedType: type["StandardVariableRecord"] = StandardVariableRecord) -> type["StandardVariableRecord"]:
     """Return the StandardVariableRecord subclass corresponding to the given
     recordType, or UnknownStandardVariable if the recordType is not recognized.
     The enumerations for this getter function are from Variable Record Types
