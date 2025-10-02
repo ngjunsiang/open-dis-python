@@ -4,6 +4,8 @@ This module defines classes for various record types used in DIS PDUs.
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import MutableSequence
+from typing import Any, Generic, Sequence, TypeVar, overload
 
 from . import bitfield
 from ..stream import DataInputStream, DataOutputStream
@@ -19,6 +21,8 @@ from ..types import (
     uint16,
     uint32,
 )
+
+SV = TypeVar("SV", bound="StandardVariableRecord")
 
 
 class EulerAngles:
@@ -564,3 +568,179 @@ class HighFidelityHAVEQUICKRadio(VariableTransmitterParametersRecord):
         self.wod4 = inputStream.read_uint32()
         self.wod5 = inputStream.read_uint32()
         self.wod6 = inputStream.read_uint32()
+
+
+class StandardVariableRecord(ABC):
+    """6.2.83 Standard Variable Specification Record
+    
+    A Standard Variable (SV) record may be applicable to more than one PDU
+    Type, and the issuance and receipt rules may be different for different
+    PDU Types.
+    """
+    recordType: enum32  # [UID 66]
+
+    @property
+    def length(self) -> uint16:
+        return self.marshalledSize()
+
+    @abstractmethod
+    def marshalledSize(self) -> int:
+        """Return the size of the record when serialized."""
+        return 6  # recordType and length fields only
+
+    @abstractmethod
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        """Serialize the record to the output stream.
+        
+        Subclasses must call this method from the parent class to write
+        the recordType and length fields.
+        """
+        outputStream.write_uint32(self.recordType)
+        outputStream.write_uint16(self.length)
+
+    @abstractmethod
+    def parse(self,
+              inputStream: DataInputStream,
+              bytelength: int | None = None) -> None:
+        """Parse the record from the input stream.
+        
+        The recordType and length are assumed to have been read, so as to
+        identify the type of SV record to be parsed, before this method is
+        called.
+
+        The bytelength parameter serves as a check that the correct number of
+        bytes have been read. If it is None, no check is performed.
+        """
+        # Validate bytelength argument
+        if bytelength is None:
+            raise TypeError(
+                f"bytelength must be specified for {type(self).__name__}"
+            )
+        if bytelength <= 6:
+            raise ValueError("bytelength too small")
+
+
+class UnknownStandardVariable(StandardVariableRecord):
+    """Placeholder for unknown or unimplemented standard variable types."""
+    recordType = 0  # Not Used (Invalid Value)
+
+    def __init__(self,
+                 recordType: enum32 = 0,  # [UID 66]
+                 data: bytes = b""):
+        self.recordType = recordType
+        self.data = data
+
+    @property
+    def length(self) -> uint16:
+        return self.marshalledSize()
+
+    def marshalledSize(self) -> int:
+        return super().marshalledSize() + len(self.data)
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        super().serialize(outputStream)
+        outputStream.write_bytes(self.data)
+
+    def parse(self,
+              inputStream: DataInputStream,
+              bytelength: int | None = None) -> None:
+        """Parse the record from the input stream.
+        
+        The recordType and length are assumed to have been read, so as to
+        identify the type of SV record to be parsed, before this method is
+        called.
+
+        The bytelength parameter serves as a check that the correct number of
+        bytes have been read. If it is None, no check is performed.
+        """
+        # Call parent class parse() to validate arguments
+        assert bytelength is not None  # for static type checkers
+        super().parse(inputStream, bytelength)
+        self.data = inputStream.read_bytes(
+            bytelength - super().marshalledSize()
+        )
+
+
+class StandardVariables(MutableSequence[SV], Generic[SV]):
+    """6.2.83 Standard Variable Specification record
+    
+    Any number of Standard Variable (SV) records, with either the same or
+    different Record Types, may be included in a Standard Variable
+    Specification record section up to the maximum size of the PDU. Record
+    Types that are not recognized by the receiving simulation shall be ignored.
+
+    The first SV record of a Standard Variable Specification record shall start
+    on a 64-bit boundary. Therefore, the Number of Standard Variable Records
+    field starts 16 bits before a 64-bit boundary.
+
+    This class implements the MutableSequence interface to support Python list
+    operations.
+    """
+
+    def __init__(self, standardVariables: Sequence[SV] | None = None):
+        self._standardVariables = (
+            list(standardVariables) if standardVariables else []
+        )
+
+    @property
+    def standardVariableRecordCount(self) -> uint16:
+        return len(self)
+    
+    def __delitem__(self, index: int | slice[Any, Any, Any]) -> None:
+        del self._standardVariables[index]
+    
+    @overload
+    def __getitem__(self, index: int) -> SV: ...
+    @overload
+    def __getitem__(self, index: slice) -> "StandardVariables[SV]": ...    
+    def __getitem__(self, index: int | slice) -> SV | "StandardVariables[SV]":
+        match index:
+            case int():
+                return self._standardVariables[index]
+            case slice():
+                return type(self)(self._standardVariables[index])
+        raise TypeError("index must be int or slice")
+
+    @overload
+    def __setitem__(self, key: int, value: SV) -> None: ...
+    @overload
+    def __setitem__(self, key: slice, value: Sequence[SV]) -> None: ...    
+    def __setitem__(self,  # pyright: ignore[reportIncompatibleMethodOverride]
+                    key: int | slice,
+                    value: SV | Sequence[SV]) -> None:
+        match key, value:
+            case int(), StandardVariableRecord() | slice(), Sequence():
+                self._standardVariables[key] = value
+        raise TypeError(
+            "key of type {} must be set to value of type {}".format(
+                type(key).__name__,
+                type(value).__name__
+            )
+        )
+    
+    def __len__(self) -> int:
+        return len(self._standardVariables)
+    
+    def insert(self, index: int, value: SV) -> None:
+        if not isinstance(value, StandardVariableRecord):
+            raise TypeError(
+                f"{type(value)}: not a subclass StandardVariableRecord"
+            )
+        self._standardVariables.insert(index, value)
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        """serialize the class"""
+        outputStream.write_uint16(self.standardVariableRecordCount)
+        for sv in self._standardVariables:
+            sv.serialize(outputStream)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        """Parse a message. This may recursively call embedded objects."""
+        self._standardVariables = []
+        standardVariableRecordCount = inputStream.read_uint16()
+        for _ in range(0, standardVariableRecordCount):
+            recordType = inputStream.read_uint32()
+            recordLength = inputStream.read_uint16()
+            sv = UnknownStandardVariable(recordType)
+            sv.parse(inputStream, recordLength)
+            self._standardVariables.append(sv)
