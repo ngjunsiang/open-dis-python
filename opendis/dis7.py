@@ -6896,10 +6896,10 @@ class ActionResponsePdu(SimulationManagementFamilyPdu):
 
 
 class EntityDamageStatusPdu(WarfareFamilyPdu):
-    """Section 7.3.5
+    """7.3.5 Entity Damage Status PDU
     
     Shall be used to communicate detailed damage information sustained by an
-    entity regardless of the source of the damage. COMPLETE
+    entity regardless of the source of the damage.
     """
     pduType: enum8 = 69  # [UID 4]
 
