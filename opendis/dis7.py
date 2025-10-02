@@ -6966,7 +6966,10 @@ class EntityDamageStatusPdu(WarfareFamilyPdu):
         for _ in range(0, damageDescriptionCount):
             recordType = inputStream.read_uint32()
             recordLength = inputStream.read_uint16()
-            sv = UnknownDamageDescription(recordType)
+            if recordType == 4500:
+                sv = DirectedEnergyDamageDescription()
+            else:
+                sv = UnknownDamageDescription(recordType)
             sv.parse(inputStream, recordLength)
             self.damageDescriptions.append(sv)
 

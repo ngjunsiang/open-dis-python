@@ -17,6 +17,7 @@ from ..types import (
     bf_int,
     bf_uint,
     float32,
+    struct8,
     uint8,
     uint16,
     uint32,
@@ -921,3 +922,59 @@ class UnknownDamageDescription(DamageDescriptionRecord):
         self.data = inputStream.read_bytes(
             bytelength - super().marshalledSize()
         )
+
+
+class DirectedEnergyDamageDescription(DamageDescriptionRecord):
+    """6.2.15.2 Directed Energy Damage Description record"""
+    recordType: enum32 = 4500
+
+    def __init__(self,
+                 damageLocation: Vector3Float | None = None,
+                 damageDiameter: float32 = 0.0,
+                 temperature: float32 = 0.0,
+                 componentIdentification: enum8 = 0,
+                 componentDamageStatus: enum8 = 0,
+                 componentVisualDamageStatus: struct8 = 0,
+                 componentVisualSmokeColor: enum8 = 0,
+                 eventID: EventIdentifier | None = None):
+        self.padding: uint16 = 0
+        self.damageLocation = damageLocation or Vector3Float()
+        self.damageDiameter = damageDiameter
+        self.temperature = temperature
+        self.componentIdentification = componentIdentification
+        self.componentDamageStatus = componentDamageStatus
+        self.componentVisualDamageStatus = componentVisualDamageStatus
+        self.componentVisualSmokeColor = componentVisualSmokeColor
+        self.eventID = eventID or EventIdentifier()
+        self.padding2: uint16 = 0
+    
+    def marshalledSize(self) -> enum8:
+        return 40
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        super().serialize(outputStream)
+        outputStream.write_uint16(self.padding)
+        self.damageLocation.serialize(outputStream)
+        outputStream.write_float32(self.damageDiameter)
+        outputStream.write_float32(self.temperature)
+        outputStream.write_uint8(self.componentIdentification)
+        outputStream.write_uint8(self.componentDamageStatus)
+        outputStream.write_uint8(self.componentVisualDamageStatus)
+        outputStream.write_uint8(self.componentVisualSmokeColor)
+        self.eventID.serialize(outputStream)
+        outputStream.write_uint16(self.padding2)
+
+    def parse(self,
+              inputStream: DataInputStream,
+              bytelength: int | None = None) -> None:
+        super().parse(inputStream)
+        self.padding = inputStream.read_uint16()
+        self.damageLocation.parse(inputStream)
+        self.damageDiameter = inputStream.read_float32()
+        self.temperature = inputStream.read_float32()
+        self.componentIdentification = inputStream.read_uint8()
+        self.componentDamageStatus = inputStream.read_uint8()
+        self.componentVisualDamageStatus = inputStream.read_uint8()
+        self.componentVisualSmokeColor = inputStream.read_uint8()
+        self.eventID.parse(inputStream)
+        self.padding2 = inputStream.read_uint16()
