@@ -874,3 +874,50 @@ class EventIdentifier:
 
 
 class DamageDescriptionRecord(StandardVariableRecord):
+    """6.2.15 Damage Description records
+    
+    Damage Description records shall use the Standard Variable record format of
+    the Standard Variable Specification record (see 6.2.83).
+    New Damage Description records may be defined at some future date as needed.
+    """
+
+
+class UnknownDamageDescription(DamageDescriptionRecord):
+    """Placeholder for unknown or unimplemented damage description types."""
+    recordType: enum32 = 0  # Not Used (Invalid Value)
+
+    def __init__(self,
+                 recordType: enum32 = 0,  # [UID 66]
+                 data: bytes = b""):
+        self.recordType = recordType
+        self.data = data
+
+    @property
+    def length(self) -> uint16:
+        return self.marshalledSize()
+
+    def marshalledSize(self) -> int:
+        return super().marshalledSize() + len(self.data)
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        super().serialize(outputStream)
+        outputStream.write_bytes(self.data)
+
+    def parse(self,
+              inputStream: DataInputStream,
+              bytelength: int | None = None) -> None:
+        """Parse the record from the input stream.
+        
+        The recordType and length are assumed to have been read, so as to
+        identify the type of SV record to be parsed, before this method is
+        called.
+
+        The bytelength parameter serves as a check that the correct number of
+        bytes have been read. If it is None, no check is performed.
+        """
+        # Call parent class parse() to validate arguments
+        assert bytelength is not None  # for static type checkers
+        super().parse(inputStream, bytelength)
+        self.data = inputStream.read_bytes(
+            bytelength - super().marshalledSize()
+        )
