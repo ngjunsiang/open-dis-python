@@ -16,9 +16,10 @@ from .record import (
     SimpleIntercomRadio,
     BasicHaveQuickMP,
     CCTTSincgarsMP,
-    VariableTransmitterParametersRecord,
-    HighFidelityHAVEQUICKRadio,
+    VariableTransmitterParameters,
     UnknownVariableTransmitterParameters,
+    HighFidelityHAVEQUICKRadio,
+    UnknownStandardVariable,
     StandardVariables,
     StandardVariableRecord,
     Vector3Float,
@@ -5208,7 +5209,7 @@ class TransmitterPdu(RadioCommunicationsFamilyPdu):
                  cryptoKeyId: struct16 = 0,  # See Table 175
                  modulationParameters: ModulationParametersRecord | None = None,
                  antennaPattern: AntennaPatternRecord | None = None,
-                 variableTransmitterParameters: Sequence[VariableTransmitterParametersRecord] | None = None):
+                 variableTransmitterParameters: Sequence[VariableTransmitterParameters] | None = None):
         super(TransmitterPdu, self).__init__()
         self.radioReferenceID = radioReferenceID or EntityID()
         """ID of the entity that is the source of the communication"""
@@ -5357,8 +5358,7 @@ class TransmitterPdu(RadioCommunicationsFamilyPdu):
                 vtp = HighFidelityHAVEQUICKRadio()
                 vtp.parse(inputStream)
             else:  # Unknown VTP record type
-                vtp = UnknownVariableTransmitterParameters()
-                vtp.recordType = recordType
+                vtp = UnknownVariableTransmitterParameters(recordType)
                 vtp.parse(inputStream)
             self.variableTransmitterParameters.append(vtp)
 
