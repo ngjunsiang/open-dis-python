@@ -2,7 +2,7 @@
 #This code is licensed under the BSD software license
 #
 
-from typing import Sequence
+from typing import Sequence, cast
 
 from .record import (
     AntennaPatternRecord,
@@ -26,6 +26,7 @@ from .record import (
     DamageDescriptionRecord,
     UnknownDamageDescription,
     DirectedEnergyDamageDescription,
+    getSVClass,
     identifier,
 )
 from .stream import DataInputStream, DataOutputStream
@@ -5232,7 +5233,7 @@ class TransmitterPdu(RadioCommunicationsFamilyPdu):
         self.padding3 = 0
         self.modulationParameters = modulationParameters
         self.antennaPattern = antennaPattern
-        self.variableTransmitterParameters = (
+        self.variableTransmitterParameters: list[VariableTransmitterParameters] = (
             list(variableTransmitterParameters)
             if variableTransmitterParameters
             else []
@@ -5354,12 +5355,14 @@ class TransmitterPdu(RadioCommunicationsFamilyPdu):
         
         for _ in range(0, variableTransmitterParameterCount):
             recordType = inputStream.read_uint32()
-            if recordType == 3000:  # High Fidelity HAVE QUICK/SATURN Radio
-                vtp = HighFidelityHAVEQUICKRadio()
-                vtp.parse(inputStream)
-            else:  # Unknown VTP record type
-                vtp = UnknownVariableTransmitterParameters(recordType)
-                vtp.parse(inputStream)
+            recordLength = inputStream.read_uint16()
+            vtpClass = getSVClass(recordType, VariableTransmitterParameters)
+            vtp = (
+                vtpClass() if vtpClass
+                else UnknownVariableTransmitterParameters(recordType)
+            )
+            vtp = cast(VariableTransmitterParameters, vtp)  # for static checker
+            vtp.parse(inputStream, recordLength)
             self.variableTransmitterParameters.append(vtp)
 
 
@@ -6935,10 +6938,13 @@ class EntityDamageStatusPdu(WarfareFamilyPdu):
         for _ in range(0, damageDescriptionCount):
             recordType = inputStream.read_uint32()
             recordLength = inputStream.read_uint16()
-            if recordType == 4500:
-                sv = DirectedEnergyDamageDescription()
-            else:
-                sv = UnknownDamageDescription(recordType)
+            svClass = getSVClass(recordType, DamageDescriptionRecord)
+            if svClass:
+                sv = (
+                    svClass() if svClass
+                    else UnknownDamageDescription(recordType)
+                )
+            sv = cast(DamageDescriptionRecord, sv)  # for static checker
             sv.parse(inputStream, recordLength)
             self.damageDescriptions.append(sv)
 

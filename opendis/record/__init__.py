@@ -642,6 +642,47 @@ class VariableTransmitterParameters(StandardVariableRecord):
     """
 
 
+class UnknownVariableTransmitterParameters(VariableTransmitterParameters):
+    """Placeholder for unknown or unimplemented variable transmitter parameters."""
+    recordType = 0  # Not Used (Invalid Value)
+
+    def __init__(self,
+                 recordType: enum32 = 0,  # [UID 66]
+                 data: bytes = b""):
+        self.recordType = recordType
+        self.data = data
+
+    @property
+    def length(self) -> uint16:
+        return self.marshalledSize()
+
+    def marshalledSize(self) -> int:
+        return super().marshalledSize() + len(self.data)
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        super().serialize(outputStream)
+        outputStream.write_bytes(self.data)
+
+    def parse(self,
+              inputStream: DataInputStream,
+              bytelength: int | None = None) -> None:
+        """Parse the record from the input stream.
+        
+        The recordType and length are assumed to have been read, so as to
+        identify the type of SV record to be parsed, before this method is
+        called.
+
+        The bytelength parameter serves as a check that the correct number of
+        bytes have been read. If it is None, no check is performed.
+        """
+        # Call parent class parse() to validate arguments
+        assert bytelength is not None  # for static type checkers
+        super().parse(inputStream, bytelength)
+        self.data = inputStream.read_bytes(
+            bytelength - super().marshalledSize()
+        )
+
+
 class HighFidelityHAVEQUICKRadio(VariableTransmitterParameters):
     """Annex C C4.2.3, Table C.4 — High Fidelity HAVE QUICK Radio record"""
     recordType: enum32 = 3000
@@ -841,3 +882,26 @@ class DirectedEnergyDamageDescription(DamageDescriptionRecord):
         self.componentVisualSmokeColor = inputStream.read_uint8()
         self.eventID.parse(inputStream)
         self.padding2 = inputStream.read_uint16()
+
+
+__SVTypeMap: dict[enum32, type["StandardVariableRecord"]] = {
+    0: UnknownStandardVariable,  # Not Used (Invalid Value)
+    3000: HighFidelityHAVEQUICKRadio,
+    4500: DirectedEnergyDamageDescription,
+    # Add other known SV record types here as they are implemented
+}
+def getSVClass(recordType: enum32, expectedType: type["StandardVariableRecord"] | None) -> type["StandardVariableRecord"]:
+    """Return the StandardVariableRecord subclass corresponding to the given
+    recordType, or UnknownStandardVariable if the recordType is not recognized.
+    The enumerations for this getter function are from Variable Record Types
+    [UID 66]
+    """
+    if recordType not in __SVTypeMap:
+        raise ValueError(f"Unknown recordType: {recordType}")
+    RecordType = __SVTypeMap[recordType]
+    if expectedType and not issubclass(RecordType, expectedType):
+        raise TypeError(
+            f"{recordType} is {RecordType.__name__}, "
+            f"not a subclass of {expectedType.__name__}"
+        )
+    return RecordType
