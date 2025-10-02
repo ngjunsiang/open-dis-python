@@ -6938,13 +6938,8 @@ class EntityDamageStatusPdu(WarfareFamilyPdu):
         for _ in range(0, damageDescriptionCount):
             recordType = inputStream.read_uint32()
             recordLength = inputStream.read_uint16()
-            svClass = getSVClass(recordType, DamageDescriptionRecord)
-            if svClass:
-                sv = (
-                    svClass() if svClass
-                    else UnknownDamageDescription(recordType)
-                )
-            sv = cast(DamageDescriptionRecord, sv)  # for static checker
+            svClass = getSVClass(recordType)
+            sv = svClass()
             sv.parse(inputStream, recordLength)
             self.damageDescriptions.append(sv)
 
