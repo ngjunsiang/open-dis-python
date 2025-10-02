@@ -744,3 +744,133 @@ class StandardVariables(MutableSequence[SV], Generic[SV]):
             sv = UnknownStandardVariable(recordType)
             sv.parse(inputStream, recordLength)
             self._standardVariables.append(sv)
+
+
+class Vector3Float:
+    """6.2.96 Vector record
+
+    Vector values for entity coordinates, linear acceleration, and linear
+    velocity shall be represented using a Vector record. This record shall
+    consist of three fields, each a 32-bit floating point number. The unit of
+    measure represented by these fields shall depend on the information
+    represented.
+    """
+
+    def __init__(self, x: float32 = 0.0, y: float32 = 0.0, z: float32 = 0.0):
+        self.x = x
+        self.y = y
+        self.z = z
+
+    def marshalledSize(self) -> int:
+        return 12
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        outputStream.write_float32(self.x)
+        outputStream.write_float32(self.y)
+        outputStream.write_float32(self.z)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        self.x = inputStream.read_float32()
+        self.y = inputStream.read_float32()
+        self.z = inputStream.read_float32()
+
+
+class LiveSimulationAddress:
+    """6.2.54 Live Simulation Address record
+    
+    A simulation's designation associated with all Live Entity IDs contained in
+    Live Entity PDUs.
+    """
+
+    def __init__(self,
+                 site: uint8 = 0,
+                 application: uint8 = 0):
+        self.site = site
+        self.application = application
+
+    def marshalledSize(self) -> int:
+        return 2
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        outputStream.write_uint8(self.site)
+        outputStream.write_uint8(self.application)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        self.site = inputStream.read_uint8()
+        self.application = inputStream.read_uint8()
+
+
+class SimulationAddress:
+    """6.2.80 Simulation Address record
+    
+    A simulation's designation associated with all object identifiers except
+    those contained in Live Entity PDUs.
+    """
+
+    def __init__(self,
+                 site: uint16 = 0,
+                 application: uint16 = 0):
+        self.site = site
+        self.application = application
+
+    def marshalledSize(self) -> int:
+        return 4
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        outputStream.write_uint16(self.site)
+        outputStream.write_uint16(self.application)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        self.site = inputStream.read_uint16()
+        self.application = inputStream.read_uint16()
+
+
+class LiveEventIdentifier:
+    """6.2.33 Event Identifier record
+    
+    Applies to the Live Entity PDU.
+    """
+
+    def __init__(self,
+                 simulationAddress: SimulationAddress | None = None,
+                 eventNumber: uint16 = 0):
+        self.simulationAddress = simulationAddress or SimulationAddress()
+        self.eventNumber = eventNumber
+
+    def marshalledSize(self) -> int:
+        return self.simulationAddress.marshalledSize() + 2
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        self.simulationAddress.serialize(outputStream)
+        outputStream.write_uint16(self.eventNumber)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        self.simulationAddress.parse(inputStream)
+        self.eventNumber = inputStream.read_uint16()
+
+
+class EventIdentifier:
+    """6.2.33 Event Identifier record
+    
+    Applies to all PDUs except the Live Entity (LE) PDU.
+    """
+
+    def __init__(self,
+                 simulationAddress: SimulationAddress | None = None,
+                 eventNumber: uint16 = 0):
+        self.simulationAddress = simulationAddress or SimulationAddress()
+        self.eventNumber = eventNumber
+
+    def marshalledSize(self) -> int:
+        return self.simulationAddress.marshalledSize() + 2
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        self.simulationAddress.serialize(outputStream)
+        outputStream.write_uint16(self.eventNumber)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        self.simulationAddress.parse(inputStream)
+        self.eventNumber = inputStream.read_uint16()
+
+
+class DamageDescriptionRecord(StandardVariableRecord):

@@ -1230,32 +1230,6 @@ class ChangeOptions:
         pass
 
 
-class LiveSimulationAddress:
-    """Section 6.2.55
-
-    A simulation's designation associated with all Live Entity IDs contained in
-    Live Entity PDUs.
-    """
-
-    def __init__(self,
-                 liveSiteNumber: uint8 = 0,
-                 liveApplicationNumber: uint8 = 0):
-        self.liveSiteNumber = liveSiteNumber
-        """facility, installation, organizational unit or geographic location may have multiple sites associated with it. The Site Number is the first component of the Live Simulation Address, which defines a live simulation."""
-        self.liveApplicationNumber = liveApplicationNumber
-        """An application associated with a live site is termed a live application. Each live application participating in an event"""
-
-    def serialize(self, outputStream):
-        """serialize the class"""
-        outputStream.write_unsigned_byte(self.liveSiteNumber)
-        outputStream.write_unsigned_byte(self.liveApplicationNumber)
-
-    def parse(self, inputStream):
-        """Parse a message. This may recursively call embedded objects."""
-        self.liveSiteNumber = inputStream.read_unsigned_byte()
-        self.liveApplicationNumber = inputStream.read_unsigned_byte()
-
-
 class EntityMarking:
     """Section 6.2.29
     
@@ -1819,30 +1793,6 @@ class DirectedEnergyAreaAimpoint:
             self.directedEnergyTargetEnergyDepositionRecordList.append(element)
 
 
-class Vector3Float:
-    """Section 6.2.95
-    
-    Three floating point values, x, y, and z.
-    """
-
-    def __init__(self, x: float32 = 0.0, y: float32 = 0.0, z: float32 = 0.0):
-        self.x = x
-        self.y = y
-        self.z = z
-
-    def serialize(self, outputStream):
-        """serialize the class"""
-        outputStream.write_float(self.x)
-        outputStream.write_float(self.y)
-        outputStream.write_float(self.z)
-
-    def parse(self, inputStream):
-        """Parse a message. This may recursively call embedded objects."""
-        self.x = inputStream.read_float()
-        self.y = inputStream.read_float()
-        self.z = inputStream.read_float()
-
-
 class Expendable:
     """Section 6.2.36
     
@@ -1978,32 +1928,6 @@ class LinearSegmentParameter:
         self.segmentHeight = inputStream.read_float()
         self.segmentDepth = inputStream.read_float()
         self.padding = inputStream.read_unsigned_int()
-
-
-class SimulationAddress:
-    """Section 6.2.79
-    
-    A Simulation Address record shall consist of the Site Identification number
-    and the Application Identification number.
-    """
-
-    def __init__(self,
-                 site: uint16 = 0,
-                 application: uint16 = 0):
-        self.site = site
-        """A site is defined as a facility, installation, organizational unit or a geographic location that has one or more simulation applications capable of participating in a distributed event."""
-        self.application = application
-        """An application is defined as a software program that is used to generate and process distributed simulation data including live, virtual and constructive data."""
-
-    def serialize(self, outputStream):
-        """serialize the class"""
-        outputStream.write_unsigned_short(self.site)
-        outputStream.write_unsigned_short(self.application)
-
-    def parse(self, inputStream):
-        """Parse a message. This may recursively call embedded objects."""
-        self.site = inputStream.read_unsigned_short()
-        self.application = inputStream.read_unsigned_short()
 
 
 class SystemIdentifier:
@@ -2472,31 +2396,6 @@ class SilentAggregateSystem:
         """Parse a message. This may recursively call embedded objects."""
         self.numberOfAggregates = inputStream.read_unsigned_short()
         self.aggregateType.parse(inputStream)
-
-
-class EventIdentifier:
-    """Section 6.2.34
-    
-    Identifies an event in the world. Use this format for every PDU EXCEPT
-    the LiveEntityPdu.
-    """
-
-    def __init__(self,
-                 simulationAddress: "SimulationAddress | None" = None,
-                 eventNumber: uint16 = 0):
-        self.simulationAddress = simulationAddress or SimulationAddress()
-        """Site and application IDs"""
-        self.eventNumber = eventNumber
-
-    def serialize(self, outputStream):
-        """serialize the class"""
-        self.simulationAddress.serialize(outputStream)
-        outputStream.write_unsigned_short(self.eventNumber)
-
-    def parse(self, inputStream):
-        """Parse a message. This may recursively call embedded objects."""
-        self.simulationAddress.parse(inputStream)
-        self.eventNumber = inputStream.read_unsigned_short()
 
 
 class BlankingSector:
