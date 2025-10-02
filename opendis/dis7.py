@@ -19,6 +19,16 @@ from .record import (
     VariableTransmitterParametersRecord,
     HighFidelityHAVEQUICKRadio,
     UnknownVariableTransmitterParameters,
+    StandardVariables,
+    StandardVariableRecord,
+    Vector3Float,
+    EventIdentifier,
+    LiveEventIdentifier,
+    SimulationAddress,
+    LiveSimulationAddress,
+    DamageDescriptionRecord,
+    UnknownDamageDescription,
+    DirectedEnergyDamageDescription,
 )
 from .stream import DataInputStream, DataOutputStream
 from .types import (
@@ -6923,41 +6933,42 @@ class EntityDamageStatusPdu(WarfareFamilyPdu):
 
     def __init__(self,
                  damagedEntityID: "EntityID | None" = None,
-                 damageDescriptionRecords=None):
+                 damageDescriptions: StandardVariables[StandardVariableRecord] | None = None):
         super(EntityDamageStatusPdu, self).__init__()
         self.damagedEntityID = damagedEntityID or EntityID()
-        """Field shall identify the damaged entity (see 6.2.28), Section 7.3.4 COMPLETE"""
         self.padding1: uint16 = 0
         self.padding2: uint16 = 0
         # TODO: Look into using StandardVariableSpecification to compose this
-        self.damageDescriptionRecords = damageDescriptionRecords or []
+        self.damageDescriptions = damageDescriptions \
+            or StandardVariables[StandardVariableRecord]()
         """Fields shall contain one or more Damage Description records (see 6.2.17) and may contain other Standard Variable records, Section 7.3.5"""
 
     @property
-    def numberOfDamageDescriptions(self) -> uint16:
-        return len(self.damageDescriptionRecords)
+    def damageDescriptionCount(self) -> uint16:
+        return len(self.damageDescriptions)
 
-    def serialize(self, outputStream):
-        """serialize the class"""
+    def serialize(self, outputStream: DataOutputStream) -> None:
         super(EntityDamageStatusPdu, self).serialize(outputStream)
         self.damagedEntityID.serialize(outputStream)
-        outputStream.write_unsigned_short(self.padding1)
-        outputStream.write_unsigned_short(self.padding2)
-        outputStream.write_unsigned_short(self.numberOfDamageDescriptions)
-        for anObj in self.damageDescriptionRecords:
-            anObj.serialize(outputStream)
+        outputStream.write_uint16(self.padding1)
+        outputStream.write_uint16(self.padding2)
+        outputStream.write_uint16(self.damageDescriptionCount)
+        for sv in self.damageDescriptions:
+            sv.serialize(outputStream)
 
-    def parse(self, inputStream):
-        """Parse a message. This may recursively call embedded objects."""
+    def parse(self, inputStream: DataInputStream) -> None:
         super(EntityDamageStatusPdu, self).parse(inputStream)
         self.damagedEntityID.parse(inputStream)
-        self.padding1 = inputStream.read_unsigned_short()
-        self.padding2 = inputStream.read_unsigned_short()
-        numberOfDamageDescriptions = inputStream.read_unsigned_short()
-        for idx in range(0, numberOfDamageDescriptions):
-            element = null()
-            element.parse(inputStream)
-            self.damageDescriptionRecords.append(element)
+        self.padding1 = inputStream.read_uint16()
+        self.padding2 = inputStream.read_uint16()
+        damageDescriptionCount = inputStream.read_uint16()
+        self.damageDescriptions = StandardVariables[StandardVariableRecord]()
+        for _ in range(0, damageDescriptionCount):
+            recordType = inputStream.read_uint32()
+            recordLength = inputStream.read_uint16()
+            sv = UnknownDamageDescription(recordType)
+            sv.parse(inputStream, recordLength)
+            self.damageDescriptions.append(sv)
 
 
 class FirePdu(WarfareFamilyPdu):
