@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from collections.abc import MutableSequence
 from typing import Any, Generic, Sequence, TypeVar, overload
 
-from . import bitfield
+from . import bitfield, identifier
 from ..stream import DataInputStream, DataOutputStream
 from ..types import (
     enum8,
@@ -776,104 +776,6 @@ class Vector3Float:
         self.z = inputStream.read_float32()
 
 
-class LiveSimulationAddress:
-    """6.2.54 Live Simulation Address record
-    
-    A simulation's designation associated with all Live Entity IDs contained in
-    Live Entity PDUs.
-    """
-
-    def __init__(self,
-                 site: uint8 = 0,
-                 application: uint8 = 0):
-        self.site = site
-        self.application = application
-
-    def marshalledSize(self) -> int:
-        return 2
-
-    def serialize(self, outputStream: DataOutputStream) -> None:
-        outputStream.write_uint8(self.site)
-        outputStream.write_uint8(self.application)
-
-    def parse(self, inputStream: DataInputStream) -> None:
-        self.site = inputStream.read_uint8()
-        self.application = inputStream.read_uint8()
-
-
-class SimulationAddress:
-    """6.2.80 Simulation Address record
-    
-    A simulation's designation associated with all object identifiers except
-    those contained in Live Entity PDUs.
-    """
-
-    def __init__(self,
-                 site: uint16 = 0,
-                 application: uint16 = 0):
-        self.site = site
-        self.application = application
-
-    def marshalledSize(self) -> int:
-        return 4
-
-    def serialize(self, outputStream: DataOutputStream) -> None:
-        outputStream.write_uint16(self.site)
-        outputStream.write_uint16(self.application)
-
-    def parse(self, inputStream: DataInputStream) -> None:
-        self.site = inputStream.read_uint16()
-        self.application = inputStream.read_uint16()
-
-
-class LiveEventIdentifier:
-    """6.2.33 Event Identifier record
-    
-    Applies to the Live Entity PDU.
-    """
-
-    def __init__(self,
-                 simulationAddress: SimulationAddress | None = None,
-                 eventNumber: uint16 = 0):
-        self.simulationAddress = simulationAddress or SimulationAddress()
-        self.eventNumber = eventNumber
-
-    def marshalledSize(self) -> int:
-        return self.simulationAddress.marshalledSize() + 2
-
-    def serialize(self, outputStream: DataOutputStream) -> None:
-        self.simulationAddress.serialize(outputStream)
-        outputStream.write_uint16(self.eventNumber)
-
-    def parse(self, inputStream: DataInputStream) -> None:
-        self.simulationAddress.parse(inputStream)
-        self.eventNumber = inputStream.read_uint16()
-
-
-class EventIdentifier:
-    """6.2.33 Event Identifier record
-    
-    Applies to all PDUs except the Live Entity (LE) PDU.
-    """
-
-    def __init__(self,
-                 simulationAddress: SimulationAddress | None = None,
-                 eventNumber: uint16 = 0):
-        self.simulationAddress = simulationAddress or SimulationAddress()
-        self.eventNumber = eventNumber
-
-    def marshalledSize(self) -> int:
-        return self.simulationAddress.marshalledSize() + 2
-
-    def serialize(self, outputStream: DataOutputStream) -> None:
-        self.simulationAddress.serialize(outputStream)
-        outputStream.write_uint16(self.eventNumber)
-
-    def parse(self, inputStream: DataInputStream) -> None:
-        self.simulationAddress.parse(inputStream)
-        self.eventNumber = inputStream.read_uint16()
-
-
 class DamageDescriptionRecord(StandardVariableRecord):
     """6.2.15 Damage Description records
     
@@ -936,7 +838,7 @@ class DirectedEnergyDamageDescription(DamageDescriptionRecord):
                  componentDamageStatus: enum8 = 0,
                  componentVisualDamageStatus: struct8 = 0,
                  componentVisualSmokeColor: enum8 = 0,
-                 eventID: EventIdentifier | None = None):
+                 eventID: identifier.EventIdentifier | None = None):
         self.padding: uint16 = 0
         self.damageLocation = damageLocation or Vector3Float()
         self.damageDiameter = damageDiameter
@@ -945,7 +847,7 @@ class DirectedEnergyDamageDescription(DamageDescriptionRecord):
         self.componentDamageStatus = componentDamageStatus
         self.componentVisualDamageStatus = componentVisualDamageStatus
         self.componentVisualSmokeColor = componentVisualSmokeColor
-        self.eventID = eventID or EventIdentifier()
+        self.eventID = eventID or identifier.EventIdentifier()
         self.padding2: uint16 = 0
     
     def marshalledSize(self) -> enum8:

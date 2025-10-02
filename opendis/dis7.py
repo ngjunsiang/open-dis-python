@@ -22,13 +22,10 @@ from .record import (
     StandardVariables,
     StandardVariableRecord,
     Vector3Float,
-    EventIdentifier,
-    LiveEventIdentifier,
-    SimulationAddress,
-    LiveSimulationAddress,
     DamageDescriptionRecord,
     UnknownDamageDescription,
     DirectedEnergyDamageDescription,
+    identifier,
 )
 from .stream import DataInputStream, DataOutputStream
 from .types import (
@@ -251,9 +248,9 @@ class GroupID:
     """
 
     def __init__(self,
-                 simulationAddress: "SimulationAddress | None" = None,
+                 simulationAddress: "identifier.SimulationAddress | None" = None,
                  groupNumber: uint16 = 0):
-        self.simulationAddress = simulationAddress or SimulationAddress()
+        self.simulationAddress = simulationAddress or identifier.SimulationAddress()
         """Simulation address (site and application number)"""
         self.groupNumber = groupNumber
         """group number"""
@@ -608,9 +605,9 @@ class MinefieldIdentifier:
     """
 
     def __init__(self,
-                 simulationAddress: "SimulationAddress | None" = None,
+                 simulationAddress: "identifier.SimulationAddress | None" = None,
                  minefieldNumber: uint16 = 0):
-        self.simulationAddress = simulationAddress or SimulationAddress()
+        self.simulationAddress = simulationAddress or identifier.SimulationAddress()
         self.minefieldNumber = minefieldNumber
 
     def serialize(self, outputStream):
@@ -1116,9 +1113,9 @@ class ObjectIdentifier:
     """
 
     def __init__(self,
-                 simulationAddress: "SimulationAddress | None" = None,
+                 simulationAddress: "identifier.SimulationAddress | None" = None,
                  objectNumber: uint16 = 0):
-        self.simulationAddress = simulationAddress or SimulationAddress()
+        self.simulationAddress = simulationAddress or identifier.SimulationAddress()
         """Simulation Address"""
         self.objectNumber = objectNumber
         """object number"""
@@ -1141,9 +1138,9 @@ class AggregateIdentifier:
     """
 
     def __init__(self,
-                 simulationAddress: "SimulationAddress | None" = None,
+                 simulationAddress: "identifier.SimulationAddress | None" = None,
                  aggregateID: uint16 = 0):
-        self.simulationAddress = simulationAddress or SimulationAddress()
+        self.simulationAddress = simulationAddress or identifier.SimulationAddress()
         """Simulation address, ie site and application, the first two fields of the entity ID"""
         self.aggregateID = aggregateID
 
@@ -1344,7 +1341,7 @@ class DirectedEnergyDamage:
             componentDamageStatus: enum8 = 0,  # [UID 315]
             componentVisualDamageStatus: struct8 = 0,  # [UID 317]
             componentVisualSmokeColor: enum8 = 0,  # [UID 316]
-            fireEventID: "EventIdentifier | None" = None):
+            fireEventID: "identifier.EventIdentifier | None" = None):
         self.padding: uint16 = 0
         self.damageLocation = damageLocation or Vector3Float()
         """location of damage, relative to center of entity"""
@@ -1360,7 +1357,7 @@ class DirectedEnergyDamage:
         """enumeration"""
         self.componentVisualSmokeColor = componentVisualSmokeColor
         """enumeration"""
-        self.fireEventID = fireEventID or EventIdentifier()
+        self.fireEventID = fireEventID or identifier.EventIdentifier()
         """For any component damage resulting this field shall be set to the fire event ID from that PDU."""
         self.padding2: uint16 = 0
 
@@ -1564,8 +1561,8 @@ class MineEntityIdentifier:
     No ESPDUs are issued for mine entities.
     """
 
-    def __init__(self, simulationAddress: "SimulationAddress | None" = None, mineEntityNumber: uint16 = 0):
-        self.simulationAddress = simulationAddress or SimulationAddress()
+    def __init__(self, simulationAddress: "identifier.SimulationAddress | None" = None, mineEntityNumber: uint16 = 0):
+        self.simulationAddress = simulationAddress or identifier.SimulationAddress()
         """"""
         self.mineEntityNumber = mineEntityNumber
         """"""
@@ -2225,9 +2222,9 @@ class SimulationIdentifier:
     """
 
     def __init__(self,
-                 simulationAddress: "SimulationAddress | None" = None,
+                 simulationAddress: "identifier.SimulationAddress | None" = None,
                  referenceNumber: uint16 = 0):
-        self.simulationAddress = simulationAddress or SimulationAddress()
+        self.simulationAddress = simulationAddress or identifier.SimulationAddress()
         """Simulation address"""
         self.referenceNumber = referenceNumber
         """This field shall be set to zero as there is no reference number associated with a Simulation Identifier."""
@@ -2483,15 +2480,15 @@ class LaunchedMunitionRecord:
     """
 
     def __init__(self,
-                 fireEventID: "EventIdentifier | None" = None,
-                 firingEntityID: "EventIdentifier | None" = None,
-                 targetEntityID: "EventIdentifier | None" = None,
+                 fireEventID: "identifier.EventIdentifier | None" = None,
+                 firingEntityID: "identifier.EventIdentifier | None" = None,
+                 targetEntityID: "identifier.EventIdentifier | None" = None,
                  targetLocation: "Vector3Double | None" = None):
-        self.fireEventID = fireEventID or EventIdentifier()
+        self.fireEventID = fireEventID or identifier.EventIdentifier()
         self.padding: uint16 = 0
-        self.firingEntityID = firingEntityID or EventIdentifier()
+        self.firingEntityID = firingEntityID or identifier.EventIdentifier()
         self.padding2: uint16 = 0
-        self.targetEntityID = targetEntityID or EventIdentifier()
+        self.targetEntityID = targetEntityID or identifier.EventIdentifier()
         self.padding3: uint16 = 0
         self.targetLocation = targetLocation or Vector3Double()
 
@@ -3211,9 +3208,9 @@ class EntityIdentifier:
     """
 
     def __init__(self,
-                 simulationAddress: "SimulationAddress | None" = None,
+                 simulationAddress: "identifier.SimulationAddress | None" = None,
                  entityNumber: uint16 = 0):
-        self.simulationAddress = simulationAddress or SimulationAddress()
+        self.simulationAddress = simulationAddress or identifier.SimulationAddress()
         """Site and application IDs"""
         self.entityNumber = entityNumber
         """Entity number"""
@@ -3336,9 +3333,9 @@ class UnattachedIdentifier:
     """
 
     def __init__(self,
-                 simulationAddress: "SimulationAddress | None" = None,
+                 simulationAddress: "identifier.SimulationAddress | None" = None,
                  referenceNumber: uint16 = 0):
-        self.simulationAddress = simulationAddress or SimulationAddress()
+        self.simulationAddress = simulationAddress or identifier.SimulationAddress()
         """See 6.2.79"""
         self.referenceNumber = referenceNumber
         """Reference number"""
@@ -3612,34 +3609,6 @@ class VariableDatum:
             inputStream.read_unsigned_byte()
 
 
-class EventIdentifierLiveEntity:
-    """Section 6.2.34
-
-    Identifies an event in the world. Use this format for ONLY the
-    LiveEntityPdu.
-    """
-
-    def __init__(self,
-                 siteNumber: uint8 = 0,
-                 applicationNumber: uint8 = 0,
-                 eventNumber: uint16 = 0):
-        self.siteNumber = siteNumber
-        self.applicationNumber = applicationNumber
-        self.eventNumber = eventNumber
-
-    def serialize(self, outputStream):
-        """serialize the class"""
-        outputStream.write_unsigned_byte(self.siteNumber)
-        outputStream.write_unsigned_byte(self.applicationNumber)
-        outputStream.write_unsigned_short(self.eventNumber)
-
-    def parse(self, inputStream):
-        """Parse a message. This may recursively call embedded objects."""
-        self.siteNumber = inputStream.read_unsigned_byte()
-        self.applicationNumber = inputStream.read_unsigned_byte()
-        self.eventNumber = inputStream.read_unsigned_short()
-
-
 class PduHeader:
     """Section 6.2.66
     
@@ -3831,10 +3800,10 @@ class LiveEntityIdentifier:
     """
 
     def __init__(self,
-                 liveSimulationAddress: "LiveSimulationAddress | None" = None,
+                 liveSimulationAddress: "identifier.LiveSimulationAddress | None" = None,
                  entityNumber: uint16 = 0):
         self.liveSimulationAddress = (liveSimulationAddress
-                                      or LiveSimulationAddress())
+                                      or identifier.LiveSimulationAddress())
         """Live Simulation Address record (see 6.2.54)"""
         self.entityNumber = entityNumber
         """Live entity number"""
@@ -4213,7 +4182,7 @@ class CollisionPdu(EntityInformationFamilyPdu):
     def __init__(self,
                  issuingEntityID: "EntityID | None" = None,
                  collidingEntityID: "EntityID | None" = None,
-                 eventID: "EventIdentifier | None" = None,
+                 eventID: "identifier.EventIdentifier | None" = None,
                  collisionType: enum8 = 0,  # [UID 189]
                  velocity: "Vector3Float | None" = None,
                  mass: float32 = 0.0,  # in kg
@@ -4223,7 +4192,7 @@ class CollisionPdu(EntityInformationFamilyPdu):
         """This field shall identify the entity that is issuing the PDU, and shall be represented by an Entity Identifier record (see 6.2.28)."""
         self.collidingEntityID = collidingEntityID or EntityID()
         """This field shall identify the entity that has collided with the issuing entity (see 5.3.3.4). This field shall be represented by an Entity Identifier record (see 6.2.28)."""
-        self.eventID = eventID or EventIdentifier()
+        self.eventID = eventID or identifier.EventIdentifier()
         """This field shall contain an identification generated by the issuing simulation application to associate related collision events. This field shall be represented by an Event Identifier record (see 6.2.34)."""
         self.collisionType = collisionType
         """This field shall identify the type of collision. The Collision Type field shall be represented by an 8-bit record of enumerations"""
@@ -4394,8 +4363,8 @@ class LinearObjectStatePdu(SyntheticEnvironmentFamilyPdu):
                  referencedObjectID: "EntityID | None" = None,
                  updateNumber: uint16 = 0,
                  forceID: enum8 = 0,  # [UID 6]
-                 requesterID: "SimulationAddress | None" = None,
-                 receivingID: "SimulationAddress | None" = None,
+                 requesterID: "identifier.SimulationAddress | None" = None,
+                 receivingID: "identifier.SimulationAddress | None" = None,
                  objectType: "ObjectType | None" = None,
                  linearSegmentParameters: list["LinearSegmentParameter"] | None = None):
         super(LinearObjectStatePdu, self).__init__()
@@ -4408,8 +4377,8 @@ class LinearObjectStatePdu(SyntheticEnvironmentFamilyPdu):
         self.forceID = forceID
         self.numberOfSegments = numberOfSegments
         """number of linear segment parameters"""
-        self.requesterID = requesterID or SimulationAddress()
-        self.receivingID = receivingID or SimulationAddress()
+        self.requesterID = requesterID or identifier.SimulationAddress()
+        self.receivingID = receivingID or identifier.SimulationAddress()
         self.objectType = objectType or ObjectType()
         self.linearSegmentParameters = linearSegmentParameters or []
 
@@ -4669,7 +4638,7 @@ class CollisionElasticPdu(EntityInformationFamilyPdu):
     def __init__(self,
                  issuingEntityID: "EntityID | None" = None,
                  collidingEntityID: "EntityID | None" = None,
-                 collisionEventID: "EventIdentifier | None" = None,
+                 collisionEventID: "identifier.EventIdentifier | None" = None,
                  contactVelocity: "Vector3Float | None" = None,
                  mass: float32 = 0.0,  # in kg
                  locationOfImpact: "Vector3Float | None" = None,
@@ -4686,7 +4655,7 @@ class CollisionElasticPdu(EntityInformationFamilyPdu):
         """This field shall identify the entity that is issuing the PDU and shall be represented by an Entity Identifier record (see 6.2.28)"""
         self.collidingEntityID = collidingEntityID or EntityID()
         """This field shall identify the entity that has collided with the issuing entity. This field shall be a valid identifier of an entity or server capable of responding to the receipt of this Collision-Elastic PDU. This field shall be represented by an Entity Identifier record (see 6.2.28)."""
-        self.collisionEventID = collisionEventID or EventIdentifier()
+        self.collisionEventID = collisionEventID or identifier.EventIdentifier()
         """This field shall contain an identification generated by the issuing simulation application to associate related collision events. This field shall be represented by an Event Identifier record (see 6.2.34)."""
         self.pad: uint16 = 0
         self.contactVelocity = contactVelocity or Vector3Float()
@@ -5404,13 +5373,13 @@ class ElectromagneticEmissionsPdu(DistributedEmissionsFamilyPdu):
 
     def __init__(self,
                  emittingEntityID: "EntityID | None" = None,
-                 eventID: "EventIdentifier | None" = None,
+                 eventID: "identifier.EventIdentifier | None" = None,
                  stateUpdateIndicator: enum8 = 0,  # [UID 77]
                  systems: list["EmissionSystemRecord"] | None = None):
         super(ElectromagneticEmissionsPdu, self).__init__()
         self.emittingEntityID = emittingEntityID or EntityID()
         """ID of the entity emitting"""
-        self.eventID = eventID or EventIdentifier()
+        self.eventID = eventID or identifier.EventIdentifier()
         self.stateUpdateIndicator = stateUpdateIndicator
         """This field shall be used to indicate if the data in the PDU represents a state update or just data that has changed since issuance of the last Electromagnetic Emission PDU [relative to the identified entity and emission system(s)]."""
         self.systems = systems or []
@@ -5618,7 +5587,7 @@ class AttributePdu(EntityInformationFamilyPdu):
     """
 
     def __init__(self,
-                 originatingSimulationAddress: "SimulationAddress | None" = None,
+                 originatingSimulationAddress: "identifier.SimulationAddress | None" = None,
                  attributeRecordPduType: enum8 = 0,  # [UID 4]
                  attributeRecordProtocolVersion: enum8 = 0,  # [UID 5]
                  masterAttributeRecordType: enum32 = 0,  # [UID 66]
@@ -5626,7 +5595,7 @@ class AttributePdu(EntityInformationFamilyPdu):
                  numberOfAttributeRecordSets: uint16 = 0):
         super(AttributePdu, self).__init__()
         self.originatingSimulationAddress = (originatingSimulationAddress
-                                             or SimulationAddress())
+                                             or identifier.SimulationAddress())
         """This field shall identify the simulation issuing the Attribute PDU. It shall be represented by a Simulation Address record (see 6.2.79)."""
         self.padding1: uint32 = 0
         self.padding2: uint16 = 0
@@ -5798,8 +5767,8 @@ class PointObjectStatePdu(SyntheticEnvironmentFamilyPdu):
                  objectLocation: "Vector3Double | None" = None,
                  objectOrientation: "EulerAngles | None" = None,
                  objectAppearance: struct32 | struct16 = 0,  # [UID 229]
-                 requesterID: "SimulationAddress | None" = None,
-                 receivingID: "SimulationAddress | None" = None):
+                 requesterID: "identifier.SimulationAddress | None" = None,
+                 receivingID: "identifier.SimulationAddress | None" = None):
         super(PointObjectStatePdu, self).__init__()
         # TODO: Validate ObjectID?
         self.objectID = objectID or EntityID()
@@ -5821,9 +5790,9 @@ class PointObjectStatePdu(SyntheticEnvironmentFamilyPdu):
         self.objectAppearance = objectAppearance
         """Object appearance"""
         self.pad1: uint16 = 0
-        self.requesterID = requesterID or SimulationAddress()
+        self.requesterID = requesterID or identifier.SimulationAddress()
         """requester ID"""
-        self.receivingID = receivingID or SimulationAddress()
+        self.receivingID = receivingID or identifier.SimulationAddress()
         """receiver ID"""
         self.pad2: uint32 = 0
 
@@ -6242,8 +6211,8 @@ class ArealObjectStatePdu(SyntheticEnvironmentFamilyPdu):
                  objectType: "ObjectType | None" = None,
                  specificObjectAppearance: struct32 = 0,
                  generalObjectAppearance: struct16 = 0,  # [UID 229]
-                 requesterID: "SimulationAddress | None" = None,
-                 receivingID: "SimulationAddress | None" = None,
+                 requesterID: "identifier.SimulationAddress | None" = None,
+                 receivingID: "identifier.SimulationAddress | None" = None,
                  objectLocation: list["Vector3Double"] | None = None):
         super(ArealObjectStatePdu, self).__init__()
         # TODO: validate object ID?
@@ -6258,8 +6227,8 @@ class ArealObjectStatePdu(SyntheticEnvironmentFamilyPdu):
         self.objectType = objectType or ObjectType()
         self.specificObjectAppearance = specificObjectAppearance
         self.generalObjectAppearance = generalObjectAppearance
-        self.requesterID = requesterID or SimulationAddress()
-        self.receivingID = receivingID or SimulationAddress()
+        self.requesterID = requesterID or identifier.SimulationAddress()
+        self.receivingID = receivingID or identifier.SimulationAddress()
         self.objectLocation = objectLocation or []
 
     @property
@@ -6705,7 +6674,7 @@ class DetonationPdu(WarfareFamilyPdu):
 
     def __init__(self,
                  explodingEntityID: "EntityID | None" = None,
-                 eventID: "EventIdentifier | None" = None,
+                 eventID: "identifier.EventIdentifier | None" = None,
                  velocity: "Vector3Float | None" = None,
                  location: "Vector3Double | None" = None,
                  descriptor: "MunitionDescriptor | None" = None,
@@ -6715,7 +6684,7 @@ class DetonationPdu(WarfareFamilyPdu):
         super(DetonationPdu, self).__init__()
         self.explodingEntityID = explodingEntityID or EntityID()
         """ID of the expendable entity, Section 7.3.3"""
-        self.eventID = eventID or EventIdentifier()
+        self.eventID = eventID or identifier.EventIdentifier()
         self.velocity = velocity or Vector3Float()
         """velocity of the munition immediately before detonation/impact, Section 7.3.3"""
         self.location = location or Vector3Double(
@@ -6984,7 +6953,7 @@ class FirePdu(WarfareFamilyPdu):
 
     def __init__(self,
                  munitionExpendableID: "EntityID | None" = None,
-                 eventID: "EventIdentifier | None" = None,
+                 eventID: "identifier.EventIdentifier | None" = None,
                  fireMissionIndex: uint32 = 0,
                  location: "Vector3Double | None" = None,
                  descriptor: "MunitionDescriptor | None" = None,
@@ -6993,7 +6962,7 @@ class FirePdu(WarfareFamilyPdu):
         super(FirePdu, self).__init__()
         self.munitionExpendableID = munitionExpendableID or EntityID()
         """This field shall specify the entity identification of the fired munition or expendable. This field shall be represented by an Entity Identifier record (see 6.2.28)."""
-        self.eventID = eventID or EventIdentifier()
+        self.eventID = eventID or identifier.EventIdentifier()
         """This field shall contain an identification generated by the firing entity to associate related firing and detonation events. This field shall be represented by an Event Identifier record (see 6.2.34)."""
         self.fireMissionIndex = fireMissionIndex
         """This field shall identify the fire mission (see 5.4.3.3). This field shall be representedby a 32-bit unsigned integer."""
@@ -7083,7 +7052,7 @@ class UaPdu(DistributedEmissionsFamilyPdu):
 
     def __init__(self,
                  emittingEntityID: "EntityID | None" = None,
-                 eventID: "EventIdentifier | None" = None,
+                 eventID: "identifier.EventIdentifier | None" = None,
                  stateChangeIndicator: enum8 = 0,  # [UID 143]
                  passiveParameterIndex: enum16 = 0,  # [UID 148]
                  propulsionPlantConfiguration: struct8 = 0,  # [UID 149]
@@ -7093,7 +7062,7 @@ class UaPdu(DistributedEmissionsFamilyPdu):
         super(UaPdu, self).__init__()
         self.emittingEntityID = emittingEntityID or EntityID()
         """ID of the entity that is the source of the emission"""
-        self.eventID = eventID or EventIdentifier()
+        self.eventID = eventID or identifier.EventIdentifier()
         """ID of event"""
         self.stateChangeIndicator = stateChangeIndicator
         """This field shall be used to indicate whether the data in the UA PDU represent a state update or data that have changed since issuance of the last UA PDU"""
