@@ -185,13 +185,13 @@ class MunitionDescriptor:
     """
 
     def __init__(self,
-                 munitionType: "EntityType | None" = None,
+                 munitionType: record.EntityType | None = None,
                  warhead: enum16 = 0,  # [UID 60]
                  fuse: enum16 = 0,  # [UID 61]
                  quantity: uint16 = 0,
                  rate: uint16 = 0):
         # TODO: Validate munitionType.entityKind == 2
-        self.munitionType = munitionType or EntityType()
+        self.munitionType = munitionType or record.EntityType()
         """What munition was used in the burst"""
         self.warhead = warhead
         """type of warhead enumeration"""
@@ -761,14 +761,14 @@ class AttachedParts:
                  detachedIndicator: enum8 = 0,  # [UID 415]
                  partAttachedTo: uint16 = 0,
                  parameterType: enum32 = 0,  # [UID 57]
-                 attachedPartType: "EntityType | None" = None):
+                 attachedPartType: record.EntityType | None = None):
         self.detachedIndicator = detachedIndicator
         """0 = attached, 1 = detached. See I.2.3.1 for state transition diagram"""
         self.partAttachedTo = partAttachedTo
         """the identification of the articulated part to which this articulation parameter is attached. This field shall be specified by a 16-bit unsigned integer. This field shall contain the value zero if the articulated part is attached directly to the entity."""
         self.parameterType = parameterType
         """The location or station to which the part is attached"""
-        self.attachedPartType = attachedPartType or EntityType()
+        self.attachedPartType = attachedPartType or record.EntityType()
         """The definition of the 64 bits shall be determined based on the type of parameter specified in the Parameter Type field"""
 
     def serialize(self, outputStream):
@@ -1274,10 +1274,10 @@ class ExplosionDescriptor:
     """
 
     def __init__(self,
-                 explodingObject: "EntityType | None" = None,
+                 explodingObject: record.EntityType | None = None,
                  explosiveMaterial: enum16 = 0,  # [UID 310]
                  explosiveForce: float32 = 0.0):  # in kg of TNT (4.184 x 10^6 J/kg)
-        self.explodingObject = explodingObject or EntityType()
+        self.explodingObject = explodingObject or record.EntityType()
         """Type of the object that exploded. See 6.2.30"""
         self.explosiveMaterial = explosiveMaterial
         """Material that exploded. Can be grain dust, tnt, gasoline, etc. Enumeration"""
@@ -1618,11 +1618,11 @@ class Expendable:
     """
 
     def __init__(self,
-                 expendable: "EntityType | None" = None,
+                 expendable: record.EntityType | None = None,
                  station: enum32 = 0,  # [UID 57]
                  quantity: uint16 = 0,
                  expendableStatus: enum8 = 0):  # [UID 327]
-        self.expendable = expendable or EntityType()
+        self.expendable = expendable or record.EntityType()
         """Type of expendable"""
         self.station = station
         self.quantity = quantity
@@ -2136,9 +2136,9 @@ class SupplyQuantity:
     """
 
     def __init__(self,
-                 supplyType: "EntityType | None" = None,
+                 supplyType: record.EntityType | None = None,
                  quantity: float32 = 0.0):
-        self.supplyType = supplyType or EntityType()
+        self.supplyType = supplyType or record.EntityType()
         self.quantity = quantity
         """the number of units of a supply type."""
 
@@ -2161,11 +2161,11 @@ class SilentEntitySystem:
 
     def __init__(self,
                  numberOfEntities: uint16 = 0,
-                 entityType: "EntityType | None" = None,
+                 entityType: record.EntityType | None = None,
                  appearanceRecordList: list | None = None):
         self.numberOfEntities = numberOfEntities
         """number of the type specified by the entity type field"""
-        self.entityType = entityType or EntityType()
+        self.entityType = entityType or record.EntityType()
         self.appearanceRecordList = appearanceRecordList or []
         """Variable length list of appearance records"""
 
@@ -2468,52 +2468,6 @@ class IntercomCommunicationsParameters:
         self.recordSpecificField = inputStream.read_unsigned_int()
 
 
-class EntityType:
-    """Section 6.2.30
-    
-    Identifies the type of Entity.
-    """
-
-    def __init__(self,
-                 entityKind: enum8 = 0,  # [UID 7]
-                 domain: enum8 = 0,  # [UID 8], [UID 14]
-                 country: enum16 = 0,  # [UID 29]
-                 category: enum8 = 0,
-                 subcategory: enum8 = 0,
-                 specific: enum8 = 0,
-                 extra: enum8 = 0):
-        self.entityKind = entityKind
-        self.domain = domain
-        """Domain of entity (air, surface, subsurface, space, etc)"""
-        self.country = country
-        """country to which the design of the entity is attributed"""
-        self.category = category
-        self.subcategory = subcategory
-        self.specific = specific
-        """specific info based on subcategory field. Renamed from specific because that is a reserved word in SQL."""
-        self.extra = extra
-
-    def serialize(self, outputStream):
-        """serialize the class"""
-        outputStream.write_unsigned_byte(self.entityKind)
-        outputStream.write_unsigned_byte(self.domain)
-        outputStream.write_unsigned_short(self.country)
-        outputStream.write_unsigned_byte(self.category)
-        outputStream.write_unsigned_byte(self.subcategory)
-        outputStream.write_unsigned_byte(self.specific)
-        outputStream.write_unsigned_byte(self.extra)
-
-    def parse(self, inputStream):
-        """Parse a message. This may recursively call embedded objects."""
-        self.entityKind = inputStream.read_unsigned_byte()
-        self.domain = inputStream.read_unsigned_byte()
-        self.country = inputStream.read_unsigned_short()
-        self.category = inputStream.read_unsigned_byte()
-        self.subcategory = inputStream.read_unsigned_byte()
-        self.specific = inputStream.read_unsigned_byte()
-        self.extra = inputStream.read_unsigned_byte()
-
-
 class Munition:
     """Section 6.2.60
     
@@ -2524,12 +2478,12 @@ class Munition:
     """
 
     def __init__(self,
-                 munitionType: "EntityType | None" = None,
+                 munitionType: record.EntityType | None = None,
                  station: enum32 = 0,  # [UID 57]
                  quantity: uint16 = 0,
                  munitionStatus: enum8 = 0):  # [UID 327]
         # TODO: Validate munitionType.entityKind == 2
-        self.munitionType = munitionType or EntityType()
+        self.munitionType = munitionType or record.EntityType()
         """This field shall identify the entity type of the munition. See section 6.2.30."""
         self.station = station
         """the station or launcher to which the munition is assigned. See Annex I"""
@@ -2875,14 +2829,14 @@ class MunitionReload:
     """
 
     def __init__(self,
-                 munitionType: "EntityType | None" = None,
+                 munitionType: record.EntityType | None = None,
                  station: enum32 = 0,  # [UID 57] (Annex I)
                  standardQuantity: uint16 = 0,
                  maximumQuantity: uint16 = 0,
                  standardQuantityReloadTime: uint32 = 0,  # in simulation sec
                  maximumQuantityReloadTime: uint32 = 0):  # in simulation sec
         # TODO: validate munitionType.entityKind == 2
-        self.munitionType = munitionType or EntityType()
+        self.munitionType = munitionType or record.EntityType()
         """This field shall identify the entity type of the munition. See section 6.2.30."""
         self.station = station
         """the station or launcher to which the munition is assigned. See Annex I"""
@@ -2977,14 +2931,14 @@ class ExpendableReload:
     """
 
     def __init__(self,
-                 expendable: "EntityType | None" = None,
+                 expendable: record.EntityType | None = None,
                  station: enum32 = 0,  # [UID 57] (Annex I)
                  standardQuantity: uint16 = 0,
                  maximumQuantity: uint16 = 0,
                  standardQuantityReloadTime: uint32 = 0,  # in simulation sec
                  maximumQuantityReloadTime: uint32 = 0):  # in simulation sec
         # TODO: validate expendable.entityKind
-        self.expendable = expendable or EntityType()
+        self.expendable = expendable or record.EntityType()
         """Type of expendable"""
         self.station = station
         self.standardQuantity = standardQuantity
@@ -3092,11 +3046,11 @@ class EntityTypeVP:
 
     def __init__(self,
                  changeIndicator: enum8 = 0,
-                 entityType: "EntityType | None" = None):
+                 entityType: record.EntityType | None = None):
         """the identification of the Variable Parameter record. Enumeration from EBV"""
         self.changeIndicator = changeIndicator  # [UID 320]
         """Indicates if this VP has changed since last issuance"""
-        self.entityType = entityType or EntityType()  # 64 bits
+        self.entityType = entityType or record.EntityType()  # 64 bits
         self.padding: uint16 = 0
         self.padding1: uint32 = 0
 
@@ -3481,8 +3435,8 @@ class ExpendableDescriptor:
     Burst of chaff or expendable device.
     """
 
-    def __init__(self, expendableType: "EntityType | None" = None):  # (See 6.2.30)
-        self.expendableType = expendableType or EntityType()
+    def __init__(self, expendableType: record.EntityType | None = None):  # (See 6.2.30)
+        self.expendableType = expendableType or record.EntityType()
         """Type of the object that exploded"""
         self.padding: uint64 = 0
 
@@ -4777,8 +4731,8 @@ class EntityStatePdu(EntityInformationFamilyPdu):
     def __init__(self,
                  entityID: record.EntityIdentifier | None = None,
                  forceId: enum8 = 0,  # [UID 6]
-                 entityType: EntityType | None = None,
-                 alternativeEntityType: EntityType | None = None,
+                 entityType: record.EntityType | None = None,
+                 alternativeEntityType: record.EntityType | None = None,
                  entityLinearVelocity: record.Vector3Float | None = None,
                  entityLocation: record.WorldCoordinates | None = None,
                  entityOrientation: record.EulerAngles | None = None,
@@ -4791,8 +4745,8 @@ class EntityStatePdu(EntityInformationFamilyPdu):
         self.entityID = entityID or record.EntityIdentifier()
         self.forceId = forceId
         """What force this entity is affiliated with, eg red, blue, neutral, etc"""
-        self.entityType = entityType or EntityType()
-        self.alternativeEntityType = alternativeEntityType or EntityType()
+        self.entityType = entityType or record.EntityType()
+        self.alternativeEntityType = alternativeEntityType or record.EntityType()
         self.entityLinearVelocity = entityLinearVelocity or record.Vector3Float()
         self.entityLocation = entityLocation or record.WorldCoordinates()
         self.entityOrientation = entityOrientation or record.EulerAngles()
@@ -4919,7 +4873,7 @@ class TransmitterPdu(RadioCommunicationsFamilyPdu):
     def __init__(self,
                  radioReferenceID: record.EntityIdentifier | ObjectIdentifier | None = None,
                  radioNumber: uint16 = 0,
-                 radioEntityType: EntityType | None = None,
+                 radioEntityType: record.EntityType | None = None,
                  transmitState: enum8 = 0,  # [UID 164]
                  inputSource: enum8 = 0,  # [UID 165]
                  antennaLocation: record.WorldCoordinates | None = None,
@@ -4939,7 +4893,7 @@ class TransmitterPdu(RadioCommunicationsFamilyPdu):
         """ID of the entity that is the source of the communication"""
         self.radioNumber = radioNumber
         """particular radio within an entity"""
-        self.radioEntityType = radioEntityType or EntityType()  # TODO: validation
+        self.radioEntityType = radioEntityType or record.EntityType()  # TODO: validation
         self.transmitState = transmitState
         self.inputSource = inputSource
         self.antennaLocation = antennaLocation or record.WorldCoordinates()
@@ -6066,18 +6020,18 @@ class MinefieldStatePdu(MinefieldFamilyPdu):
                  minefieldID: "MinefieldIdentifier | None" = None,
                  minefieldSequence: uint16 = 0,
                  forceID: enum8 = 0,  # [UID 6]
-                 minefieldType: EntityType | None = None,
+                 minefieldType: record.EntityType | None = None,
                  minefieldLocation: record.WorldCoordinates | None = None,
                  minefieldOrientation: record.EulerAngles | None = None,
                  appearance: struct16 = 0,  # [UID 190]
                  protocolMode: struct16 = 0,  # See 6.2.69
                  perimeterPoints: list[Vector2Float] | None = None,
-                 mineTypes: list[EntityType] | None = None):
+                 mineTypes: list[record.EntityType] | None = None):
         super(MinefieldStatePdu, self).__init__()
         self.minefieldID = minefieldID or MinefieldIdentifier()
         self.minefieldSequence = minefieldSequence
         self.forceID = forceID
-        self.minefieldType = minefieldType or EntityType()
+        self.minefieldType = minefieldType or record.EntityType()
         self.minefieldLocation = minefieldLocation or record.WorldCoordinates()
         """location of center of minefield in world coords"""
         self.minefieldOrientation = minefieldOrientation or record.EulerAngles()
@@ -6134,7 +6088,7 @@ class MinefieldStatePdu(MinefieldFamilyPdu):
             self.perimeterPoints.append(element)
 
         for idx in range(0, numberOfMineTypes):
-            element = EntityType()
+            element = record.EntityType()
             element.parse(inputStream)
             self.mineTypes.append(element)
 
@@ -6291,7 +6245,7 @@ class DirectedEnergyFirePdu(WarfareFamilyPdu):
     pduType: enum8 = 68  # [UID 4]
 
     def __init__(self,
-                 munitionType: "EntityType | None" = None,
+                 munitionType: record.EntityType | None = None,
                  shotStartTime: "ClockTime | None" = None,
                  cumulativeShotTime: float32 = 0.0,  # in seconds
                  apertureEmitterLocation: record.Vector3Float | None = None,  # in meters
@@ -6304,7 +6258,7 @@ class DirectedEnergyFirePdu(WarfareFamilyPdu):
                  dERecords: list[record.DamageDescriptionRecord] | None = None):
         super(DirectedEnergyFirePdu, self).__init__()
         # TODO: validate entity type?
-        self.munitionType = munitionType or EntityType()
+        self.munitionType = munitionType or record.EntityType()
         self.shotStartTime = shotStartTime or ClockTime()
         self.cumulativeShotTime = cumulativeShotTime
         self.apertureEmitterLocation = (apertureEmitterLocation
@@ -6398,8 +6352,7 @@ class DetonationPdu(WarfareFamilyPdu):
         self.location = location or record.WorldCoordinates()
         """location of the munition detonation, the expendable detonation, Section 7.3.3"""
         self.descriptor = descriptor or MunitionDescriptor()
-        self.locationInEntityCoordinates = locationInEntityCoordinates or Vector3Float(
-        )
+        self.locationInEntityCoordinates = locationInEntityCoordinates or record.Vector3Float()
         self.detonationResult = detonationResult
         self.pad: uint16 = 0
         self.variableParameters = variableParameters or []
@@ -6637,11 +6590,11 @@ class EntityDamageStatusPdu(WarfareFamilyPdu):
         self.padding2 = inputStream.read_uint16()
         damageDescriptionCount = inputStream.read_uint16()
         for _ in range(0, damageDescriptionCount):
-            record = parseStandardVariableRecord(
+            svRecord = parseStandardVariableRecord(
                 inputStream,
                 record.DamageDescriptionRecord
             )
-            self.damageDescriptions.append(record)
+            self.damageDescriptions.append(svRecord)
 
 
 class FirePdu(WarfareFamilyPdu):
@@ -7329,7 +7282,7 @@ class IsPartOfPdu(EntityManagementFamilyPdu):
                  relationship: "Relationship | None" = None,
                  partLocation: record.Vector3Float | None = None,
                  namedLocationID: "NamedLocationIdentification | None" = None,
-                 partEntityType: "EntityType | None" = None):
+                 partEntityType: record.EntityType | None = None):
         super(IsPartOfPdu, self).__init__()
         self.orginatingEntityID = originatingEntityID or record.EntityIdentifier()
         """ID of entity originating PDU"""
@@ -7340,7 +7293,7 @@ class IsPartOfPdu(EntityManagementFamilyPdu):
         self.partLocation = partLocation or record.Vector3Float()
         """location of part; centroid of part in host's coordinate system. x=range, y=bearing, z=0"""
         self.namedLocationID = namedLocationID or NamedLocationIdentification()
-        self.partEntityType = partEntityType or EntityType()
+        self.partEntityType = partEntityType or record.EntityType()
 
     def serialize(self, outputStream):
         """serialize the class"""

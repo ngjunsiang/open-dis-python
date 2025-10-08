@@ -21,6 +21,7 @@ from . import symbolic_names as sym
 
 __all__ = [
     "EntityIdentifier",
+    "EntityType",
     "EulerAngles",
     "EventIdentifier",
     "SimulationAddress",
@@ -52,6 +53,55 @@ class EntityIdentifier(base.Record):
     def parse(self, inputStream: DataInputStream) -> None:
         self.simulationAddress.parse(inputStream)
         self.entityNumber = inputStream.read_uint16()
+
+
+class EntityType(base.Record):
+    """6.2.30 Entity Type record
+    
+    This record shall specify the kind of entity, the country of design, the
+    domain, the specific identification of the entity, and any extra
+    information necessary for describing the entity.
+    Fields not used shall contain the value zero.
+    A table of comprehensive entity type enumerations can be found in
+    SISO-REF-010 (see [UID 30]).
+    """
+
+    def __init__(self,
+                 entityKind: enum8 = 0,  # [UID 7]
+                 domain: enum8 = 0,  # [UID 8], [UID 14]
+                 country: enum16 = 0,  # [UID 29]
+                 category: enum8 = 0,
+                 subcategory: enum8 = 0,
+                 specific: enum8 = 0,
+                 extra: enum8 = 0):
+        self.entityKind = entityKind
+        self.domain = domain
+        self.country = country
+        self.category = category
+        self.subcategory = subcategory
+        self.specific = specific
+        self.extra = extra
+
+    def marshalledSize(self) -> int:
+        return 8
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        outputStream.write_uint8(self.entityKind)
+        outputStream.write_uint8(self.domain)
+        outputStream.write_uint16(self.country)
+        outputStream.write_uint8(self.category)
+        outputStream.write_uint8(self.subcategory)
+        outputStream.write_uint8(self.specific)
+        outputStream.write_uint8(self.extra)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        self.entityKind = inputStream.read_uint8()
+        self.domain = inputStream.read_uint8()
+        self.country = inputStream.read_uint16()
+        self.category = inputStream.read_uint8()
+        self.subcategory = inputStream.read_uint8()
+        self.specific = inputStream.read_uint8()
+        self.extra = inputStream.read_uint8()
 
 
 class EulerAngles(base.Record):
