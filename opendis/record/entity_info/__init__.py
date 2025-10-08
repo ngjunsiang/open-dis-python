@@ -6,6 +6,7 @@ __all__ = [
     "VariableParameterRecord",
     "getVariableParameterClass",
     "appearance",
+    "getEntityAppearanceClass",
 ]
 
 from typing import TypeVar
@@ -28,10 +29,54 @@ from opendis.types import (
     uint32,
 )
 
+from opendis.record.common import EntityType
 
 from . import appearance
 
 VP = TypeVar('VP', bound="VariableParameterRecord")
+
+
+def getEntityAppearanceClass(
+        entityType: enum8,
+        domain: enum8 | None = None,
+) -> type[appearance.AppearanceRecord]:
+    """Return an AppearanceRecord subclass for the given entityType and domain.
+    
+    If not determinable, return UnknownAppearance.
+    """
+    match (entityType, domain):
+        case (0, _):  # Entity Kind: Other
+            return appearance.UnknownAppearance
+        case (1, 1):  # Entity Kind: Platform, Domain: Land
+            return appearance.LandPlatformAppearance
+        case (1, 2):  # Entity Kind: Platform, Domain: Air
+            return appearance.AirPlatformAppearance
+        case (1, 3):  # Entity Kind: Platform, Domain: Surface
+            return appearance.SurfacePlatformAppearance
+        case (1, 4):  # Entity Kind: Platform, Domain: Subsurface
+            return appearance.SubsurfacePlatformAppearance
+        case (1, 5):  # Entity Kind: Platform, Domain: Space
+            return appearance.SpacePlatformAppearance
+        case (2, _):  # Entity Kind: Munition
+            return appearance.MunitionAppearance
+        case (3, _):  # Entity Kind: Life form
+            # Only human lifeform appearance supported for now
+            return appearance.HumanLifeFormAppearance
+        case (4, _):  # Entity Kind: Environmental
+            return appearance.EnvironmentalAppearance
+        case (5, _):  # Entity Kind: Cultural feature
+            return appearance.CulturalFeatureAppearance
+        case (6, _):  # Entity Kind: Supply
+            return appearance.SupplyAppearance
+        case (7, _):  # Entity Kind: Radio
+            return appearance.RadioAppearance
+        case (8, _):  # Entity Kind: Expendable
+            return appearance.ExpendableAppearance
+        case (9, _):  # Entity Kind: Sensor/Emitter
+            return appearance.SensorEmitterAppearance
+        case _:
+            return appearance.UnknownAppearance
+
 
 # Interfaces
 
