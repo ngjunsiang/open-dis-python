@@ -80,7 +80,7 @@ class DataQueryDatumSpecification:
         """variable length list variable datum IDs"""
 
     @property
-    def FixedDatumIDCount(self) -> uint32:
+    def fixedDatumIDCount(self) -> uint32:
         return len(self.fixedDatumIDs)
 
     @property
@@ -89,7 +89,7 @@ class DataQueryDatumSpecification:
 
     def serialize(self, outputStream):
         """serialize the class"""
-        outputStream.write_unsigned_int(self.FixedDatumIDCount)
+        outputStream.write_unsigned_int(self.fixedDatumIDCount)
         outputStream.write_unsigned_int(self.variableDatumIDCount)
         for datumID in self.fixedDatumIDs:
             outputStream.write_unsigned_int(datumID)
@@ -3871,8 +3871,8 @@ class DataQueryPdu(SimulationManagementFamilyPdu):
                                                       variableDatumIDs or [])
 
     @property
-    def FixedDatumIDCount(self) -> int:
-        return self._dataQuery.FixedDatumIDCount
+    def fixedDatumIDCount(self) -> int:
+        return self._dataQuery.fixedDatumIDCount
 
     @property
     def variableDatumIDCount(self) -> int:
@@ -5834,8 +5834,8 @@ class DataQueryReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
                                                       variableDatumIDs or [])
 
     @property
-    def FixedDatumIDCount(self) -> int:
-        return self._dataQuery.FixedDatumIDCount
+    def fixedDatumIDCount(self) -> int:
+        return self._dataQuery.fixedDatumIDCount
 
     @property
     def variableDatumIDCount(self) -> int:
