@@ -5,8 +5,8 @@ __all__ = [
     "AttachedPart",
     "SilentEntitySystem",
     "VariableParameterRecord",
-    "getVariableParameterClass",
     "appearance",
+    "getVariableParameterClass",
     "getEntityAppearanceClass",
 ]
 
@@ -32,7 +32,7 @@ from opendis.types import (
 
 from opendis.record.common import EntityType
 
-from . import appearance
+from .appearance import *
 
 VP = TypeVar('VP', bound="VariableParameterRecord")
 
