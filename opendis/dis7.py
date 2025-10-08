@@ -1041,47 +1041,6 @@ class FixedDatum:
         self.fixedDatumValue = inputStream.read_unsigned_int()
 
 
-class VariableParameter:
-    """Section 6.2.94.1
-
-    Specification of additional information associated with an entity or
-    detonation, not otherwise accounted for in a PDU.
-    """
-
-    def __init__(self,
-                 recordType: enum8 = 0,  # [UID 56]
-                 variableParameterFields1=0,
-                 variableParameterFields2=0,
-                 variableParameterFields3=0,
-                 variableParameterFields4=0):
-        self.recordType = recordType
-        """the identification of the Variable Parameter record. Enumeration from EBV"""
-        self.variableParameterFields1 = variableParameterFields1
-        """Variable parameter data fields. Two doubles minus one byte"""
-        self.variableParameterFields2 = variableParameterFields2
-        """Variable parameter data fields."""
-        self.variableParameterFields3 = variableParameterFields3
-        """Variable parameter data fields."""
-        self.variableParameterFields4 = variableParameterFields4
-        """Variable parameter data fields."""
-
-    def serialize(self, outputStream):
-        """serialize the class"""
-        outputStream.write_unsigned_byte(self.recordType)
-        outputStream.write_double(self.variableParameterFields1)
-        outputStream.write_unsigned_int(self.variableParameterFields2)
-        outputStream.write_unsigned_short(self.variableParameterFields3)
-        outputStream.write_unsigned_byte(self.variableParameterFields4)
-
-    def parse(self, inputStream):
-        """Parse a message. This may recursively call embedded objects."""
-        self.recordType = inputStream.read_unsigned_byte()
-        self.variableParameterFields1 = inputStream.read_double()
-        self.variableParameterFields2 = inputStream.read_unsigned_int()
-        self.variableParameterFields3 = inputStream.read_unsigned_short()
-        self.variableParameterFields4 = inputStream.read_unsigned_byte()
-
-
 class ChangeOptions:
     """This is wrong and breaks serialization. See section 6.2.13 aka B.2.41"""
 
@@ -3642,7 +3601,7 @@ class EntityStateUpdatePdu(EntityInformationFamilyPdu):
                  entityLocation: record.WorldCoordinates | None = None,
                  entityOrientation: record.EulerAngles | None = None,
                  entityAppearance: struct32 = 0,  # [UID 31-43]
-                 variableParameters: list[VariableParameter] | None = None):
+                 variableParameters: list[record.VariableParameterRecord] | None = None):
         super(EntityStateUpdatePdu, self).__init__()
         self.entityID = entityID or record.EntityIdentifier()
         """This field shall identify the entity issuing the PDU, and shall be represented by an Entity Identifier record (see 6.2.28)."""
@@ -3652,14 +3611,12 @@ class EntityStateUpdatePdu(EntityInformationFamilyPdu):
         self.entityLocation = entityLocation or record.WorldCoordinates()
         """This field shall specify an entitys physical location in the simulated world and shall be represented by a World Coordinates record (see 6.2.97)."""
         self.entityOrientation = entityOrientation or record.EulerAngles()
-        """This field shall specify an entitys orientation and shall be represented by an Euler Angles record (see 6.2.33)."""
-        self.entityAppearance = entityAppearance
-        """This field shall specify the dynamic changes to the entity's appearance attributes. This field shall be represented by an Entity Appearance record (see 6.2.26)."""
-        self.variableParameters = variableParameters or []
-        """This field shall specify the parameter values for each Variable Parameter record that is included (see 6.2.93 and Annex I)."""
+        self.variableParameters: list[record.VariableParameterRecord] = (
+            variableParameters or []
+        )
 
     @property
-    def numberOfVariableParameters(self) -> uint8:
+    def variableParameterCount(self) -> uint8:
         return len(self.variableParameters)
 
     def serialize(self, outputStream):
@@ -3672,8 +3629,8 @@ class EntityStateUpdatePdu(EntityInformationFamilyPdu):
         self.entityLocation.serialize(outputStream)
         self.entityOrientation.serialize(outputStream)
         outputStream.write_unsigned_int(self.entityAppearance)
-        for anObj in self.variableParameters:
-            anObj.serialize(outputStream)
+        for vpRecord in self.variableParameters:
+            vpRecord.serialize(outputStream)
 
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
@@ -3684,11 +3641,10 @@ class EntityStateUpdatePdu(EntityInformationFamilyPdu):
         self.entityLinearVelocity.parse(inputStream)
         self.entityLocation.parse(inputStream)
         self.entityOrientation.parse(inputStream)
-        self.entityAppearance = inputStream.read_unsigned_int()
-        for idx in range(0, numberOfVariableParameters):
-            element = VariableParameter()
-            element.parse(inputStream)
-            self.variableParameters.append(element)
+        self.variableParameters.clear()
+        for _ in range(0, variableParameterCount):
+            vpRecord = parseVariableParameterRecord(inputStream)
+            self.variableParameters.append(vpRecord)
 
 
 class ServiceRequestPdu(LogisticsFamilyPdu):
@@ -6276,7 +6232,7 @@ class DetonationPdu(WarfareFamilyPdu):
                  descriptor: MunitionDescriptor | None = None,
                  locationInEntityCoordinates: record.Vector3Float | None = None,
                  detonationResult: enum8 = 0,  # [UID 62]
-                 variableParameters: list[VariableParameter] | None = None):
+                 variableParameters: list[record.VariableParameterRecord] | None = None):
         super(DetonationPdu, self).__init__()
         self.explodingEntityID = explodingEntityID or record.EntityIdentifier()
         """ID of the expendable entity, Section 7.3.3"""
@@ -6288,12 +6244,12 @@ class DetonationPdu(WarfareFamilyPdu):
         self.descriptor = descriptor or MunitionDescriptor()
         self.locationInEntityCoordinates = locationInEntityCoordinates or record.Vector3Float()
         self.detonationResult = detonationResult
-        self.pad: uint16 = 0
-        self.variableParameters = variableParameters or []
-        """specify the parameter values for each Variable Parameter record, Section 7.3.3"""
+        self.variableParameters: list[record.VariableParameterRecord] = (
+            variableParameters or []
+        )
 
     @property
-    def numberOfVariableParameters(self) -> uint8:
+    def variableParameterCount(self) -> uint8:
         return len(self.variableParameters)
 
     def serialize(self, outputStream):
@@ -6308,8 +6264,8 @@ class DetonationPdu(WarfareFamilyPdu):
         outputStream.write_unsigned_byte(self.detonationResult)
         outputStream.write_unsigned_byte(self.numberOfVariableParameters)
         outputStream.write_unsigned_short(self.pad)
-        for anObj in self.variableParameters:
-            anObj.serialize(outputStream)
+        for vpRecord in self.variableParameters:
+            vpRecord.serialize(outputStream)
 
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
@@ -6321,12 +6277,12 @@ class DetonationPdu(WarfareFamilyPdu):
         self.descriptor.parse(inputStream)
         self.locationInEntityCoordinates.parse(inputStream)
         self.detonationResult = inputStream.read_unsigned_byte()
-        numberOfVariableParameters = inputStream.read_unsigned_byte()
+        variableParameterCount = inputStream.read_unsigned_byte()
         self.pad = inputStream.read_unsigned_short()
-        for idx in range(0, numberOfVariableParameters):
-            element = VariableParameter()
-            element.parse(inputStream)
-            self.variableParameters.append(element)
+        self.variableParameters.clear()
+        for _ in range(0, variableParameterCount):
+            vpRecord = parseVariableParameterRecord(inputStream)
+            self.variableParameters.append(vpRecord)
 
 
 class SetDataPdu(SimulationManagementFamilyPdu):
