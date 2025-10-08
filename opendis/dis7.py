@@ -6551,7 +6551,7 @@ class UaPdu(DistributedEmissionsFamilyPdu):
         """ID of event"""
         self.stateChangeIndicator = stateChangeIndicator
         """This field shall be used to indicate whether the data in the UA PDU represent a state update or data that have changed since issuance of the last UA PDU"""
-        self.pad: uint8 = 0
+        self.padding: uint8 = 0
         self.passiveParameterIndex = passiveParameterIndex
         """This field indicates which database record (or file) shall be used in the definition of passive signature (unintentional) emissions of the entity. The indicated database record (or  file) shall define all noise generated as a function of propulsion plant configurations and associated  auxiliaries."""
         self.propulsionPlantConfiguration = propulsionPlantConfiguration
@@ -6582,7 +6582,7 @@ class UaPdu(DistributedEmissionsFamilyPdu):
         self.emittingEntityID.serialize(outputStream)
         self.eventID.serialize(outputStream)
         outputStream.write_byte(self.stateChangeIndicator)
-        outputStream.write_byte(self.pad)
+        outputStream.write_uint8(self.padding)
         outputStream.write_unsigned_short(self.passiveParameterIndex)
         outputStream.write_unsigned_byte(self.propulsionPlantConfiguration)
         outputStream.write_unsigned_byte(self.shaftCount)
@@ -6601,7 +6601,7 @@ class UaPdu(DistributedEmissionsFamilyPdu):
         self.emittingEntityID.parse(inputStream)
         self.eventID.parse(inputStream)
         self.stateChangeIndicator = inputStream.read_byte()
-        self.pad = inputStream.read_byte()
+        self.padding = inputStream.read_uint8()
         self.passiveParameterIndex = inputStream.read_unsigned_short()
         self.propulsionPlantConfiguration = inputStream.read_unsigned_byte()
         shaftCount = inputStream.read_unsigned_byte()
