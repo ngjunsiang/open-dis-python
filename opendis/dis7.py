@@ -3516,10 +3516,12 @@ class LogisticsFamilyPdu(Pdu):
 
 
 class EntityStateUpdatePdu(EntityInformationFamilyPdu):
-    """Section 7.2.5
+    """7.2.5 Entity State Update PDU
     
     Nonstatic information about a particular entity may be communicated by
-    issuing an Entity State Update PDU. COMPLETE
+    issuing an Entity State Update PDU.
+    May be used when a simulation application is using dead
+    reckoning algorithm DRM (FPW).
     """
     pduType: enum8 = 67  # [UID 4]
 
@@ -3532,12 +3534,11 @@ class EntityStateUpdatePdu(EntityInformationFamilyPdu):
                  variableParameters: list[record.VariableParameterRecord] | None = None):
         super(EntityStateUpdatePdu, self).__init__()
         self.entityID = entityID or record.EntityIdentifier()
-        """This field shall identify the entity issuing the PDU, and shall be represented by an Entity Identifier record (see 6.2.28)."""
         self.padding1: uint8 = 0
-        self.entityLinearVelocity = entityLinearVelocity or record.Vector3Float()
-        """This field shall specify an entitys linear velocity. The coordinate system for an entitys linear velocity depends on the dead reckoning algorithm used. This field shall be represented by a Linear Velocity Vector record [see 6.2.95 item c)])."""
+        self.entityLinearVelocity = (
+            entityLinearVelocity or record.Vector3Float()
+        )
         self.entityLocation = entityLocation or record.WorldCoordinates()
-        """This field shall specify an entitys physical location in the simulated world and shall be represented by a World Coordinates record (see 6.2.97)."""
         self.entityOrientation = entityOrientation or record.EulerAngles()
         self.entityAppearance = entityAppearance or record.UnknownAppearance()
         self.variableParameters: list[record.VariableParameterRecord] = (
@@ -3548,8 +3549,7 @@ class EntityStateUpdatePdu(EntityInformationFamilyPdu):
     def variableParameterCount(self) -> uint8:
         return len(self.variableParameters)
 
-    def serialize(self, outputStream):
-        """serialize the class"""
+    def serialize(self, outputStream: DataOutputStream) -> None:
         super(EntityStateUpdatePdu, self).serialize(outputStream)
         self.entityID.serialize(outputStream)
         outputStream.write_byte(self.padding1)
@@ -3561,12 +3561,11 @@ class EntityStateUpdatePdu(EntityInformationFamilyPdu):
         for vpRecord in self.variableParameters:
             vpRecord.serialize(outputStream)
 
-    def parse(self, inputStream):
-        """Parse a message. This may recursively call embedded objects."""
+    def parse(self, inputStream: DataInputStream) -> None:
         super(EntityStateUpdatePdu, self).parse(inputStream)
         self.entityID.parse(inputStream)
         self.padding1 = inputStream.read_byte()
-        numberOfVariableParameters = inputStream.read_unsigned_byte()
+        variableParameterCount = inputStream.read_uint8()
         self.entityLinearVelocity.parse(inputStream)
         self.entityLocation.parse(inputStream)
         self.entityOrientation.parse(inputStream)
@@ -4555,7 +4554,7 @@ class StopFreezePdu(SimulationManagementFamilyPdu):
 
 
 class EntityStatePdu(EntityInformationFamilyPdu):
-    """Section 7.2.2
+    """7.2.2 Entity State PDU
     
     Represents the postion and state of one entity in the world.
     """
@@ -4579,13 +4578,18 @@ class EntityStatePdu(EntityInformationFamilyPdu):
         self.forceId = forceId
         """What force this entity is affiliated with, eg red, blue, neutral, etc"""
         self.entityType = entityType or record.EntityType()
-        self.alternativeEntityType = alternativeEntityType or record.EntityType()
-        self.entityLinearVelocity = entityLinearVelocity or record.Vector3Float()
+        self.alternativeEntityType = (
+            alternativeEntityType or record.EntityType()
+        )
+        self.entityLinearVelocity = (
+            entityLinearVelocity or record.Vector3Float()
+        )
         self.entityLocation = entityLocation or record.WorldCoordinates()
         self.entityOrientation = entityOrientation or record.EulerAngles()
-        self.entityAppearance = entityAppearance
-        """a series of bit flags that are used to help draw the entity, such as smoking, on fire, etc."""
-        self.deadReckoningParameters = deadReckoningParameters or DeadReckoningParameters()
+        self.entityAppearance = entityAppearance or record.UnknownAppearance()
+        self.deadReckoningParameters = (
+            deadReckoningParameters or DeadReckoningParameters()
+        )
         self.marking = marking or EntityMarking()
         """characters that can be used for debugging, or to draw unique strings on the side of entities in the world"""
         self.capabilities = capabilities
@@ -5046,7 +5050,7 @@ class ResupplyOfferPdu(LogisticsFamilyPdu):
         self.padding1: uint8 = 0
         self.padding2: uint16 = 0
         self.supplies = supplies or []
-        """A Record that Specifies the type of supply and the amount of that supply for each of the supply types in numberOfSupplyTypes (see 6.2.85), Section 7.4.3"""
+        """A Record that Specifies the type of supply and the amount of that supply for each of the supply types in supplyTypeCount (see 6.2.85), Section 7.4.3"""
 
     @property
     def supplyTypeCount(self) -> uint8:
@@ -6155,11 +6159,11 @@ class DirectedEnergyFirePdu(WarfareFamilyPdu):
 
 
 class DetonationPdu(WarfareFamilyPdu):
-    """Section 7.3.3
+    """7.3.3 Detonation PDU
     
     Detonation or impact of munitions, as well as, non-munition explosions,
     the burst or initial bloom of chaff, and the ignition of a flare shall be
-    indicated. COMPLETE
+    indicated.
     """
     pduType: enum8 = 3  # [UID 4]
 
@@ -6191,8 +6195,7 @@ class DetonationPdu(WarfareFamilyPdu):
     def variableParameterCount(self) -> uint8:
         return len(self.variableParameters)
 
-    def serialize(self, outputStream):
-        """serialize the class"""
+    def serialize(self, outputStream: DataOutputStream) -> None:
         super(DetonationPdu, self).serialize(outputStream)
         self.explodingEntityID.serialize(outputStream)
         self.eventID.serialize(outputStream)
@@ -6206,8 +6209,7 @@ class DetonationPdu(WarfareFamilyPdu):
         for vpRecord in self.variableParameters:
             vpRecord.serialize(outputStream)
 
-    def parse(self, inputStream):
-        """Parse a message. This may recursively call embedded objects."""
+    def parse(self, inputStream: DataInputStream) -> None:
         super(DetonationPdu, self).parse(inputStream)
         self.explodingEntityID.parse(inputStream)
         self.eventID.parse(inputStream)
@@ -7146,11 +7148,10 @@ class IsPartOfPdu(EntityManagementFamilyPdu):
 
 
 class AggregateStatePdu(EntityManagementFamilyPdu):
-    """Section 7.8.2
+    """7.8.2 Aggregate State PDU
 
     Detailed information about aggregating entities and communicating
-    information about the aggregated entities is communicated by this PDU
-    COMPLETE
+    information about the aggregated entities is communicated by this PDU.
     """
     pduType: enum8 = 33
 
@@ -7170,7 +7171,6 @@ class AggregateStatePdu(EntityManagementFamilyPdu):
                  silentEntitySystems: list[record.SilentEntitySystem] | None = None,
                  variableDatumRecords: list[VariableDatum] | None = None):
         super(AggregateStatePdu, self).__init__()
-        """Identifier of the aggregate issuing the PDU"""
         self.aggregateID = aggregateID or AggregateIdentifier()
         """Common force to which the aggregate belongs"""
         self.forceID = forceID
@@ -7181,10 +7181,8 @@ class AggregateStatePdu(EntityManagementFamilyPdu):
         self.aggregateMarking = aggregateMarking or AggregateMarking()
         """Bounding space, in meters, occupied by the aggregate"""
         self.dimensions = dimensions or record.Vector3Float()
-        """Orientation of the aggregate, average of the orientations of the constituents"""
         self.orientation = orientation or record.EulerAngles()
         self.centerOfMass = centerOfMass or record.Vector3Float()
-        """Aggregates linear velocity. The coordinate system is dependent on the dead reckoning algorithm"""
         self.velocity = velocity or record.WorldCoordinates()
         """Identify subaggregates that are transmitting Aggregate State PDUs"""
         self.aggregateIDs = aggregateIDs or []
@@ -7216,8 +7214,7 @@ class AggregateStatePdu(EntityManagementFamilyPdu):
     def variableDatumCount(self) -> uint32:
         return len(self.variableDatumRecords)
 
-    def serialize(self, outputStream):
-        """serialize the class"""
+    def serialize(self, outputStream: DataOutputStream) -> None:
         super(AggregateStatePdu, self).serialize(outputStream)
         self.aggregateID.serialize(outputStream)
         outputStream.write_unsigned_byte(self.forceID)
@@ -7245,8 +7242,7 @@ class AggregateStatePdu(EntityManagementFamilyPdu):
         for variableDatumRecord in self.variableDatumRecords:
             variableDatumRecord.serialize(outputStream)
 
-    def parse(self, inputStream):
-        """Parse a message. This may recursively call embedded objects."""
+    def parse(self, inputStream: DataInputStream) -> None:
         super(AggregateStatePdu, self).parse(inputStream)
         self.aggregateID.parse(inputStream)
         self.forceID = inputStream.read_unsigned_byte()
