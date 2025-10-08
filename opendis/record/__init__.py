@@ -31,6 +31,7 @@ from . import (
 )
 from .base import *
 from .common import *
+from .entity_info import *
 from .radio import *
 from .warfare import *
 

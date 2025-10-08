@@ -45,6 +45,26 @@ def parseStandardVariableRecord(
     return sv_instance
 
 
+def parseVariableParameterRecord(
+        inputStream: DataInputStream
+) -> record.VariableParameterRecord:
+    """Parse a single Variable Parameter Record from the input stream.
+    These rely on recordType enums from [UID 56].
+    The mapping of recordType to class is defined in opendis.entity_info
+
+    Args:
+        inputStream: The DataInputStream to read from.
+    
+    Returns:
+        An instance of a VariableParameterRecord subclass.
+    """
+    recordType = inputStream.read_uint8()
+    vpClass = record.getVariableParameterClass(recordType)
+    vp_instance = vpClass()
+    vp_instance.parse(inputStream)
+    return vp_instance
+
+
 class DataQueryDatumSpecification:
     """Section 6.2.17
 
@@ -750,44 +770,6 @@ class OwnershipStatus:
         self.padding = inputStream.read_unsigned_byte()
 
 
-class AttachedParts:
-    """Section 6.2.93.3
-    
-    Removable parts that may be attached to an entity.
-    """
-    recordType: enum8 = 1  # [UID 56]  Variable Parameter Record Type
-
-    def __init__(self,
-                 detachedIndicator: enum8 = 0,  # [UID 415]
-                 partAttachedTo: uint16 = 0,
-                 parameterType: enum32 = 0,  # [UID 57]
-                 attachedPartType: record.EntityType | None = None):
-        self.detachedIndicator = detachedIndicator
-        """0 = attached, 1 = detached. See I.2.3.1 for state transition diagram"""
-        self.partAttachedTo = partAttachedTo
-        """the identification of the articulated part to which this articulation parameter is attached. This field shall be specified by a 16-bit unsigned integer. This field shall contain the value zero if the articulated part is attached directly to the entity."""
-        self.parameterType = parameterType
-        """The location or station to which the part is attached"""
-        self.attachedPartType = attachedPartType or record.EntityType()
-        """The definition of the 64 bits shall be determined based on the type of parameter specified in the Parameter Type field"""
-
-    def serialize(self, outputStream):
-        """serialize the class"""
-        outputStream.write_unsigned_byte(self.recordType)
-        outputStream.write_unsigned_byte(self.detachedIndicator)
-        outputStream.write_unsigned_short(self.partAttachedTo)
-        outputStream.write_unsigned_int(self.parameterType)
-        outputStream.write_long(self.parameterValue)
-
-    def parse(self, inputStream):
-        """Parse a message. This may recursively call embedded objects."""
-        self.recordType = inputStream.read_unsigned_byte()  # TODO: validate
-        self.detachedIndicator = inputStream.read_unsigned_byte()
-        self.partAttachedTo = inputStream.read_unsigned_short()
-        self.parameterType = inputStream.read_unsigned_int()
-        self.parameterValue = inputStream.read_long()
-
-
 class Attribute:
     """Section 6.2.10.
 
@@ -843,45 +825,6 @@ class RecordQuerySpecification:
         for idx in range(0, numberOfRecords):
             val = inputStream.read_unsigned_int()
             self.recordIDs.append(val)
-
-
-class ArticulatedParts:
-    """Section 6.2.94.2
-
-    Articulated parts for movable parts and a combination of moveable/attached
-    parts of an entity.
-    """
-    recordType: enum8 = 0  # [UID 56] Variable Parameter Record Type
-
-    def __init__(self,
-                 changeIndicator: uint8 = 0,
-                 partAttachedTo: uint16 = 0,
-                 parameterType: enum32 = 0,
-                 parameterValue: float32 = 0):
-        self.changeIndicator = changeIndicator
-        """indicate the change of any parameter for any articulated part. Starts at zero, incremented for each change"""
-        self.partAttachedTo = partAttachedTo
-        """the identification of the articulated part to which this articulation parameter is attached. This field shall be specified by a 16-bit unsigned integer. This field shall contain the value zero if the articulated part is attached directly to the entity."""
-        self.parameterType = parameterType
-        """the type of parameter represented, 32 bit enumeration"""
-        self.parameterValue = parameterValue
-        """The definition of the 64 bits shall be determined based on the type of parameter specified in the Parameter Type field"""
-
-    def serialize(self, outputStream):
-        """serialize the class"""
-        outputStream.write_unsigned_byte(self.recordType)
-        outputStream.write_unsigned_byte(self.changeIndicator)
-        outputStream.write_unsigned_short(self.partAttachedTo)
-        outputStream.write_unsigned_int(self.parameterType)
-        outputStream.write_long(self.parameterValue)
-
-    def parse(self, inputStream):
-        """Parse a message. This may recursively call embedded objects."""
-        self.recordType = inputStream.read_unsigned_byte()  # TODO: validate
-        self.changeIndicator = inputStream.read_unsigned_byte()
-        self.partAttachedTo = inputStream.read_unsigned_short()
-        self.parameterType = inputStream.read_unsigned_int()
-        self.parameterValue = inputStream.read_long()
 
 
 class ObjectType:
@@ -4740,7 +4683,7 @@ class EntityStatePdu(EntityInformationFamilyPdu):
                  deadReckoningParameters: DeadReckoningParameters | None = None,
                  marking: EntityMarking | None = None,
                  capabilities: uint32 = 0,  # [UID 55]
-                 variableParameters: list[VariableParameter] | None = None):
+                 variableParameters: list[record.VariableParameterRecord] | None = None):
         super(EntityStatePdu, self).__init__()
         self.entityID = entityID or record.EntityIdentifier()
         self.forceId = forceId
@@ -4752,60 +4695,51 @@ class EntityStatePdu(EntityInformationFamilyPdu):
         self.entityOrientation = entityOrientation or record.EulerAngles()
         self.entityAppearance = entityAppearance
         """a series of bit flags that are used to help draw the entity, such as smoking, on fire, etc."""
-        self.deadReckoningParameters = deadReckoningParameters or DeadReckoningParameters(
-        )
-        """parameters used for dead reckoning"""
+        self.deadReckoningParameters = deadReckoningParameters or DeadReckoningParameters()
         self.marking = marking or EntityMarking()
         """characters that can be used for debugging, or to draw unique strings on the side of entities in the world"""
         self.capabilities = capabilities
-        """a series of bit flags"""
-        self.variableParameters = variableParameters or []
-        """variable length list of variable parameters. In earlier DIS versions this was articulation parameters."""
+        self.variableParameters: list[record.VariableParameterRecord] = variableParameters or []
 
     @property
-    def numberOfVariableParameters(self) -> uint8:
-        """How many variable parameters are in the variable length list.
-        In earlier versions of DIS these were known as articulation parameters.
-        """
+    def variableParameterCount(self) -> uint8:
         return len(self.variableParameters)
 
-    def serialize(self, outputStream):
-        """serialize the class"""
+    def serialize(self, outputStream: DataOutputStream) -> None:
         super(EntityStatePdu, self).serialize(outputStream)
         self.entityID.serialize(outputStream)
-        outputStream.write_unsigned_byte(self.forceId)
-        outputStream.write_unsigned_byte(self.numberOfVariableParameters)
+        outputStream.write_uint8(self.forceId)
+        outputStream.write_uint8(self.variableParameterCount)
         self.entityType.serialize(outputStream)
         self.alternativeEntityType.serialize(outputStream)
         self.entityLinearVelocity.serialize(outputStream)
         self.entityLocation.serialize(outputStream)
         self.entityOrientation.serialize(outputStream)
-        outputStream.write_unsigned_int(self.entityAppearance)
+        outputStream.write_uint32(self.entityAppearance)
         self.deadReckoningParameters.serialize(outputStream)
         self.marking.serialize(outputStream)
-        outputStream.write_unsigned_int(self.capabilities)
-        for anObj in self.variableParameters:
-            anObj.serialize(outputStream)
+        outputStream.write_uint32(self.capabilities)
+        for vpRecord in self.variableParameters:
+            vpRecord.serialize(outputStream)
 
-    def parse(self, inputStream):
-        """Parse a message. This may recursively call embedded objects."""
+    def parse(self, inputStream: DataInputStream) -> None:
         super(EntityStatePdu, self).parse(inputStream)
         self.entityID.parse(inputStream)
-        self.forceId = inputStream.read_unsigned_byte()
-        numberOfVariableParameters = inputStream.read_unsigned_byte()
+        self.forceId = inputStream.read_uint8()
+        variableParameterCount = inputStream.read_uint8()
         self.entityType.parse(inputStream)
         self.alternativeEntityType.parse(inputStream)
         self.entityLinearVelocity.parse(inputStream)
         self.entityLocation.parse(inputStream)
         self.entityOrientation.parse(inputStream)
-        self.entityAppearance = inputStream.read_unsigned_int()
+        self.entityAppearance = inputStream.read_uint32()
         self.deadReckoningParameters.parse(inputStream)
         self.marking.parse(inputStream)
-        self.capabilities = inputStream.read_unsigned_int()
-        for idx in range(0, numberOfVariableParameters):
-            element = VariableParameter()
-            element.parse(inputStream)
-            self.variableParameters.append(element)
+        self.capabilities = inputStream.read_uint32()
+        self.variableParameters.clear()
+        for _ in range(0, variableParameterCount):
+            vpRecord = parseVariableParameterRecord(inputStream)
+            self.variableParameters.append(vpRecord)
 
 
 class EntityManagementFamilyPdu(Pdu):
