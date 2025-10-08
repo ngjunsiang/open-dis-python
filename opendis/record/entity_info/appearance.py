@@ -17,6 +17,18 @@ class AppearanceRecord(base.Record):
           return 4
 
 
+class UnknownAppearance(AppearanceRecord):
+    """Placeholder for unknown appearance records."""
+    def __init__(self, data: bytes = b'\0' * 4):
+        self.data = data
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        outputStream.write_bytes(self.data)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        _ = inputStream.read_bytes(self.marshalledSize())
+
+
 class LandPlatformAppearance(AppearanceRecord):
     """SISO-REF-010 17.11.1.1.1 Land Platform Appearance Record [UID 31]"""
     _struct = bitfield.bitfield(name="LandPlatformAppearance", fields=[
