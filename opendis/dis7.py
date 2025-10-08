@@ -2055,45 +2055,6 @@ class SupplyQuantity:
         self.quantity = inputStream.read_float()
 
 
-class SilentEntitySystem:
-    """Section 6.2.79
-    
-    Information abou an entity not producing espdus.
-    """
-
-    def __init__(self,
-                 numberOfEntities: uint16 = 0,
-                 entityType: record.EntityType | None = None,
-                 appearanceRecordList: list | None = None):
-        self.numberOfEntities = numberOfEntities
-        """number of the type specified by the entity type field"""
-        self.entityType = entityType or record.EntityType()
-        self.appearanceRecordList = appearanceRecordList or []
-        """Variable length list of appearance records"""
-
-    @property
-    def numberOfAppearanceRecords(self) -> uint16:
-        return len(self.appearanceRecordList)
-
-    def serialize(self, outputStream):
-        """serialize the class"""
-        outputStream.write_unsigned_short(self.numberOfEntities)
-        outputStream.write_unsigned_short(self.numberOfAppearanceRecords)
-        self.entityType.serialize(outputStream)
-        for anObj in self.appearanceRecordList:
-            anObj.serialize(outputStream)
-
-    def parse(self, inputStream):
-        """Parse a message. This may recursively call embedded objects."""
-        self.numberOfEntities = inputStream.read_unsigned_short()
-        numberOfAppearanceRecords = inputStream.read_unsigned_short()
-        self.entityType.parse(inputStream)
-        for idx in range(0, numberOfAppearanceRecords):
-            element = null()
-            element.parse(inputStream)
-            self.appearanceRecordList.append(element)
-
-
 class SilentAggregateSystem:
     """No section, only referenced in connection with the AggregateStatePDU
 
@@ -3600,7 +3561,7 @@ class EntityStateUpdatePdu(EntityInformationFamilyPdu):
                  entityLinearVelocity: record.Vector3Float | None = None,
                  entityLocation: record.WorldCoordinates | None = None,
                  entityOrientation: record.EulerAngles | None = None,
-                 entityAppearance: struct32 = 0,  # [UID 31-43]
+                 entityAppearance: record.AppearanceRecord | None = None,  # [UID 31-43]
                  variableParameters: list[record.VariableParameterRecord] | None = None):
         super(EntityStateUpdatePdu, self).__init__()
         self.entityID = entityID or record.EntityIdentifier()
@@ -3611,6 +3572,7 @@ class EntityStateUpdatePdu(EntityInformationFamilyPdu):
         self.entityLocation = entityLocation or record.WorldCoordinates()
         """This field shall specify an entitys physical location in the simulated world and shall be represented by a World Coordinates record (see 6.2.97)."""
         self.entityOrientation = entityOrientation or record.EulerAngles()
+        self.entityAppearance = entityAppearance or record.UnknownAppearance()
         self.variableParameters: list[record.VariableParameterRecord] = (
             variableParameters or []
         )
@@ -3628,7 +3590,7 @@ class EntityStateUpdatePdu(EntityInformationFamilyPdu):
         self.entityLinearVelocity.serialize(outputStream)
         self.entityLocation.serialize(outputStream)
         self.entityOrientation.serialize(outputStream)
-        outputStream.write_unsigned_int(self.entityAppearance)
+        self.entityAppearance.serialize(outputStream)
         for vpRecord in self.variableParameters:
             vpRecord.serialize(outputStream)
 
@@ -3641,6 +3603,11 @@ class EntityStateUpdatePdu(EntityInformationFamilyPdu):
         self.entityLinearVelocity.parse(inputStream)
         self.entityLocation.parse(inputStream)
         self.entityOrientation.parse(inputStream)
+        # To parse the entity appearance correctly requires knowing the entity
+        # kind and/or domain. This is not available here, so we use a generic
+        # appearance record that just captures the raw bits.
+        self.entityAppearance = record.UnknownAppearance()
+        self.entityAppearance.parse(inputStream)
         self.variableParameters.clear()
         for _ in range(0, variableParameterCount):
             vpRecord = parseVariableParameterRecord(inputStream)
@@ -4635,7 +4602,7 @@ class EntityStatePdu(EntityInformationFamilyPdu):
                  entityLinearVelocity: record.Vector3Float | None = None,
                  entityLocation: record.WorldCoordinates | None = None,
                  entityOrientation: record.EulerAngles | None = None,
-                 entityAppearance: struct32 = 0,  # [UID 31-43]
+                 entityAppearance: record.AppearanceRecord | None = None,  # [UID 31-43]
                  deadReckoningParameters: DeadReckoningParameters | None = None,
                  marking: EntityMarking | None = None,
                  capabilities: uint32 = 0,  # [UID 55]
@@ -4671,7 +4638,7 @@ class EntityStatePdu(EntityInformationFamilyPdu):
         self.entityLinearVelocity.serialize(outputStream)
         self.entityLocation.serialize(outputStream)
         self.entityOrientation.serialize(outputStream)
-        outputStream.write_uint32(self.entityAppearance)
+        self.entityAppearance.serialize(outputStream)
         self.deadReckoningParameters.serialize(outputStream)
         self.marking.serialize(outputStream)
         outputStream.write_uint32(self.capabilities)
@@ -4688,7 +4655,12 @@ class EntityStatePdu(EntityInformationFamilyPdu):
         self.entityLinearVelocity.parse(inputStream)
         self.entityLocation.parse(inputStream)
         self.entityOrientation.parse(inputStream)
-        self.entityAppearance = inputStream.read_uint32()
+        entityAppearanceClass = record.getEntityAppearanceClass(
+            entityType=self.entityType.entityKind,
+            domain=self.entityType.domain
+        )
+        self.entityAppearance = entityAppearanceClass()
+        self.entityAppearance.parse(inputStream)
         self.deadReckoningParameters.parse(inputStream)
         self.marking.parse(inputStream)
         self.capabilities = inputStream.read_uint32()
@@ -7228,7 +7200,7 @@ class AggregateStatePdu(EntityManagementFamilyPdu):
                  aggregateIDs: list[AggregateIdentifier] | None = None,
                  entityIDs: list[record.EntityIdentifier] | None = None,
                  silentAggregateSystems: list[SilentAggregateSystem] | None = None,
-                 silentEntitySystems: list[SilentEntitySystem] | None = None,
+                 silentEntitySystems: list[record.SilentEntitySystem] | None = None,
                  variableDatumRecords: list[VariableDatum] | None = None):
         super(AggregateStatePdu, self).__init__()
         """Identifier of the aggregate issuing the PDU"""
@@ -7270,7 +7242,7 @@ class AggregateStatePdu(EntityManagementFamilyPdu):
         return len(self.silentAggregateSystems)
 
     @property
-    def numberOfSilentEntitySystems(self) -> uint16:
+    def silentEntitySystemsCount(self) -> uint16:
         return len(self.silentEntitySystems)
 
     @property
@@ -7293,7 +7265,7 @@ class AggregateStatePdu(EntityManagementFamilyPdu):
         outputStream.write_unsigned_short(self.numberOfAggregateIDs)
         outputStream.write_unsigned_short(self.numberOfEntityIDs)
         outputStream.write_unsigned_short(self.numberOfSilentAggregateSystems)
-        outputStream.write_unsigned_short(self.numberOfSilentEntitySystems)
+        outputStream.write_uint16(self.silentEntitySystemsCount)
         for aggregateID in self.aggregateIDs:
             aggregateID.serialize(outputStream)
         for entityID in self.entityIDs:
@@ -7322,7 +7294,7 @@ class AggregateStatePdu(EntityManagementFamilyPdu):
         numberOfAggregateIDs = inputStream.read_unsigned_short()
         numberOfEntityIDs = inputStream.read_unsigned_short()
         numberOfSilentAggregateSystems = inputStream.read_unsigned_short()
-        numberOfSilentEntitySystems = inputStream.read_unsigned_short()
+        silentEntitySystemsCount = inputStream.read_uint16()
         for idx in range(0, numberOfAggregateIDs):
             element = AggregateIdentifier()
             element.parse(inputStream)
@@ -7335,12 +7307,11 @@ class AggregateStatePdu(EntityManagementFamilyPdu):
             element = SilentAggregateSystem()
             element.parse(inputStream)
             self.silentAggregateSystems.append(element)
-        for idx in range(0, numberOfSilentEntitySystems):
-            element = SilentEntitySystem()
-            element.parse(inputStream)
-            self.silentEntitySystems.append(element)
-        numberOfVariableDatumRecords = inputStream.read_unsigned_int()
-        for idx in range(0, numberOfVariableDatumRecords):
+        self.silentEntitySystems.clear()
+        for _ in range(0, silentEntitySystemsCount):
+            sesRecord = record.SilentEntitySystem()
+            sesRecord.parse(inputStream)
+            self.silentEntitySystems.append(sesRecord)
             element = VariableDatum()
             element.parse(inputStream)
             self.variableDatumRecords.append(element)

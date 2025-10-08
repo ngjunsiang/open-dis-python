@@ -3,6 +3,7 @@
 __all__ = [
     "ArticulatedPart",
     "AttachedPart",
+    "SilentEntitySystem",
     "VariableParameterRecord",
     "getVariableParameterClass",
     "appearance",
@@ -99,6 +100,59 @@ class VariableParameterRecord(base.Record):
     def serialize(self, outputStream: DataOutputStream) -> None:
         super().serialize(outputStream)
         outputStream.write_uint8(self.recordType)
+
+
+# Implementations
+
+class SilentEntitySystem(base.VariableRecord):
+    """6.2.79 Silent Entity System record
+    
+    Information about an entity not producing Entity State PDUs.
+    """
+
+    def __init__(self,
+                 entityCount: uint16 = 0,
+                 entityType: EntityType | None = None,
+                 entityAppearances: list[appearance.AppearanceRecord] | None = None):
+        self.entityCount = entityCount
+        """number of the type specified by the entity type field"""
+        self.entityType = entityType or EntityType()
+        # Entity appearances of entities in the aggregate that
+        # deviate from the default.
+        self.entityAppearances: list[appearance.AppearanceRecord] = (
+            entityAppearances or []
+        )
+
+    def marshalledSize(self) -> int:
+        size = 12  # entityCount (2) + appearanceRecordCount (2) + entityType (8)
+        size += self.appearanceRecordCount * 4  # each appearance is 4 bytes
+        return size
+
+    @property
+    def appearanceRecordCount(self) -> uint16:
+        return len(self.entityAppearances)
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        outputStream.write_uint16(self.entityCount)
+        outputStream.write_uint16(self.appearanceRecordCount)
+        self.entityType.serialize(outputStream)
+        for apRecord in self.entityAppearances:
+            apRecord.serialize(outputStream)
+
+    def parse(self,
+              inputStream: DataInputStream,
+              bytelength: int | None = None) -> None:
+        self.entityCount = inputStream.read_uint16()
+        appearanceRecordCount = inputStream.read_uint16()
+        self.entityType.parse(inputStream)
+        for _ in range(0, appearanceRecordCount):
+            entityAppearanceClass = getEntityAppearanceClass(
+                entityType=self.entityType.entityKind,
+                domain=self.entityType.domain
+            )
+            entityAppearanceRecord = entityAppearanceClass()
+            entityAppearanceRecord.parse(inputStream)
+            self.entityAppearances.append(entityAppearanceRecord)
 
 
 class ArticulatedPart(VariableParameterRecord):
