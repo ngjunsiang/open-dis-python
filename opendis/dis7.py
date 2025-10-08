@@ -2208,7 +2208,7 @@ class SilentAggregateSystem:
     def serialize(self, outputStream):
         """serialize the class"""
         outputStream.write_unsigned_short(self.numberOfAggregates)
-        self.entityType.serialize(outputStream)
+        self.aggregateType.serialize(outputStream)
 
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
