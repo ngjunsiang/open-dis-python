@@ -3893,8 +3893,6 @@ class LinearObjectStatePdu(SyntheticEnvironmentFamilyPdu):
         self.updateNumber = updateNumber
         """unique update number of each state transition of an object"""
         self.forceID = forceID
-        self.segmentCount = segmentCount
-        """number of linear segment parameters"""
         self.requesterID = requesterID or record.SimulationAddress()
         self.receivingID = receivingID or record.SimulationAddress()
         self.objectType = objectType or ObjectType()
@@ -3911,7 +3909,7 @@ class LinearObjectStatePdu(SyntheticEnvironmentFamilyPdu):
         self.referencedObjectID.serialize(outputStream)
         outputStream.write_unsigned_short(self.updateNumber)
         outputStream.write_unsigned_byte(self.forceID)
-        outputStream.write_unsigned_byte(self.segmentCount)
+        outputStream.write_uint8(self.segmentCount)
         self.requesterID.serialize(outputStream)
         self.receivingID.serialize(outputStream)
         self.objectType.serialize(outputStream)
