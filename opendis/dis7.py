@@ -6178,12 +6178,9 @@ class DetonationPdu(WarfareFamilyPdu):
                  variableParameters: list[record.VariableParameterRecord] | None = None):
         super(DetonationPdu, self).__init__()
         self.explodingEntityID = explodingEntityID or record.EntityIdentifier()
-        """ID of the expendable entity, Section 7.3.3"""
         self.eventID = eventID or record.EventIdentifier()
         self.velocity = velocity or record.Vector3Float()
-        """velocity of the munition immediately before detonation/impact, Section 7.3.3"""
         self.location = location or record.WorldCoordinates()
-        """location of the munition detonation, the expendable detonation, Section 7.3.3"""
         self.descriptor = descriptor or MunitionDescriptor()
         self.locationInEntityCoordinates = locationInEntityCoordinates or record.Vector3Float()
         self.detonationResult = detonationResult
