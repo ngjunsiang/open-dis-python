@@ -7,7 +7,17 @@ from opendis.record import base, bitfield
 from opendis.stream import DataInputStream, DataOutputStream
 from opendis.types import bf_enum
 
-class LandPlatformAppearance(base.Record):
+class AppearanceRecord(base.Record):
+     """6.2.26 Entity Appearance Record
+     
+     A 32-bit record (see [UID 31-43]).
+     """
+
+     def marshalledSize(self) -> int:
+          return 4
+
+
+class LandPlatformAppearance(AppearanceRecord):
     """SISO-REF-010 17.11.1.1.1 Land Platform Appearance Record [UID 31]"""
     _struct = bitfield.bitfield(name="LandPlatformAppearance", fields=[
         ("paintScheme", bitfield.INTEGER, 1), # bit 0
@@ -93,10 +103,7 @@ class LandPlatformAppearance(base.Record):
             self.interiorLightsOn = interiorLightsOn
             self.occupantsSurrendered = occupantsSurrendered
             self.cloaked = cloaked
-    
-    def marshalledSize(self) -> int:
-          return 4
-    
+
     def serialize(self, outputStream: DataOutputStream) -> None:
         self._struct(
             self.paintScheme,
@@ -159,7 +166,7 @@ class LandPlatformAppearance(base.Record):
         self.cloaked = record_bitfield.cloaked
 
 
-class AirPlatformAppearance(base.Record):
+class AirPlatformAppearance(AppearanceRecord):
     """SISO-REF-010 17.11.1.1.2 Air Platform Appearance Record [UID 32]"""
     _struct = bitfield.bitfield(name="AirPlatformAppearance", fields=[
         ("paintScheme", bitfield.INTEGER, 1),  # bit 0
@@ -249,10 +256,7 @@ class AirPlatformAppearance(base.Record):
             self.interiorLightsOn = interiorLightsOn
             self.reverseThrustEngaged = reverseThrustEngaged
             self.weightOnWheels = weightOnWheels
-    
-    def marshalledSize(self) -> int:
-          return 4
-    
+
     def serialize(self, outputStream: DataOutputStream) -> None:
         self._struct(
             self.paintScheme,
@@ -317,7 +321,7 @@ class AirPlatformAppearance(base.Record):
         self.weightOnWheels = record_bitfield.weightOnWheels
 
 
-class SurfacePlatformAppearance(base.Record):
+class SurfacePlatformAppearance(AppearanceRecord):
     """SISO-REF-010 17.11.1.1.3 Land Platform Appearance Record [UID 33]"""
     _struct = bitfield.bitfield(name="SurfacePlatformAppearance", fields=[
         ("paintScheme", bitfield.INTEGER, 1), # bit 0
@@ -386,10 +390,7 @@ class SurfacePlatformAppearance(base.Record):
             self.spotLightOn = spotLightOn
             self.interiorLightsOn = interiorLightsOn
             self.unused6 = 0
-    
-    def marshalledSize(self) -> int:
-          return 4
-    
+
     def serialize(self, outputStream: DataOutputStream) -> None:
         self._struct(
             self.paintScheme,
@@ -444,7 +445,7 @@ class SurfacePlatformAppearance(base.Record):
         self.unused6 = record_bitfield.unused6
 
 
-class SubsurfacePlatformAppearance(base.Record):
+class SubsurfacePlatformAppearance(AppearanceRecord):
     """SISO-REF-010 17.11.1.1.4 Subsurface Platform Appearance Record [UID 34]"""
     _struct = bitfield.bitfield(name="SubsurfacePlatformAppearance", fields=[
         ("paintScheme", bitfield.INTEGER, 1), # bit 0
@@ -517,9 +518,6 @@ class SubsurfacePlatformAppearance(base.Record):
         self.missileHatchesOpen = missileHatchesOpen
         self.towedArraySonar = towedArraySonar
         self.unused5 = 0
-    
-    def marshalledSize(self) -> int:
-        return 4
 
     def serialize(self, outputStream: DataOutputStream) -> None:
         self._struct(
@@ -577,7 +575,7 @@ class SubsurfacePlatformAppearance(base.Record):
         self.unused5 = record_bitfield.unused5
 
 
-class SpacePlatformAppearance(base.Record):
+class SpacePlatformAppearance(AppearanceRecord):
     """SISO-REF-010 17.11.1.1.5 Space Platform Appearance Record [UID 35]"""
     _struct = bitfield.bitfield(name="SpacePlatformAppearance", fields=[
         ("paintScheme", bitfield.INTEGER, 1), # bit 0
@@ -619,9 +617,6 @@ class SpacePlatformAppearance(base.Record):
             self.state = state
             self.unused4 = 0
 
-    def marshalledSize(self) -> int:
-          return 4
-
     def serialize(self, outputStream: DataOutputStream) -> None:
         self._struct(
             self.paintScheme,
@@ -656,7 +651,7 @@ class SpacePlatformAppearance(base.Record):
         self.unused4 = record_bitfield.unused4
 
 
-class MunitionAppearance(base.Record):
+class MunitionAppearance(AppearanceRecord):
     """SISO-REF-010 17.11.1.2 Munition Appearance Record [UID 36]"""
     _struct = bitfield.bitfield(name="MunitionAppearance", fields=[
         ("unused", bitfield.INTEGER, 3),  # bits 0-2
@@ -700,9 +695,6 @@ class MunitionAppearance(base.Record):
         self.coverShroudStatus = coverShroudStatus
         self.unused3 = 0
 
-    def marshalledSize(self) -> int:
-        return 4
-
     def serialize(self, outputStream: DataOutputStream) -> None:
         self._struct(
             self.unused,
@@ -739,7 +731,7 @@ class MunitionAppearance(base.Record):
         self.unused3 = record_bitfield.unused3
 
 
-class HumanLifeFormAppearance(base.Record):
+class HumanLifeFormAppearance(AppearanceRecord):
     """SISO-REF-010 17.11.1.3.1 Human Life Form Appearance Record [UID 37]"""
     _struct = bitfield.bitfield(name="LifeFormAppearance", fields=[
         ("paintScheme", bitfield.INTEGER, 1),  # bit 0
@@ -806,9 +798,6 @@ class HumanLifeFormAppearance(base.Record):
         self.concealedStationary = concealedStationary
         self.concealedMoving = concealedMoving
 
-    def marshalledSize(self) -> int:
-        return 4
-
     def serialize(self, outputStream: DataOutputStream) -> None:
         self._struct(
             self.paintScheme,
@@ -857,7 +846,7 @@ class HumanLifeFormAppearance(base.Record):
         self.concealedMoving = record_bitfield.concealedMoving
 
 
-class EnvironmentalAppearance(base.Record):
+class EnvironmentalAppearance(AppearanceRecord):
     """SISO-REF-010 17.11.1.4 Environmental Appearance Record [UID 38]"""
     _struct = bitfield.bitfield(name="EnvironmentalAppearance", fields=[
         ("unused1", bitfield.INTEGER, 16),  # bits 0-15
@@ -882,9 +871,6 @@ class EnvironmentalAppearance(base.Record):
         self.unused3 = 0
         self.masked = masked
 
-    def marshalledSize(self) -> int:
-        return 4
-
     def serialize(self, outputStream: DataOutputStream) -> None:
         self._struct(
             self.unused1,
@@ -907,7 +893,7 @@ class EnvironmentalAppearance(base.Record):
         self.masked = record_bitfield.masked
 
 
-class CulturalFeatureAppearance(base.Record):
+class CulturalFeatureAppearance(AppearanceRecord):
     """SISO-REF-010 17.11.1.5 Cultural Feature Appearance Record [UID 39]"""
     _struct = bitfield.bitfield(name="CulturalFeatureAppearance", fields=[
         ("damageArea", bitfield.INTEGER, 3),  # bits 0-2
@@ -925,7 +911,6 @@ class CulturalFeatureAppearance(base.Record):
         ("unused4", bitfield.INTEGER, 1),  # bit 30
         ("masked", bitfield.INTEGER, 1),  # bit 31
     ])
-
 
     def __init__(self,
                  damageArea: bf_enum = 0,
@@ -952,9 +937,6 @@ class CulturalFeatureAppearance(base.Record):
             self.interiorLightsOn = interiorLightsOn
             self.unused4 = 0
             self.masked = masked
-
-    def marshalledSize(self) -> int:
-        return 4
 
     def serialize(self, outputStream: DataOutputStream) -> None:
         self._struct(
@@ -992,7 +974,7 @@ class CulturalFeatureAppearance(base.Record):
         self.masked = record_bitfield.masked
 
 
-class SupplyAppearance(base.Record):
+class SupplyAppearance(AppearanceRecord):
     """SISO-REF-010 17.11.1.6 Supply Appearance Record [UID 40]"""
     _struct = bitfield.bitfield(name="SupplyAppearance", fields=[
         ("paintScheme", bitfield.INTEGER, 1),  # bit 0
@@ -1011,8 +993,67 @@ class SupplyAppearance(base.Record):
         ("masked", bitfield.INTEGER, 1),  # bit 31
     ])
 
+    def __init__(self,
+                 paintScheme: bool = False,
+                 damage: bf_enum = 0,
+                 parachuteStatus: bf_enum = 0,
+                 isFlaming: bool = False,
+                 isFrozen: bool = False,
+                 state: bool = False,
+                 deployedStatus: bf_enum = 0,
+                 masked: bool = False):
+            self.paintScheme = paintScheme
+            self.unused1 = 0
+            self.damage = damage
+            self.unused2 = 0
+            self.parachuteStatus = parachuteStatus
+            self.unused3 = 0
+            self.isFlaming = isFlaming
+            self.unused4 = 0
+            self.isFrozen = isFrozen
+            self.unused5 = 0
+            self.state = state
+            self.deployedStatus = deployedStatus
+            self.unused6 = 0
+            self.masked = masked
 
-class RadioAppearance(base.Record):
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        self._struct(
+            self.paintScheme,
+            self.unused1,
+            self.damage,
+            self.unused2,
+            self.parachuteStatus,
+            self.unused3,
+            self.isFlaming,
+            self.unused4,
+            self.isFrozen,
+            self.unused5,
+            self.state,
+            self.deployedStatus,
+            self.unused6,
+            self.masked,
+        ).serialize(outputStream)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        record_bitfield = self._struct.parse(inputStream)
+        self.paintScheme = record_bitfield.paintScheme
+        self.unused1 = record_bitfield.unused1
+        self.damage = record_bitfield.damage
+        self.unused2 = record_bitfield.unused2
+        self.parachuteStatus = record_bitfield.parachuteStatus
+        self.unused3 = record_bitfield.unused3
+        self.isFlaming = record_bitfield.isFlaming
+        self.unused4 = record_bitfield.unused4
+        self.isFrozen = record_bitfield.isFrozen
+        self.unused5 = record_bitfield.unused5
+        self.state = record_bitfield.state
+        self.deployedStatus = record_bitfield.deployedStatus
+        self.unused6 = record_bitfield.unused6
+        self.masked = record_bitfield.masked
+
+
+class RadioAppearance(AppearanceRecord):
     """SISO-REF-010 17.11.1.7 Radio Appearance Record [UID 41]"""
     _struct = bitfield.bitfield(name="RadioAppearance", fields=[
         ("unused1", bitfield.INTEGER, 21),  # bits 0-20
@@ -1030,9 +1071,6 @@ class RadioAppearance(base.Record):
             self.unused2 = 0
             self.state = state
             self.unused3 = 0
-
-    def marshalledSize(self) -> int:
-        return 4
 
     def serialize(self, outputStream: DataOutputStream) -> None:
         self._struct(
@@ -1052,7 +1090,7 @@ class RadioAppearance(base.Record):
         self.unused3 = record_bitfield.unused3
 
 
-class ExpendableAppearance(base.Record):
+class ExpendableAppearance(AppearanceRecord):
     """SISO-REF-010 17.11.1.8 Expendable Appearance Record [UID 42]"""
     _struct = bitfield.bitfield(name="ExpendableAppearance", fields=[
         ("unused1", bitfield.INTEGER, 3),  # bits 0-2
@@ -1099,9 +1137,6 @@ class ExpendableAppearance(base.Record):
             self.unused2 = 0
             self.masked = masked
 
-    def marshalledSize(self) -> int:
-        return 4
-
     def serialize(self, outputStream: DataOutputStream) -> None:
         self._struct(
             self.unused1,
@@ -1138,7 +1173,7 @@ class ExpendableAppearance(base.Record):
         self.masked = record_bitfield.masked
 
 
-class SensorEmitterAppearance(base.Record):
+class SensorEmitterAppearance(AppearanceRecord):
     """SISO-REF-010 17.11.1.9 Sensor Emitter Appearance Record [UID 43]"""
     _struct = bitfield.bitfield(name="SensorEmitterAppearance", fields=[
         ("paintScheme", bitfield.INTEGER, 1),  # bit 0
@@ -1210,9 +1245,6 @@ class SensorEmitterAppearance(base.Record):
             self.unused5 = 0
             self.interiorLightsOn = interiorLightsOn
             self.unused6 = 0
-
-    def marshalledSize(self) -> int:
-        return 4
 
     def serialize(self, outputStream: DataOutputStream) -> None:
         self._struct(
