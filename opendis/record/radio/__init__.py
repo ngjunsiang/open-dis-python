@@ -178,7 +178,6 @@ class SpreadSpectrum(base.Record):
 
     In Python, the presence or absence of each technique is indicated by a bool.
     """
-
     _struct = bitfield.bitfield(name="SpreadSpectrum", fields=[
         ("frequencyHopping", bitfield.INTEGER, 1),
         ("pseudoNoise", bitfield.INTEGER, 1),
@@ -272,7 +271,6 @@ class NetId(base.Record):
     XXX = Net Number
     YY = Frequency Table
     """
-
     _struct = bitfield.bitfield(name="NetId", fields=[
         ("netNumber", bitfield.INTEGER, 10),
         ("frequencyTable", bitfield.INTEGER, 2),
