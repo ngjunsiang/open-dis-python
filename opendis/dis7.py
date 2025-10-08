@@ -99,12 +99,12 @@ class DataQueryDatumSpecification:
 
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
-        fixedDatumIDCount = inputStream.read_unsigned_int()
-        variableDatumIDCount = inputStream.read_unsigned_int()
-        for idx in range(0, fixedDatumIDCount):
+        fixedDatumIDCount = inputStream.read_uint32()
+        variableDatumIDCount = inputStream.read_uint32()
+        for _ in range(0, fixedDatumIDCount):
             datumID = inputStream.read_unsigned_int()
             self.fixedDatumIDs.append(datumID)
-        for idx in range(0, variableDatumIDCount):
+        for _ in range(0, variableDatumIDCount):
             datumID = inputStream.read_unsigned_int()
             self.variableDatumIDs.append(datumID)
 
@@ -193,7 +193,7 @@ class IFFData:
         # The record length includes the length of record type field (32 bits)
         # and record length field (16 bits) so we subtract 6 bytes total for
         # those
-        for idx in range(0, self.recordLength - 6):
+        for _ in range(0, self.recordLength - 6):
             val = inputStream.read_unsigned_byte()
             self.iffData.append(val)
 
@@ -610,7 +610,7 @@ class FalseTargetsAttribute:
         self.beamNumber = inputStream.read_unsigned_byte()
         self.stateIndicator = inputStream.read_unsigned_byte()
         self.padding2 = inputStream.read_unsigned_byte()
-        self.falseTargetCount = inputStream.read_unsigned_short()
+        self.falseTargetCount = inputStream.read_uint16()
         self.walkSpeed = inputStream.read_float()
         self.walkAcceleration = inputStream.read_float()
         self.maximumWalkDistance = inputStream.read_float()
@@ -735,8 +735,8 @@ class IFFDataSpecification:
 
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
-        iffDataRecordCount = inputStream.read_unsigned_short()
-        for idx in range(0, iffDataRecordCount):
+        iffDataRecordCount = inputStream.read_uint16()
+        for _ in range(0, iffDataRecordCount):
             element = IFFData()
             element.parse(inputStream)
             self.iffDataRecords.append(element)
@@ -821,7 +821,7 @@ class RecordQuerySpecification:
 
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
-        recordCount = inputStream.read_unsigned_int()
+        recordCount = inputStream.read_uint32()
         for _ in range(0, recordCount):
             val = inputStream.read_unsigned_int()
             self.recordIDs.append(val)
@@ -937,7 +937,7 @@ class RecordSpecificationElement:
         self.recordID = inputStream.read_unsigned_int()
         self.recordSetSerialNumber = inputStream.read_unsigned_int()
         self.recordLength = inputStream.read_unsigned_short()
-        self.recordCount = inputStream.read_unsigned_short()
+        self.recordCount = inputStream.read_uint16()
         self.recordValues = inputStream.read_unsigned_short()
         self.pad4 = inputStream.read_unsigned_byte()
 
@@ -1261,7 +1261,7 @@ class SecondaryOperationalData:
         """Parse a message. This may recursively call embedded objects."""
         self.operationalData1 = inputStream.read_unsigned_byte()
         self.operationalData2 = inputStream.read_unsigned_byte()
-        self.iffFundamentalParameterRecordCount = inputStream.read_unsigned_short()
+        self.iffFundamentalParameterRecordCount = inputStream.read_uint16()
 
 
 class EnvironmentType:
@@ -1500,8 +1500,8 @@ class DatumSpecification:
 
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
-        fixedDatumRecordCount = inputStream.read_unsigned_int()
-        variableDatumCount = inputStream.read_unsigned_int()
+        fixedDatumRecordCount = inputStream.read_uint32()
+        variableDatumCount = inputStream.read_uint32()
         for _ in range(0, fixedDatumRecordCount):
             element = FixedDatum()
             element.parse(inputStream)
@@ -2021,7 +2021,7 @@ class GridAxisDescriptorVariable:
         self.axisType = inputStream.read_unsigned_byte()
         # FIXME: use axis type to determine whether to deserialize regular or
         #        irregular axis data
-        self.pointsOnXiAxisCount = inputStream.read_unsigned_short()
+        self.pointsOnXiAxisCount = inputStream.read_uint16()
         self.initialIndex = inputStream.read_unsigned_short()
         self.coordinateScaleXi = inputStream.read_double()
         self.coordinateOffsetXi = inputStream.read_double()
@@ -2075,7 +2075,7 @@ class SilentAggregateSystem:
 
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
-        self.aggregateCount = inputStream.read_unsigned_short()
+        self.aggregateCount = inputStream.read_uint16()
         self.aggregateType.parse(inputStream)
 
 
@@ -3013,7 +3013,7 @@ class GridAxis:
         self.domainPointsXi = inputStream.read_unsigned_short()
         self.interleafFactor = inputStream.read_unsigned_byte()
         self.axisType = inputStream.read_unsigned_byte()
-        self.pointsOnXiAxisCount = inputStream.read_unsigned_short()
+        self.pointsOnXiAxisCount = inputStream.read_uint16()
         self.initialIndex = inputStream.read_unsigned_short()
 
 
@@ -3041,7 +3041,7 @@ class RecordSpecification:
 
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
-        recordSetCount = inputStream.read_unsigned_int()
+        recordSetCount = inputStream.read_uint32()
         for _ in range(0, recordSetCount):
             element = null()
             element.parse(inputStream)
@@ -3552,7 +3552,7 @@ class EntityStateUpdatePdu(EntityInformationFamilyPdu):
     def serialize(self, outputStream: DataOutputStream) -> None:
         super(EntityStateUpdatePdu, self).serialize(outputStream)
         self.entityID.serialize(outputStream)
-        outputStream.write_byte(self.padding1)
+        outputStream.write_uint8(self.padding1)
         outputStream.write_uint8(self.variableParameterCount)
         self.entityLinearVelocity.serialize(outputStream)
         self.entityLocation.serialize(outputStream)
@@ -3564,7 +3564,7 @@ class EntityStateUpdatePdu(EntityInformationFamilyPdu):
     def parse(self, inputStream: DataInputStream) -> None:
         super(EntityStateUpdatePdu, self).parse(inputStream)
         self.entityID.parse(inputStream)
-        self.padding1 = inputStream.read_byte()
+        self.padding1 = inputStream.read_uint8()
         variableParameterCount = inputStream.read_uint8()
         self.entityLinearVelocity.parse(inputStream)
         self.entityLocation.parse(inputStream)
@@ -3624,7 +3624,7 @@ class ServiceRequestPdu(LogisticsFamilyPdu):
         self.requestingEntityID.parse(inputStream)
         self.servicingEntityID.parse(inputStream)
         self.serviceTypeRequested = inputStream.read_unsigned_byte()
-        supplyTypeCount = inputStream.read_unsigned_byte()
+        supplyTypeCount = inputStream.read_uint8()
         self.serviceRequestPadding = inputStream.read_short()
         for _ in range(0, supplyTypeCount):
             element = SupplyQuantity()
@@ -3925,7 +3925,7 @@ class LinearObjectStatePdu(SyntheticEnvironmentFamilyPdu):
         self.referencedObjectID.parse(inputStream)
         self.updateNumber = inputStream.read_unsigned_short()
         self.forceID = inputStream.read_unsigned_byte()
-        segmentCount = inputStream.read_unsigned_byte()
+        segmentCount = inputStream.read_uint8()
         self.requesterID.parse(inputStream)
         self.receivingID.parse(inputStream)
         self.objectType.parse(inputStream)
@@ -4034,7 +4034,7 @@ class IntercomSignalPdu(RadioCommunicationsFamilyPdu):
         self.samples = inputStream.read_unsigned_short()
         # sampleSize = dataLength / samples
         # FIXME: Read sampleSize number of bits from inputStream for data
-        for idx in range(0, dataLength // 8):
+        for _ in range(0, dataLength // 8):
             element = null()
             element.parse(inputStream)
             self.data.append(element)
@@ -4106,7 +4106,7 @@ class ResupplyReceivedPdu(LogisticsFamilyPdu):
         super(ResupplyReceivedPdu, self).parse(inputStream)
         self.receivingEntityID.parse(inputStream)
         self.supplyingEntityID.parse(inputStream)
-        supplyTypeCount = inputStream.read_unsigned_byte()
+        supplyTypeCount = inputStream.read_uint8()
         self.padding1 = inputStream.read_short()
         self.padding2 = inputStream.read_byte()
         for _ in range(0, supplyTypeCount):
@@ -4914,7 +4914,7 @@ class ElectromagneticEmissionsPdu(DistributedEmissionsFamilyPdu):
         self.emittingEntityID.parse(inputStream)
         self.eventID.parse(inputStream)
         self.stateUpdateIndicator = inputStream.read_unsigned_byte()
-        systemCount = inputStream.read_unsigned_byte()
+        systemCount = inputStream.read_uint8()
         self.paddingForEmissionsPdu = inputStream.read_unsigned_short()
 
         for _ in range(0, systemCount):
@@ -4974,7 +4974,7 @@ class EmissionSystemBeamRecord:
         self.beamParameterIndex = inputStream.read_unsigned_short()
         self.fundamentalParameterData.parse(inputStream)
         self.beamFunction = inputStream.read_unsigned_byte()
-        trackJamTargetCount = inputStream.read_unsigned_byte()
+        trackJamTargetCount = inputStream.read_uint8()
         self.highDensityTrackJam = inputStream.read_unsigned_byte()
         self.beamStatus.parse(inputStream)
         self.jammingModeSequence = inputStream.read_unsigned_int()
@@ -5020,7 +5020,7 @@ class EmissionSystemRecord:
 
     def parse(self, inputStream):
         self.systemDataLength = inputStream.read_unsigned_byte()
-        beamCount = inputStream.read_unsigned_byte()
+        beamCount = inputStream.read_uint8()
         inputStream.read_unsigned_short()  # 16 bit padding
         self.emitterSystem.parse(inputStream)
         self.location.parse(inputStream)
@@ -5072,7 +5072,7 @@ class ResupplyOfferPdu(LogisticsFamilyPdu):
         super(ResupplyOfferPdu, self).parse(inputStream)
         self.receivingEntityID.parse(inputStream)
         self.supplyingEntityID.parse(inputStream)
-        supplyTypeCount = inputStream.read_unsigned_byte()
+        supplyTypeCount = inputStream.read_uint8()
         self.padding1 = inputStream.read_byte()
         self.padding2 = inputStream.read_short()
         for _ in range(0, supplyTypeCount):
@@ -5142,7 +5142,7 @@ class AttributePdu(EntityInformationFamilyPdu):
         self.masterAttributeRecordType = inputStream.read_unsigned_int()
         self.actionCode = inputStream.read_unsigned_byte()
         self.padding3 = inputStream.read_byte()
-        self.attributeRecordSetCount = inputStream.read_unsigned_short()
+        self.attributeRecordSetCount = inputStream.read_uint16()
 
 
 class MinefieldFamilyPdu(Pdu):
@@ -5770,7 +5770,7 @@ class ArealObjectStatePdu(SyntheticEnvironmentFamilyPdu):
         self.objectType.parse(inputStream)
         self.specificObjectAppearance = inputStream.read_unsigned_int()
         self.generalObjectAppearance = inputStream.read_unsigned_short()
-        pointCount = inputStream.read_unsigned_short()
+        pointCount = inputStream.read_uint16()
         self.requesterID.parse(inputStream)
         self.receivingID.parse(inputStream)
         for _ in range(0, pointCount):
@@ -5908,9 +5908,9 @@ class MinefieldStatePdu(MinefieldFamilyPdu):
         self.minefieldID.parse(inputStream)
         self.minefieldSequence = inputStream.read_unsigned_short()
         self.forceID = inputStream.read_unsigned_byte()
-        perimeterPointCount = inputStream.read_unsigned_byte()
+        perimeterPointCount = inputStream.read_uint8()
         self.minefieldType.parse(inputStream)
-        mineTypeCount = inputStream.read_unsigned_short()
+        mineTypeCount = inputStream.read_uint16()
         self.minefieldLocation.parse(inputStream)
         self.minefieldOrientation.parse(inputStream)
         self.appearance = inputStream.read_unsigned_short()
@@ -6601,9 +6601,9 @@ class UaPdu(DistributedEmissionsFamilyPdu):
         self.padding = inputStream.read_uint8()
         self.passiveParameterIndex = inputStream.read_unsigned_short()
         self.propulsionPlantConfiguration = inputStream.read_unsigned_byte()
-        shaftCount = inputStream.read_unsigned_byte()
-        apaCount = inputStream.read_unsigned_byte()
-        uaEmitterSystemCount = inputStream.read_unsigned_byte()
+        shaftCount = inputStream.read_uint8()
+        apaCount = inputStream.read_uint8()
+        uaEmitterSystemCount = inputStream.read_uint8()
         for _ in range(0, shaftCount):
             element = null()
             element.parse(inputStream)
@@ -6758,7 +6758,7 @@ class SignalPdu(RadioCommunicationsFamilyPdu):
         self.sampleRate = inputStream.read_unsigned_int()
         dataLength = inputStream.read_unsigned_short()
         self.samples = inputStream.read_unsigned_short()
-        for idx in range(0, dataLength // 8):
+        for _ in range(0, dataLength // 8):
             element = inputStream.read_unsigned_byte()
             self.data.append(element)
 
@@ -6854,8 +6854,8 @@ class SeesPdu(DistributedEmissionsFamilyPdu):
         )
         self.radarCrossSectionSignatureRepresentationIndex = inputStream.read_unsigned_short(
         )
-        propulsionSystemCount = inputStream.read_unsigned_short()
-        vectoringNozzleSystemCount = inputStream.read_unsigned_short()
+        propulsionSystemCount = inputStream.read_uint16()
+        vectoringNozzleSystemCount = inputStream.read_uint16()
         for _ in range(0, propulsionSystemCount):
             element = null()
             element.parse(inputStream)
@@ -7040,7 +7040,7 @@ class MinefieldResponseNackPdu(MinefieldFamilyPdu):
         self.minefieldID.parse(inputStream)
         self.requestingEntityID.parse(inputStream)
         self.requestID = inputStream.read_unsigned_byte()
-        missingPduCount = inputStream.read_unsigned_byte()
+        missingPduCount = inputStream.read_uint8()
         for _ in range(0, missingPduCount):
             element = null()
             element.parse(inputStream)
@@ -7215,10 +7215,10 @@ class AggregateStatePdu(EntityManagementFamilyPdu):
     def serialize(self, outputStream: DataOutputStream) -> None:
         super(AggregateStatePdu, self).serialize(outputStream)
         self.aggregateID.serialize(outputStream)
-        outputStream.write_unsigned_byte(self.forceID)
-        outputStream.write_unsigned_byte(self.aggregateState)
+        outputStream.write_uint16(self.forceID)
+        outputStream.write_uint8(self.aggregateState)
         self.aggregateType.serialize(outputStream)
-        outputStream.write_unsigned_int(self.formation)
+        outputStream.write_uint32(self.formation)
         self.aggregateMarking.serialize(outputStream)
         self.dimensions.serialize(outputStream)
         self.orientation.serialize(outputStream)
@@ -7243,10 +7243,10 @@ class AggregateStatePdu(EntityManagementFamilyPdu):
     def parse(self, inputStream: DataInputStream) -> None:
         super(AggregateStatePdu, self).parse(inputStream)
         self.aggregateID.parse(inputStream)
-        self.forceID = inputStream.read_unsigned_byte()
-        self.aggregateState = inputStream.read_unsigned_byte()
+        self.forceID = inputStream.read_uint16()
+        self.aggregateState = inputStream.read_uint8()
         self.aggregateType.parse(inputStream)
-        self.formation = inputStream.read_unsigned_int()
+        self.formation = inputStream.read_uint32()
         self.aggregateMarking.parse(inputStream)
         self.dimensions.parse(inputStream)
         self.orientation.parse(inputStream)
@@ -7273,7 +7273,7 @@ class AggregateStatePdu(EntityManagementFamilyPdu):
             sesRecord = record.SilentEntitySystem()
             sesRecord.parse(inputStream)
             self.silentEntitySystems.append(sesRecord)
-        variableDatumCount = inputStream.read_unsigned_int()
+        variableDatumCount = inputStream.read_uint16()
         for _ in range(0, variableDatumCount):
             element = VariableDatum()
             element.parse(inputStream)
