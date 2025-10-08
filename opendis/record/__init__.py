@@ -21,20 +21,29 @@ from opendis.types import (
     uint32,
 )
 
-from . import base, bitfield, symbolic_names as sym
-from .base import StandardVariableRecord
+# Sub-namespace imports
+from . import (
+    bitfield,
+    common,
+    radio,
+    symbolic_names as sym,
+    warfare,
+)
+from .base import *
 from .common import *
+from .entity_info import *
+from .entity_info.appearance import *
 from .radio import *
 from .warfare import *
 
 SV = TypeVar('SV', bound=base.StandardVariableRecord)
 
 
-__variableRecordClasses: dict[int, type[base.StandardVariableRecord]] = {
-    3000: HighFidelityHAVEQUICKRadio,
-    4000: DirectedEnergyPrecisionAimpoint,
-    4001: DirectedEnergyAreaAimpoint,
-    4500: DirectedEnergyDamage,
+__standardVariableRecordClasses: dict[int, type[base.StandardVariableRecord]] = {
+    3000: radio.HighFidelityHAVEQUICKRadio,
+    4000: warfare.DirectedEnergyPrecisionAimpoint,
+    4001: warfare.DirectedEnergyAreaAimpoint,
+    4500: warfare.DirectedEnergyDamage,
 }
 
 def getStandardVariableClass(
@@ -73,7 +82,7 @@ def getStandardVariableClass(
             f"recordType must be a non-negative integer, got {recordType!r}"
         )
     UnknownStandardVariableRecord.recordType = recordType
-    vrClass = __variableRecordClasses.get(
+    vrClass = __standardVariableRecordClasses.get(
         recordType,
         UnknownStandardVariableRecord
     )
