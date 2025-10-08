@@ -29,6 +29,8 @@ from opendis.types import (
 )
 
 
+from . import appearance
+
 VP = TypeVar('VP', bound="VariableParameterRecord")
 
 # Interfaces
