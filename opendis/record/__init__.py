@@ -37,7 +37,7 @@ from .warfare import *
 SV = TypeVar('SV', bound=base.StandardVariableRecord)
 
 
-__variableRecordClasses: dict[int, type[base.StandardVariableRecord]] = {
+__standardVariableRecordClasses: dict[int, type[base.StandardVariableRecord]] = {
     3000: radio.HighFidelityHAVEQUICKRadio,
     4000: warfare.DirectedEnergyPrecisionAimpoint,
     4001: warfare.DirectedEnergyAreaAimpoint,
@@ -80,7 +80,7 @@ def getStandardVariableClass(
             f"recordType must be a non-negative integer, got {recordType!r}"
         )
     UnknownStandardVariableRecord.recordType = recordType
-    vrClass = __variableRecordClasses.get(
+    vrClass = __standardVariableRecordClasses.get(
         recordType,
         UnknownStandardVariableRecord
     )
