@@ -20,17 +20,17 @@ from opendis.types import (
 from . import symbolic_names as sym
 
 __all__ = [
-    "Vector3Float",
-    "WorldCoordinates",
     "EntityIdentifier",
     "EulerAngles",
-    "SimulationAddress",
     "EventIdentifier",
+    "SimulationAddress",
+    "Vector3Float",
+    "WorldCoordinates",
 ]
 
 
 class EntityIdentifier(base.Record):
-    """Section 6.2.28 Entity Identifier record
+    """6.2.28 Entity Identifier record
     
     Unique designation of each entity in an event or exercise that is not
     contained in a Live Entity PDU.
