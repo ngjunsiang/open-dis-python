@@ -10,6 +10,7 @@ from io import BytesIO
 
 from opendis.stream import DataOutputStream
 from opendis.dis7 import EntityStatePdu
+from opendis.record import EntityIdentifier, SimulationAddress
 from opendis.RangeCoordinates import *
 
 UDP_PORT = 3001
@@ -21,11 +22,12 @@ udpSocket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 gps = GPS() # conversion helper
 
 def send():
-    pdu = EntityStatePdu()
-
-    pdu.entityID.entityNumber = 42
-    pdu.entityID.simulationAddress.site = 17
-    pdu.entityID.simulationAddress.application = 23
+    pdu = EntityStatePdu(
+        entityID=EntityIdentifier(
+            simulationAddress=SimulationAddress(site=17, application=23),
+            entityNumber=42
+        )
+    )
     pdu.marking.setString('Igor3d')
 
      # Entity in Monterey, CA, USA facing North, no roll or pitch
