@@ -3561,14 +3561,14 @@ class SeparationVP:
     def __init__(self,
                  reasonForSeparation: enum8 = 0,  # [UID 282]
                  preEntityIndicator: enum8 = 0,  # [UID 283]
-                 parentEntityID: EntityIdentifier | None = None,
+                 parentEntityID: record.EntityIdentifier | None = None,
                  stationLocation: "NamedLocationIdentification | None" = None):
         self.reasonForSeparation = reasonForSeparation
         """Reason for separation. EBV"""
         self.preEntityIndicator = preEntityIndicator
         """Whether the entity existed prior to separation EBV"""
         self.padding1: uint8 = 0
-        self.parentEntityID = parentEntityID or EntityIdentifier()
+        self.parentEntityID = parentEntityID or record.EntityIdentifier()
         """ID of parent"""
         self.padding2: uint16 = 0
         self.stationLocation = stationLocation or NamedLocationIdentification()
