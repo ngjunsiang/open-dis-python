@@ -2373,39 +2373,6 @@ class Munition:
         self.padding = inputStream.read_unsigned_byte()
 
 
-class StandardVariableSpecification:
-    """Section 6.2.83
-    
-    Does not work, and causes failure in anything it is embedded in.
-    """
-
-    def __init__(self,
-                 standardVariables: list | None = None):
-        self.standardVariables = standardVariables or []
-        """variable length list of standard variables.
-        The class type and length here are WRONG and will cause the incorrect
-        serialization of any class in which it is embedded."""
-
-    @property
-    def numberOfStandardVariableRecords(self) -> uint16:
-        return len(self.standardVariables)
-
-    def serialize(self, outputStream):
-        """serialize the class"""
-        outputStream.write_unsigned_short(self.numberOfStandardVariableRecords)
-        for anObj in self.standardVariables:
-            anObj.serialize(outputStream)
-
-    def parse(self, inputStream):
-        """Parse a message. This may recursively call embedded objects."""
-        numberOfStandardVariableRecords = inputStream.read_unsigned_short(
-        )
-        for idx in range(0, numberOfStandardVariableRecords):
-            element = null()
-            element.parse(inputStream)
-            self.standardVariables.append(element)
-
-
 class Vector2Float:
     """Two floating point values, x, y"""
 
