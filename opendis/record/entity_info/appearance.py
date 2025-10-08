@@ -3,6 +3,23 @@
 This record shall be defined as a 32-bit record (see [UID 31-43]).
 """
 
+__all__ = [
+    "AppearanceRecord",
+    "UnknownAppearance",
+    "LandPlatformAppearance",
+    "AirPlatformAppearance",
+    "SurfacePlatformAppearance",
+    "SubsurfacePlatformAppearance",
+    "SpacePlatformAppearance",
+    "HumanLifeFormAppearance",
+    "EnvironmentalAppearance",
+    "CulturalFeatureAppearance",
+    "SupplyAppearance",
+    "RadioAppearance",
+    "ExpendableAppearance",
+    "SensorEmitterAppearance",
+]
+
 from opendis.record import base, bitfield
 from opendis.stream import DataInputStream, DataOutputStream
 from opendis.types import bf_enum

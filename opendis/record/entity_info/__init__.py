@@ -4,7 +4,8 @@ __all__ = [
     "ArticulatedPart",
     "AttachedPart",
     "VariableParameterRecord",
-    "getVariableParameterClass"
+    "getVariableParameterClass",
+    "appearance",
 ]
 
 from typing import TypeVar
