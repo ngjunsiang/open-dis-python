@@ -80,17 +80,17 @@ class DataQueryDatumSpecification:
         """variable length list variable datum IDs"""
 
     @property
-    def numberOfFixedDatumIDs(self) -> uint32:
+    def FixedDatumIDCount(self) -> uint32:
         return len(self.fixedDatumIDs)
 
     @property
-    def numberOfVariableDatumIDs(self) -> uint32:
+    def variableDatumIDCount(self) -> uint32:
         return len(self.variableDatumIDs)
 
     def serialize(self, outputStream):
         """serialize the class"""
-        outputStream.write_unsigned_int(self.numberOfFixedDatumIDs)
-        outputStream.write_unsigned_int(self.numberOfVariableDatumIDs)
+        outputStream.write_unsigned_int(self.FixedDatumIDCount)
+        outputStream.write_unsigned_int(self.variableDatumIDCount)
         for datumID in self.fixedDatumIDs:
             outputStream.write_unsigned_int(datumID)
 
@@ -99,12 +99,12 @@ class DataQueryDatumSpecification:
 
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
-        numberOfFixedDatumIDs = inputStream.read_unsigned_int()
-        numberOfVariableDatumIDs = inputStream.read_unsigned_int()
-        for idx in range(0, numberOfFixedDatumIDs):
+        fixedDatumIDCount = inputStream.read_unsigned_int()
+        variableDatumIDCount = inputStream.read_unsigned_int()
+        for idx in range(0, fixedDatumIDCount):
             datumID = inputStream.read_unsigned_int()
             self.fixedDatumIDs.append(datumID)
-        for idx in range(0, numberOfVariableDatumIDs):
+        for idx in range(0, variableDatumIDCount):
             datumID = inputStream.read_unsigned_int()
             self.variableDatumIDs.append(datumID)
 
@@ -724,19 +724,19 @@ class IFFDataSpecification:
         self.iffDataRecords = iffDataRecords or []
 
     @property
-    def numberOfIFFDataRecords(self) -> uint16:
+    def iffDataRecordCount(self) -> uint16:
         return len(self.iffDataRecords)
 
     def serialize(self, outputStream):
         """serialize the class"""
-        outputStream.write_unsigned_short(self.numberOfIFFDataRecords)
+        outputStream.write_unsigned_short(self.iffDataRecordCount)
         for anObj in self.iffDataRecords:
             anObj.serialize(outputStream)
 
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
-        numberOfIFFDataRecords = inputStream.read_unsigned_short()
-        for idx in range(0, numberOfIFFDataRecords):
+        iffDataRecordCount = inputStream.read_unsigned_short()
+        for idx in range(0, iffDataRecordCount):
             element = IFFData()
             element.parse(inputStream)
             self.iffDataRecords.append(element)
@@ -810,19 +810,19 @@ class RecordQuerySpecification:
         """variable length list of 32 bit record IDs"""
 
     @property
-    def numberOfRecords(self) -> uint32:
+    def recordCount(self) -> uint32:
         return len(self.recordIDs)
 
     def serialize(self, outputStream):
         """serialize the class"""
-        outputStream.write_unsigned_int(self.numberOfRecords)
+        outputStream.write_unsigned_int(self.recordCount)
         for anObj in self.recordIDs:
             outputStream.write_unsigned_int(anObj)
 
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
-        numberOfRecords = inputStream.read_unsigned_int()
-        for idx in range(0, numberOfRecords):
+        recordCount = inputStream.read_unsigned_int()
+        for _ in range(0, recordCount):
             val = inputStream.read_unsigned_int()
             self.recordIDs.append(val)
 
@@ -1241,12 +1241,12 @@ class SecondaryOperationalData:
     def __init__(self,
                  operationalData1: struct8 = 0,
                  operationalData2: struct8 = 0,
-                 numberOfIFFFundamentalParameterRecords: uint16 = 0):
+                 iffFundamentalParameterRecordCount: uint16 = 0):
         self.operationalData1 = operationalData1
         """additional operational characteristics of the IFF emitting system. Each 8-bit field will vary depending on the system type."""
         self.operationalData2 = operationalData2
         """additional operational characteristics of the IFF emitting system. Each 8-bit field will vary depending on the system type."""
-        self.numberOfIFFFundamentalParameterRecords = numberOfIFFFundamentalParameterRecords
+        self.iffFundamentalParameterRecordCount = iffFundamentalParameterRecordCount
         """the number of IFF Fundamental Parameter Data records that follow"""
 
     def serialize(self, outputStream):
@@ -1254,14 +1254,14 @@ class SecondaryOperationalData:
         outputStream.write_unsigned_byte(self.operationalData1)
         outputStream.write_unsigned_byte(self.operationalData2)
         outputStream.write_unsigned_short(
-            self.numberOfIFFFundamentalParameterRecords
+            self.iffFundamentalParameterRecordCount
         )
 
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
         self.operationalData1 = inputStream.read_unsigned_byte()
         self.operationalData2 = inputStream.read_unsigned_byte()
-        self.numberOfIFFFundamentalParameterRecords = inputStream.read_unsigned_short()
+        self.iffFundamentalParameterRecordCount = inputStream.read_unsigned_short()
 
 
 class EnvironmentType:
@@ -1481,17 +1481,17 @@ class DatumSpecification:
         """variable length list variable datums"""
 
     @property
-    def numberOfFixedDatumRecords(self) -> int:
+    def fixedDatumRecordCount(self) -> int:
         return len(self.fixedDatumRecords)
 
     @property
-    def numberOfVariableDatumRecords(self) -> int:
+    def variableDatumCount(self) -> int:
         return len(self.variableDatumRecords)
 
     def serialize(self, outputStream):
         """serialize the class"""
-        outputStream.write_unsigned_int(self.numberOfFixedDatumRecords)
-        outputStream.write_unsigned_int(self.numberOfVariableDatumRecords)
+        outputStream.write_unsigned_int(self.fixedDatumRecordCount)
+        outputStream.write_unsigned_int(self.variableDatumCount)
         for anObj in self.fixedDatumRecords:
             anObj.serialize(outputStream)
 
@@ -1500,14 +1500,14 @@ class DatumSpecification:
 
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
-        numberOfFixedDatumRecords = inputStream.read_unsigned_int()
-        numberOfVariableDatumRecords = inputStream.read_unsigned_int()
-        for idx in range(0, numberOfFixedDatumRecords):
+        fixedDatumRecordCount = inputStream.read_unsigned_int()
+        variableDatumCount = inputStream.read_unsigned_int()
+        for _ in range(0, fixedDatumRecordCount):
             element = FixedDatum()
             element.parse(inputStream)
             self.fixedDatumRecords.append(element)
 
-        for idx in range(0, numberOfVariableDatumRecords):
+        for _ in range(0, variableDatumCount):
             element = VariableDatum()
             element.parse(inputStream)
             self.variableDatumRecords.append(element)
@@ -1966,7 +1966,7 @@ class GridAxisDescriptorVariable:
                  domainPointsXi: uint16 = 0,
                  interleafFactor: uint8 = 0,
                  axisType: enum8 = 0,  # [UID 377]
-                 numberOfPointsOnXiAxis: uint16 = 0,
+                 pointsOnXiAxisCount: uint16 = 0,
                  initialIndex: uint16 = 0,
                  # Additional parameters for Irregular Spacing Axis Data
                  coordinateScaleXi: float64 = 0.0,
@@ -1984,7 +1984,7 @@ class GridAxisDescriptorVariable:
         """Setting this field to Regular Axis (0) shall indicate a grid axis
         with constant grid spacing, while setting it to Irregular Axis (1) shall
         indicate a grid axis with variable grid spacing."""
-        self.numberOfPointsOnXiAxis = numberOfPointsOnXiAxis
+        self.pointsOnXiAxisCount = pointsOnXiAxisCount
         """Number of grid locations along Xi axis"""
         self.initialIndex = initialIndex
         """initial grid point for the current pdu"""
@@ -2021,11 +2021,11 @@ class GridAxisDescriptorVariable:
         self.axisType = inputStream.read_unsigned_byte()
         # FIXME: use axis type to determine whether to deserialize regular or
         #        irregular axis data
-        self.numberOfPointsOnXiAxis = inputStream.read_unsigned_short()
+        self.pointsOnXiAxisCount = inputStream.read_unsigned_short()
         self.initialIndex = inputStream.read_unsigned_short()
         self.coordinateScaleXi = inputStream.read_double()
         self.coordinateOffsetXi = inputStream.read_double()
-        for idx in range(0, self.numberOfPointsOnXiAxis):
+        for _ in range(0, self.pointsOnXiAxisCount):
             element = null()
             element.parse(inputStream)
             self.xiValues.append(element)
@@ -2062,20 +2062,20 @@ class SilentAggregateSystem:
     """
 
     def __init__(self,
-                 numberOfAggregates: uint16 = 0,
+                 aggregateCount: uint16 = 0,
                  aggregateType: "AggregateType | None" = None):
-        self.numberOfAggregates = numberOfAggregates
+        self.aggregateCount = aggregateCount
         """number of the type specified by the aggregate type field"""
         self.aggregateType = aggregateType or AggregateType()
 
     def serialize(self, outputStream):
         """serialize the class"""
-        outputStream.write_unsigned_short(self.numberOfAggregates)
+        outputStream.write_unsigned_short(self.aggregateCount)
         self.aggregateType.serialize(outputStream)
 
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
-        self.numberOfAggregates = inputStream.read_unsigned_short()
+        self.aggregateCount = inputStream.read_unsigned_short()
         self.aggregateType.parse(inputStream)
 
 
@@ -3012,7 +3012,7 @@ class GridAxis:
                  domainPointsXi: uint16 = 0,
                  interleafFactor: uint8 = 0,
                  axisType: enum8 = 0,  # [UID 377]
-                 numberOfPointsOnXiAxis: uint16 = 0,
+                 pointsOnXiAxisCount: uint16 = 0,
                  initialIndex: uint16 = 0):
         self.domainInitialXi = domainInitialXi
         """coordinate of the grid origin or initial value"""
@@ -3024,7 +3024,7 @@ class GridAxis:
         """interleaf factor along the domain axis."""
         self.axisType = axisType
         """type of grid axis"""
-        self.numberOfPointsOnXiAxis = numberOfPointsOnXiAxis
+        self.pointsOnXiAxisCount = pointsOnXiAxisCount
         """Number of grid locations along Xi axis"""
         self.initialIndex = initialIndex
         """initial grid point for the current pdu"""
@@ -3036,7 +3036,7 @@ class GridAxis:
         outputStream.write_unsigned_short(self.domainPointsXi)
         outputStream.write_unsigned_byte(self.interleafFactor)
         outputStream.write_unsigned_byte(self.axisType)
-        outputStream.write_unsigned_short(self.numberOfPointsOnXiAxis)
+        outputStream.write_unsigned_short(self.pointsOnXiAxisCount)
         outputStream.write_unsigned_short(self.initialIndex)
 
     def parse(self, inputStream):
@@ -3046,7 +3046,7 @@ class GridAxis:
         self.domainPointsXi = inputStream.read_unsigned_short()
         self.interleafFactor = inputStream.read_unsigned_byte()
         self.axisType = inputStream.read_unsigned_byte()
-        self.numberOfPointsOnXiAxis = inputStream.read_unsigned_short()
+        self.pointsOnXiAxisCount = inputStream.read_unsigned_short()
         self.initialIndex = inputStream.read_unsigned_short()
 
 
@@ -3063,19 +3063,19 @@ class RecordSpecification:
         """variable length list record specifications."""
 
     @property
-    def numberOfRecordSets(self) -> uint32:
+    def recordSetCount(self) -> uint32:
         return len(self.recordSets)
 
     def serialize(self, outputStream):
         """serialize the class"""
-        outputStream.write_unsigned_int(self.numberOfRecordSets)
+        outputStream.write_unsigned_int(self.recordSetCount)
         for anObj in self.recordSets:
             anObj.serialize(outputStream)
 
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
-        numberOfRecordSets = inputStream.read_unsigned_int()
-        for idx in range(0, numberOfRecordSets):
+        recordSetCount = inputStream.read_unsigned_int()
+        for _ in range(0, recordSetCount):
             element = null()
             element.parse(inputStream)
             self.recordSets.append(element)
@@ -3586,7 +3586,7 @@ class EntityStateUpdatePdu(EntityInformationFamilyPdu):
         super(EntityStateUpdatePdu, self).serialize(outputStream)
         self.entityID.serialize(outputStream)
         outputStream.write_byte(self.padding1)
-        outputStream.write_unsigned_byte(self.numberOfVariableParameters)
+        outputStream.write_uint8(self.variableParameterCount)
         self.entityLinearVelocity.serialize(outputStream)
         self.entityLocation.serialize(outputStream)
         self.entityOrientation.serialize(outputStream)
@@ -3638,7 +3638,7 @@ class ServiceRequestPdu(LogisticsFamilyPdu):
         self.supplies = supplies or []
 
     @property
-    def numberOfSupplyTypes(self) -> uint8:
+    def supplyTypeCount(self) -> uint8:
         return len(self.supplies)
 
     def serialize(self, outputStream):
@@ -3647,7 +3647,7 @@ class ServiceRequestPdu(LogisticsFamilyPdu):
         self.requestingEntityID.serialize(outputStream)
         self.servicingEntityID.serialize(outputStream)
         outputStream.write_unsigned_byte(self.serviceTypeRequested)
-        outputStream.write_unsigned_byte(self.numberOfSupplyTypes)
+        outputStream.write_unsigned_byte(self.supplyTypeCount)
         outputStream.write_short(self.serviceRequestPadding)
         for anObj in self.supplies:
             anObj.serialize(outputStream)
@@ -3658,9 +3658,9 @@ class ServiceRequestPdu(LogisticsFamilyPdu):
         self.requestingEntityID.parse(inputStream)
         self.servicingEntityID.parse(inputStream)
         self.serviceTypeRequested = inputStream.read_unsigned_byte()
-        numberOfSupplyTypes = inputStream.read_unsigned_byte()
+        supplyTypeCount = inputStream.read_unsigned_byte()
         self.serviceRequestPadding = inputStream.read_short()
-        for idx in range(0, numberOfSupplyTypes):
+        for _ in range(0, supplyTypeCount):
             element = SupplyQuantity()
             element.parse(inputStream)
             self.supplies.append(element)
@@ -3871,12 +3871,12 @@ class DataQueryPdu(SimulationManagementFamilyPdu):
                                                       variableDatumIDs or [])
 
     @property
-    def numberOfFixedDatumIDs(self) -> int:
-        return self._dataQuery.numberOfFixedDatumIDs
+    def FixedDatumIDCount(self) -> int:
+        return self._dataQuery.FixedDatumIDCount
 
     @property
-    def numberOfVariableDatumIDs(self) -> int:
-        return self._dataQuery.numberOfVariableDatumIDs
+    def variableDatumIDCount(self) -> int:
+        return self._dataQuery.variableDatumIDCount
 
     @property
     def fixedDatumIDs(self) -> list[int]:
@@ -3927,7 +3927,7 @@ class LinearObjectStatePdu(SyntheticEnvironmentFamilyPdu):
         self.updateNumber = updateNumber
         """unique update number of each state transition of an object"""
         self.forceID = forceID
-        self.numberOfSegments = numberOfSegments
+        self.segmentCount = segmentCount
         """number of linear segment parameters"""
         self.requesterID = requesterID or record.SimulationAddress()
         self.receivingID = receivingID or record.SimulationAddress()
@@ -3935,7 +3935,7 @@ class LinearObjectStatePdu(SyntheticEnvironmentFamilyPdu):
         self.linearSegmentParameters = linearSegmentParameters or []
 
     @property
-    def numberOfSegments(self) -> uint8:
+    def segmentCount(self) -> uint8:
         return len(self.linearSegmentParameters)
 
     def serialize(self, outputStream):
@@ -3945,7 +3945,7 @@ class LinearObjectStatePdu(SyntheticEnvironmentFamilyPdu):
         self.referencedObjectID.serialize(outputStream)
         outputStream.write_unsigned_short(self.updateNumber)
         outputStream.write_unsigned_byte(self.forceID)
-        outputStream.write_unsigned_byte(self.numberOfSegments)
+        outputStream.write_unsigned_byte(self.segmentCount)
         self.requesterID.serialize(outputStream)
         self.receivingID.serialize(outputStream)
         self.objectType.serialize(outputStream)
@@ -3959,11 +3959,11 @@ class LinearObjectStatePdu(SyntheticEnvironmentFamilyPdu):
         self.referencedObjectID.parse(inputStream)
         self.updateNumber = inputStream.read_unsigned_short()
         self.forceID = inputStream.read_unsigned_byte()
-        numberOfSegments = inputStream.read_unsigned_byte()
+        segmentCount = inputStream.read_unsigned_byte()
         self.requesterID.parse(inputStream)
         self.receivingID.parse(inputStream)
         self.objectType.parse(inputStream)
-        for idx in range(0, numberOfSegments):
+        for _ in range(0, segmentCount):
             element = LinearSegmentParameter()
             element.parse(inputStream)
             self.linearSegmentParameters.append(element)
@@ -4121,7 +4121,7 @@ class ResupplyReceivedPdu(LogisticsFamilyPdu):
         """Type and amount of supplies for each specified supply type.  See 6.2.85 for supply quantity record."""
 
     @property
-    def numberOfSupplyTypes(self) -> uint8:
+    def supplyTypeCount(self) -> uint8:
         return len(self.supplies)
 
     def serialize(self, outputStream):
@@ -4129,7 +4129,7 @@ class ResupplyReceivedPdu(LogisticsFamilyPdu):
         super(ResupplyReceivedPdu, self).serialize(outputStream)
         self.receivingEntityID.serialize(outputStream)
         self.supplyingEntityID.serialize(outputStream)
-        outputStream.write_unsigned_byte(self.numberOfSupplyTypes)
+        outputStream.write_unsigned_byte(self.supplyTypeCount)
         outputStream.write_short(self.padding1)
         outputStream.write_byte(self.padding2)
         for anObj in self.supplies:
@@ -4140,10 +4140,10 @@ class ResupplyReceivedPdu(LogisticsFamilyPdu):
         super(ResupplyReceivedPdu, self).parse(inputStream)
         self.receivingEntityID.parse(inputStream)
         self.supplyingEntityID.parse(inputStream)
-        numberOfSupplyTypes = inputStream.read_unsigned_byte()
+        supplyTypeCount = inputStream.read_unsigned_byte()
         self.padding1 = inputStream.read_short()
         self.padding2 = inputStream.read_byte()
-        for idx in range(0, numberOfSupplyTypes):
+        for _ in range(0, supplyTypeCount):
             element = null()
             element.parse(inputStream)
             self.supplies.append(element)
@@ -4291,12 +4291,12 @@ class ActionRequestPdu(SimulationManagementFamilyPdu):
                                           variableDatumRecords or [])
 
     @property
-    def numberOfFixedDatumRecords(self) -> int:
-        return self._datums.numberOfFixedDatumRecords
+    def fixedDatumRecordCount(self) -> int:
+        return self._datums.fixedDatumRecordCount
 
     @property
-    def numberOfVariableDatumRecords(self) -> int:
-        return self._datums.numberOfVariableDatumRecords
+    def variableDatumCount(self) -> int:
+        return self._datums.variableDatumCount
 
     @property
     def fixedDatumRecords(self) -> list["FixedDatum"]:
@@ -4431,12 +4431,12 @@ class ActionRequestReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
                                           variableDatumRecords or [])
 
     @property
-    def numberOfFixedDatumRecords(self) -> int:
-        return self._datums.numberOfFixedDatumRecords
+    def fixedDatumRecordCount(self) -> int:
+        return self._datums.fixedDatumRecordCount
 
     @property
-    def numberOfVariableDatumRecords(self) -> int:
-        return self._datums.numberOfVariableDatumRecords
+    def variableDatumCount(self) -> int:
+        return self._datums.variableDatumCount
 
     @property
     def fixedDatumRecords(self) -> list["FixedDatum"]:
@@ -4923,7 +4923,7 @@ class ElectromagneticEmissionsPdu(DistributedEmissionsFamilyPdu):
         self.paddingForEmissionsPdu: uint16 = 0
 
     @property
-    def numberOfSystems(self) -> uint8:
+    def systemCount(self) -> uint8:
         return len(self.systems)
 
     def serialize(self, outputStream):
@@ -4932,7 +4932,7 @@ class ElectromagneticEmissionsPdu(DistributedEmissionsFamilyPdu):
         self.emittingEntityID.serialize(outputStream)
         self.eventID.serialize(outputStream)
         outputStream.write_unsigned_byte(self.stateUpdateIndicator)
-        outputStream.write_unsigned_byte(self.numberOfSystems)
+        outputStream.write_unsigned_byte(self.systemCount)
         outputStream.write_unsigned_short(self.paddingForEmissionsPdu)
         for anObj in self.systems:
             anObj.serialize(outputStream)
@@ -4943,10 +4943,10 @@ class ElectromagneticEmissionsPdu(DistributedEmissionsFamilyPdu):
         self.emittingEntityID.parse(inputStream)
         self.eventID.parse(inputStream)
         self.stateUpdateIndicator = inputStream.read_unsigned_byte()
-        numberOfSystems = inputStream.read_unsigned_byte()
+        systemCount = inputStream.read_unsigned_byte()
         self.paddingForEmissionsPdu = inputStream.read_unsigned_short()
 
-        for idx in range(0, numberOfSystems):
+        for _ in range(0, systemCount):
             element = EmissionSystemRecord()
             element.parse(inputStream)
             self.systems.append(element)
@@ -4980,7 +4980,7 @@ class EmissionSystemBeamRecord:
         self.trackJamRecords = trackJamRecords or []
 
     @property
-    def numberOfTargetsInTrackJam(self) -> uint8:
+    def trackJamTargetCount(self) -> uint8:
         return len(self.trackJamRecords)
 
     def serialize(self, outputStream):
@@ -4989,7 +4989,7 @@ class EmissionSystemBeamRecord:
         outputStream.write_unsigned_short(self.beamParameterIndex)
         self.fundamentalParameterData.serialize(outputStream)
         outputStream.write_unsigned_byte(self.beamFunction)
-        outputStream.write_unsigned_byte(self.numberOfTargetsInTrackJam)
+        outputStream.write_unsigned_byte(self.trackJamTargetCount)
         outputStream.write_unsigned_byte(self.highDensityTrackJam)
         self.beamStatus.serialize(outputStream)
         outputStream.write_unsigned_int(self.jammingModeSequence)
@@ -5003,12 +5003,12 @@ class EmissionSystemBeamRecord:
         self.beamParameterIndex = inputStream.read_unsigned_short()
         self.fundamentalParameterData.parse(inputStream)
         self.beamFunction = inputStream.read_unsigned_byte()
-        numberOfTargetsInTrackJam = inputStream.read_unsigned_byte()
+        trackJamTargetCount = inputStream.read_unsigned_byte()
         self.highDensityTrackJam = inputStream.read_unsigned_byte()
         self.beamStatus.parse(inputStream)
         self.jammingModeSequence = inputStream.read_unsigned_int()
 
-        for idx in range(0, numberOfTargetsInTrackJam):
+        for _ in range(0, trackJamTargetCount):
             element = TrackJamData()
             element.parse(inputStream)
             self.trackJamRecords.append(element)
@@ -5035,12 +5035,12 @@ class EmissionSystemRecord:
         self.beamRecords = beamRecords or []
 
     @property
-    def numberOfBeams(self) -> uint8:
+    def beamCount(self) -> uint8:
         return len(self.beamRecords)
 
     def serialize(self, outputStream):
         outputStream.write_unsigned_byte(self.systemDataLength)
-        outputStream.write_unsigned_byte(self.numberOfBeams)
+        outputStream.write_unsigned_byte(self.beamCount)
         outputStream.write_unsigned_short(0)  # 16 bit padding
         self.emitterSystem.serialize(outputStream)
         self.location.serialize(outputStream)
@@ -5049,11 +5049,11 @@ class EmissionSystemRecord:
 
     def parse(self, inputStream):
         self.systemDataLength = inputStream.read_unsigned_byte()
-        numberOfBeams = inputStream.read_unsigned_byte()
+        beamCount = inputStream.read_unsigned_byte()
         inputStream.read_unsigned_short()  # 16 bit padding
         self.emitterSystem.parse(inputStream)
         self.location.parse(inputStream)
-        for idx in range(0, numberOfBeams):
+        for _ in range(0, beamCount):
             element = EmissionSystemBeamRecord()
             element.parse(inputStream)
             self.beamRecords.append(element)
@@ -5082,7 +5082,7 @@ class ResupplyOfferPdu(LogisticsFamilyPdu):
         """A Record that Specifies the type of supply and the amount of that supply for each of the supply types in numberOfSupplyTypes (see 6.2.85), Section 7.4.3"""
 
     @property
-    def numberOfSupplyTypes(self) -> uint8:
+    def supplyTypeCount(self) -> uint8:
         return len(self.supplies)
 
     def serialize(self, outputStream):
@@ -5090,7 +5090,7 @@ class ResupplyOfferPdu(LogisticsFamilyPdu):
         super(ResupplyOfferPdu, self).serialize(outputStream)
         self.receivingEntityID.serialize(outputStream)
         self.supplyingEntityID.serialize(outputStream)
-        outputStream.write_unsigned_byte(self.numberOfSupplyTypes)
+        outputStream.write_unsigned_byte(self.supplyTypeCount)
         outputStream.write_byte(self.padding1)
         outputStream.write_short(self.padding2)
         for anObj in self.supplies:
@@ -5101,10 +5101,10 @@ class ResupplyOfferPdu(LogisticsFamilyPdu):
         super(ResupplyOfferPdu, self).parse(inputStream)
         self.receivingEntityID.parse(inputStream)
         self.supplyingEntityID.parse(inputStream)
-        numberOfSupplyTypes = inputStream.read_unsigned_byte()
+        supplyTypeCount = inputStream.read_unsigned_byte()
         self.padding1 = inputStream.read_byte()
         self.padding2 = inputStream.read_short()
-        for idx in range(0, numberOfSupplyTypes):
+        for _ in range(0, supplyTypeCount):
             element = SupplyQuantity()
             element.parse(inputStream)
             self.supplies.append(element)
@@ -5128,7 +5128,7 @@ class AttributePdu(EntityInformationFamilyPdu):
                  attributeRecordProtocolVersion: enum8 = 0,  # [UID 5]
                  masterAttributeRecordType: enum32 = 0,  # [UID 66]
                  actionCode: enum8 = 0,  # [UID 295]
-                 numberOfAttributeRecordSets: uint16 = 0):
+                 attributeRecordSetCount: uint16 = 0):
         super(AttributePdu, self).__init__()
         self.originatingSimulationAddress = (originatingSimulationAddress
                                              or record.SimulationAddress())
@@ -5144,7 +5144,7 @@ class AttributePdu(EntityInformationFamilyPdu):
         self.actionCode = actionCode
         """This field shall identify the action code applicable to this Attribute PDU. The Action Code shall apply to all Attribute records contained in the PDU. It shall be represented by an 8-bit enumeration."""
         self.padding3: uint8 = 0
-        self.numberOfAttributeRecordSets = numberOfAttributeRecordSets
+        self.attributeRecordSetCount = attributeRecordSetCount
         """This field shall specify the number of Attribute Record Sets that make up the remainder of the PDU. It shall be represented by a 16-bit unsigned integer."""
 
     def serialize(self, outputStream):
@@ -5158,7 +5158,7 @@ class AttributePdu(EntityInformationFamilyPdu):
         outputStream.write_unsigned_int(self.masterAttributeRecordType)
         outputStream.write_unsigned_byte(self.actionCode)
         outputStream.write_byte(self.padding3)
-        outputStream.write_unsigned_short(self.numberOfAttributeRecordSets)
+        outputStream.write_unsigned_short(self.attributeRecordSetCount)
 
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
@@ -5171,7 +5171,7 @@ class AttributePdu(EntityInformationFamilyPdu):
         self.masterAttributeRecordType = inputStream.read_unsigned_int()
         self.actionCode = inputStream.read_unsigned_byte()
         self.padding3 = inputStream.read_byte()
-        self.numberOfAttributeRecordSets = inputStream.read_unsigned_short()
+        self.attributeRecordSetCount = inputStream.read_unsigned_short()
 
 
 class MinefieldFamilyPdu(Pdu):
@@ -5217,12 +5217,12 @@ class SetDataReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
                                           variableDatumRecords or [])
 
     @property
-    def numberOfFixedDatumRecords(self) -> int:
-        return self._datums.numberOfFixedDatumRecords
+    def fixedDatumRecordCount(self) -> int:
+        return self._datums.fixedDatumRecordCount
 
     @property
-    def numberOfVariableDatumRecords(self) -> int:
-        return self._datums.numberOfVariableDatumRecords
+    def variableDatumCount(self) -> int:
+        return self._datums.variableDatumCount
 
     @property
     def fixedDatumRecords(self) -> list["FixedDatum"]:
@@ -5386,12 +5386,12 @@ class DataPdu(SimulationManagementFamilyPdu):
                                           variableDatumRecords or [])
 
     @property
-    def numberOfFixedDatumRecords(self) -> int:
-        return self._datums.numberOfFixedDatumRecords
+    def fixedDatumRecordCount(self) -> int:
+        return self._datums.fixedDatumRecordCount
 
     @property
-    def numberOfVariableDatumRecords(self) -> int:
-        return self._datums.numberOfVariableDatumRecords
+    def variableDatumCount(self) -> int:
+        return self._datums.variableDatumCount
 
     @property
     def fixedDatumRecords(self) -> list["FixedDatum"]:
@@ -5768,7 +5768,7 @@ class ArealObjectStatePdu(SyntheticEnvironmentFamilyPdu):
         self.objectLocation: list[record.WorldCoordinates] = objectLocation or []
 
     @property
-    def numberOfPoints(self) -> uint16:
+    def pointCount(self) -> uint16:
         return len(self.objectLocation)
 
     def serialize(self, outputStream):
@@ -5782,7 +5782,7 @@ class ArealObjectStatePdu(SyntheticEnvironmentFamilyPdu):
         self.objectType.serialize(outputStream)
         outputStream.write_unsigned_int(self.specificObjectAppearance)
         outputStream.write_unsigned_short(self.generalObjectAppearance)
-        outputStream.write_unsigned_short(self.numberOfPoints)
+        outputStream.write_unsigned_short(self.pointCount)
         self.requesterID.serialize(outputStream)
         self.receivingID.serialize(outputStream)
         for anObj in self.objectLocation:
@@ -5799,10 +5799,10 @@ class ArealObjectStatePdu(SyntheticEnvironmentFamilyPdu):
         self.objectType.parse(inputStream)
         self.specificObjectAppearance = inputStream.read_unsigned_int()
         self.generalObjectAppearance = inputStream.read_unsigned_short()
-        numberOfPoints = inputStream.read_unsigned_short()
+        pointCount = inputStream.read_unsigned_short()
         self.requesterID.parse(inputStream)
         self.receivingID.parse(inputStream)
-        for idx in range(0, numberOfPoints):
+        for _ in range(0, pointCount):
             element = record.WorldCoordinates()
             element.parse(inputStream)
             self.objectLocation.append(element)
@@ -5834,12 +5834,12 @@ class DataQueryReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
                                                       variableDatumIDs or [])
 
     @property
-    def numberOfFixedDatumIDs(self) -> int:
-        return self._dataQuery.numberOfFixedDatumIDs
+    def FixedDatumIDCount(self) -> int:
+        return self._dataQuery.FixedDatumIDCount
 
     @property
-    def numberOfVariableDatumIDs(self) -> int:
-        return self._dataQuery.numberOfVariableDatumIDs
+    def variableDatumIDCount(self) -> int:
+        return self._dataQuery.variableDatumIDCount
 
     @property
     def fixedDatumIDs(self) -> list[int]:
@@ -5905,11 +5905,11 @@ class MinefieldStatePdu(MinefieldFamilyPdu):
         self.mineTypes = mineTypes or []
 
     @property
-    def numberOfPerimeterPoints(self) -> uint8:
+    def perimeterPointCount(self) -> uint8:
         return len(self.perimeterPoints)
 
     @property
-    def numberOfMineTypes(self) -> uint16:
+    def mineTypeCount(self) -> uint16:
         return len(self.mineTypes)
 
     def serialize(self, outputStream):
@@ -5918,9 +5918,9 @@ class MinefieldStatePdu(MinefieldFamilyPdu):
         self.minefieldID.serialize(outputStream)
         outputStream.write_unsigned_short(self.minefieldSequence)
         outputStream.write_unsigned_byte(self.forceID)
-        outputStream.write_unsigned_byte(self.numberOfPerimeterPoints)
+        outputStream.write_unsigned_byte(self.perimeterPointCount)
         self.minefieldType.serialize(outputStream)
-        outputStream.write_unsigned_short(self.numberOfMineTypes)
+        outputStream.write_unsigned_short(self.mineTypeCount)
         self.minefieldLocation.serialize(outputStream)
         self.minefieldOrientation.serialize(outputStream)
         outputStream.write_unsigned_short(self.appearance)
@@ -5937,19 +5937,19 @@ class MinefieldStatePdu(MinefieldFamilyPdu):
         self.minefieldID.parse(inputStream)
         self.minefieldSequence = inputStream.read_unsigned_short()
         self.forceID = inputStream.read_unsigned_byte()
-        numberOfPerimeterPoints = inputStream.read_unsigned_byte()
+        perimeterPointCount = inputStream.read_unsigned_byte()
         self.minefieldType.parse(inputStream)
-        numberOfMineTypes = inputStream.read_unsigned_short()
+        mineTypeCount = inputStream.read_unsigned_short()
         self.minefieldLocation.parse(inputStream)
         self.minefieldOrientation.parse(inputStream)
         self.appearance = inputStream.read_unsigned_short()
         self.protocolMode = inputStream.read_unsigned_short()
-        for idx in range(0, numberOfPerimeterPoints):
+        for _ in range(0, perimeterPointCount):
             element = Vector2Float()
             element.parse(inputStream)
             self.perimeterPoints.append(element)
 
-        for idx in range(0, numberOfMineTypes):
+        for _ in range(0, mineTypeCount):
             element = record.EntityType()
             element.parse(inputStream)
             self.mineTypes.append(element)
@@ -5979,12 +5979,12 @@ class DataReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
                                           variableDatumRecords or [])
 
     @property
-    def numberOfFixedDatumRecords(self) -> int:
-        return self._datums.numberOfFixedDatumRecords
+    def fixedDatumRecordCount(self) -> int:
+        return self._datums.fixedDatumRecordCount
 
     @property
-    def numberOfVariableDatumRecords(self) -> int:
-        return self._datums.numberOfVariableDatumRecords
+    def variableDatumCount(self) -> int:
+        return self._datums.variableDatumCount
 
     @property
     def fixedDatumRecords(self) -> list["FixedDatum"]:
@@ -6029,12 +6029,12 @@ class CommentPdu(SimulationManagementFamilyPdu):
                                           variableDatumRecords or [])
 
     @property
-    def numberOfFixedDatumRecords(self) -> int:
-        return self._datums.numberOfFixedDatumRecords
+    def fixedDatumRecordCount(self) -> int:
+        return self._datums.fixedDatumRecordCount
 
     @property
-    def numberOfVariableDatumRecords(self) -> int:
-        return self._datums.numberOfVariableDatumRecords
+    def variableDatumCount(self) -> int:
+        return self._datums.variableDatumCount
 
     @property
     def fixedDatumRecords(self) -> list["FixedDatum"]:
@@ -6072,12 +6072,12 @@ class CommentReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
                                           variableDatumRecords or [])
 
     @property
-    def numberOfFixedDatumRecords(self) -> int:
-        return self._datums.numberOfFixedDatumRecords
+    def fixedDatumRecordCount(self) -> int:
+        return self._datums.fixedDatumRecordCount
 
     @property
-    def numberOfVariableDatumRecords(self) -> int:
-        return self._datums.numberOfVariableDatumRecords
+    def variableDatumCount(self) -> int:
+        return self._datums.variableDatumCount
 
     @property
     def fixedDatumRecords(self) -> list["FixedDatum"]:
@@ -6138,7 +6138,7 @@ class DirectedEnergyFirePdu(WarfareFamilyPdu):
         self.dERecords: list[record.DamageDescriptionRecord] = dERecords or []
 
     @property
-    def numberOfDERecords(self) -> uint16:
+    def dERecordCount(self) -> uint16:
         return len(self.dERecords)
 
     def serialize(self, outputStream: DataOutputStream) -> None:
@@ -6157,7 +6157,7 @@ class DirectedEnergyFirePdu(WarfareFamilyPdu):
         outputStream.write_uint8(self.padding2)
         outputStream.write_uint32(self.padding3)
         outputStream.write_uint16(self.padding4)
-        outputStream.write_uint16(self.numberOfDERecords)
+        outputStream.write_uint16(self.dERecordCount)
         for record in self.dERecords:
             record.serialize(outputStream)
 
@@ -6177,9 +6177,9 @@ class DirectedEnergyFirePdu(WarfareFamilyPdu):
         self.padding2 = inputStream.read_uint8()
         self.padding3 = inputStream.read_uint32()
         self.padding4 = inputStream.read_uint16()
-        numberOfDERecords = inputStream.read_uint16()
+        dERecordCount = inputStream.read_uint16()
         self.dERecords.clear()
-        for _ in range(0, numberOfDERecords):
+        for _ in range(0, dERecordCount):
             vtp = parseStandardVariableRecord(
                 inputStream,
                 record.DamageDescriptionRecord
@@ -6234,7 +6234,7 @@ class DetonationPdu(WarfareFamilyPdu):
         self.descriptor.serialize(outputStream)
         self.locationInEntityCoordinates.serialize(outputStream)
         outputStream.write_unsigned_byte(self.detonationResult)
-        outputStream.write_unsigned_byte(self.numberOfVariableParameters)
+        outputStream.write_uint8(self.variableParameterCount)
         outputStream.write_unsigned_short(self.pad)
         for vpRecord in self.variableParameters:
             vpRecord.serialize(outputStream)
@@ -6249,7 +6249,7 @@ class DetonationPdu(WarfareFamilyPdu):
         self.descriptor.parse(inputStream)
         self.locationInEntityCoordinates.parse(inputStream)
         self.detonationResult = inputStream.read_unsigned_byte()
-        variableParameterCount = inputStream.read_unsigned_byte()
+        variableParameterCount = inputStream.read_uint8()
         self.pad = inputStream.read_unsigned_short()
         self.variableParameters.clear()
         for _ in range(0, variableParameterCount):
@@ -6276,12 +6276,12 @@ class SetDataPdu(SimulationManagementFamilyPdu):
                                           variableDatumRecords or [])
 
     @property
-    def numberOfFixedDatumRecords(self) -> int:
-        return self._datums.numberOfFixedDatumRecords
+    def fixedDatumRecordCount(self) -> int:
+        return self._datums.fixedDatumRecordCount
 
     @property
-    def numberOfVariableDatumRecords(self) -> int:
-        return self._datums.numberOfVariableDatumRecords
+    def variableDatumCount(self) -> int:
+        return self._datums.variableDatumCount
 
     @property
     def fixedDatumRecords(self) -> list["FixedDatum"]:
@@ -6331,7 +6331,7 @@ class RecordQueryReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
         self.recordIDs = recordIDs or []
 
     @property
-    def numberOfRecords(self) -> uint32:
+    def recordCount(self) -> uint32:
         return len(self.recordIDs)
 
     def serialize(self, outputStream):
@@ -6343,7 +6343,7 @@ class RecordQueryReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
         outputStream.write_unsigned_byte(self.pad2)
         outputStream.write_unsigned_short(self.eventType)
         outputStream.write_unsigned_int(self.time)
-        outputStream.write_unsigned_int(self.numberOfRecords)
+        outputStream.write_unsigned_int(self.recordCount)
         for anObj in self.recordIDs:
             anObj.serialize(outputStream)
 
@@ -6356,8 +6356,8 @@ class RecordQueryReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
         self.pad2 = inputStream.read_unsigned_byte()
         self.eventType = inputStream.read_unsigned_short()
         self.time = inputStream.read_unsigned_int()
-        numberOfRecords = inputStream.read_unsigned_int()
-        for idx in range(0, numberOfRecords):
+        recordCount = inputStream.read_uint32()
+        for _ in range(0, recordCount):
             element = null()
             element.parse(inputStream)
             self.recordIDs.append(element)
@@ -6384,12 +6384,12 @@ class ActionResponsePdu(SimulationManagementFamilyPdu):
                                           variableDatumRecords or [])
 
     @property
-    def numberOfFixedDatumRecords(self) -> int:
-        return self._datums.numberOfFixedDatumRecords
+    def fixedDatumRecordCount(self) -> int:
+        return self._datums.fixedDatumRecordCount
 
     @property
-    def numberOfVariableDatumRecords(self) -> int:
-        return self._datums.numberOfVariableDatumRecords
+    def variableDatumCount(self) -> int:
+        return self._datums.variableDatumCount
 
     @property
     def fixedDatumRecords(self) -> list["FixedDatum"]:
@@ -6595,15 +6595,15 @@ class UaPdu(DistributedEmissionsFamilyPdu):
         """THIS IS WRONG. It has the wrong class in the list."""
 
     @property
-    def numberOfShafts(self) -> uint8:
+    def shaftCount(self) -> uint8:
         return len(self.shaftRPMs)
 
     @property
-    def numberOfAPAs(self) -> uint8:
+    def apaCount(self) -> uint8:
         return len(self.apaData)
 
     @property
-    def numberOfUAEmitterSystems(self) -> uint8:
+    def uaEmitterSystemCount(self) -> uint8:
         return len(self.emitterSystems)
 
     def serialize(self, outputStream):
@@ -6615,9 +6615,9 @@ class UaPdu(DistributedEmissionsFamilyPdu):
         outputStream.write_byte(self.pad)
         outputStream.write_unsigned_short(self.passiveParameterIndex)
         outputStream.write_unsigned_byte(self.propulsionPlantConfiguration)
-        outputStream.write_unsigned_byte(self.numberOfShafts)
-        outputStream.write_unsigned_byte(self.numberOfAPAs)
-        outputStream.write_unsigned_byte(self.numberOfUAEmitterSystems)
+        outputStream.write_unsigned_byte(self.shaftCount)
+        outputStream.write_unsigned_byte(self.apaCount)
+        outputStream.write_unsigned_byte(self.uaEmitterSystemCount)
         for anObj in self.shaftRPMs:
             anObj.serialize(outputStream)
         for anObj in self.apaData:
@@ -6634,18 +6634,18 @@ class UaPdu(DistributedEmissionsFamilyPdu):
         self.pad = inputStream.read_byte()
         self.passiveParameterIndex = inputStream.read_unsigned_short()
         self.propulsionPlantConfiguration = inputStream.read_unsigned_byte()
-        numberOfShafts = inputStream.read_unsigned_byte()
-        numberOfAPAs = inputStream.read_unsigned_byte()
-        numberOfUAEmitterSystems = inputStream.read_unsigned_byte()
-        for idx in range(0, numberOfShafts):
+        shaftCount = inputStream.read_unsigned_byte()
+        apaCount = inputStream.read_unsigned_byte()
+        uaEmitterSystemCount = inputStream.read_unsigned_byte()
+        for _ in range(0, shaftCount):
             element = null()
             element.parse(inputStream)
             self.shaftRPMs.append(element)
-        for idx in range(0, numberOfAPAs):
+        for _ in range(0, apaCount):
             element = null()
             element.parse(inputStream)
             self.apaData.append(element)
-        for idx in range(0, numberOfUAEmitterSystems):
+        for _ in range(0, uaEmitterSystemCount):
             element = null()
             element.parse(inputStream)
             self.emitterSystems.append(element)
@@ -6853,11 +6853,11 @@ class SeesPdu(DistributedEmissionsFamilyPdu):
         self.vectoringSystemData = vectoringSystemData or []
 
     @property
-    def numberOfPropulsionSystems(self) -> uint16:
+    def propulsionSystemCount(self) -> uint16:
         return len(self.propulsionSystemData)
 
     @property
-    def numberOfVectoringNozzleSystems(self) -> uint16:
+    def vectoringNozzleSystemCount(self) -> uint16:
         return len(self.vectoringSystemData)
 
     def serialize(self, outputStream):
@@ -6870,8 +6870,8 @@ class SeesPdu(DistributedEmissionsFamilyPdu):
             self.acousticSignatureRepresentationIndex)
         outputStream.write_unsigned_short(
             self.radarCrossSectionSignatureRepresentationIndex)
-        outputStream.write_unsigned_short(self.numberOfPropulsionSystems)
-        outputStream.write_unsigned_short(self.numberOfVectoringNozzleSystems)
+        outputStream.write_unsigned_short(self.propulsionSystemCount)
+        outputStream.write_unsigned_short(self.vectoringNozzleSystemCount)
         for anObj in self.propulsionSystemData:
             anObj.serialize(outputStream)
         for anObj in self.vectoringSystemData:
@@ -6887,14 +6887,14 @@ class SeesPdu(DistributedEmissionsFamilyPdu):
         )
         self.radarCrossSectionSignatureRepresentationIndex = inputStream.read_unsigned_short(
         )
-        numberOfPropulsionSystems = inputStream.read_unsigned_short()
-        numberOfVectoringNozzleSystems = inputStream.read_unsigned_short()
-        for idx in range(0, numberOfPropulsionSystems):
+        propulsionSystemCount = inputStream.read_unsigned_short()
+        vectoringNozzleSystemCount = inputStream.read_unsigned_short()
+        for _ in range(0, propulsionSystemCount):
             element = null()
             element.parse(inputStream)
             self.propulsionSystemData.append(element)
 
-        for idx in range(0, numberOfVectoringNozzleSystems):
+        for _ in range(0, vectoringNozzleSystemCount):
             element = null()
             element.parse(inputStream)
             self.vectoringSystemData.append(element)
@@ -7001,12 +7001,12 @@ class EventReportReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
                                           variableDatumRecords or [])
 
     @property
-    def numberOfFixedDatumRecords(self) -> int:
-        return self._datums.numberOfFixedDatumRecords
+    def fixedDatumRecordCount(self) -> int:
+        return self._datums.fixedDatumRecordCount
 
     @property
-    def numberOfVariableDatumRecords(self) -> int:
-        return self._datums.numberOfVariableDatumRecords
+    def variableDatumCount(self) -> int:
+        return self._datums.variableDatumCount
 
     @property
     def fixedDatumRecords(self) -> list["FixedDatum"]:
@@ -7053,7 +7053,7 @@ class MinefieldResponseNackPdu(MinefieldFamilyPdu):
         # TODO: pad to 32-bit boundary
 
     @property
-    def numberOfMissingPdus(self) -> uint8:
+    def missingPduCount(self) -> uint8:
         return len(self.missingPduSequenceNumbers)
 
     def serialize(self, outputStream):
@@ -7062,7 +7062,7 @@ class MinefieldResponseNackPdu(MinefieldFamilyPdu):
         self.minefieldID.serialize(outputStream)
         self.requestingEntityID.serialize(outputStream)
         outputStream.write_unsigned_byte(self.requestID)
-        outputStream.write_unsigned_byte(self.numberOfMissingPdus)
+        outputStream.write_unsigned_byte(self.missingPduCount)
         for anObj in self.missingPduSequenceNumbers:
             anObj.serialize(outputStream)
 
@@ -7073,8 +7073,8 @@ class MinefieldResponseNackPdu(MinefieldFamilyPdu):
         self.minefieldID.parse(inputStream)
         self.requestingEntityID.parse(inputStream)
         self.requestID = inputStream.read_unsigned_byte()
-        numberOfMissingPdus = inputStream.read_unsigned_byte()
-        for idx in range(0, numberOfMissingPdus):
+        missingPduCount = inputStream.read_unsigned_byte()
+        for _ in range(0, missingPduCount):
             element = null()
             element.parse(inputStream)
             self.missingPduSequenceNumbers.append(element)
@@ -7100,12 +7100,12 @@ class ActionResponseReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
                                           variableDatumRecords or [])
 
     @property
-    def numberOfFixedDatumRecords(self) -> int:
-        return self._datums.numberOfFixedDatumRecords
+    def fixedDatumRecordCount(self) -> int:
+        return self._datums.fixedDatumRecordCount
 
     @property
-    def numberOfVariableDatumRecords(self) -> int:
-        return self._datums.numberOfVariableDatumRecords
+    def variableDatumCount(self) -> int:
+        return self._datums.variableDatumCount
 
     @property
     def fixedDatumRecords(self) -> list["FixedDatum"]:
@@ -7230,15 +7230,15 @@ class AggregateStatePdu(EntityManagementFamilyPdu):
         self.variableDatumRecords = variableDatumRecords or []
 
     @property
-    def numberOfAggregateIDs(self) -> uint16:
+    def aggregateIDCount(self) -> uint16:
         return len(self.aggregateIDs)
 
     @property
-    def numberOfEntityIDs(self) -> uint16:
+    def entityIDCount(self) -> uint16:
         return len(self.entityIDs)
 
     @property
-    def numberOfSilentAggregateSystems(self) -> uint16:
+    def silentAggregateSystemsCount(self) -> uint16:
         return len(self.silentAggregateSystems)
 
     @property
@@ -7246,7 +7246,7 @@ class AggregateStatePdu(EntityManagementFamilyPdu):
         return len(self.silentEntitySystems)
 
     @property
-    def numberOfVariableDatumRecords(self) -> uint32:
+    def variableDatumCount(self) -> uint32:
         return len(self.variableDatumRecords)
 
     def serialize(self, outputStream):
@@ -7262,9 +7262,9 @@ class AggregateStatePdu(EntityManagementFamilyPdu):
         self.orientation.serialize(outputStream)
         self.centerOfMass.serialize(outputStream)
         self.velocity.serialize(outputStream)
-        outputStream.write_unsigned_short(self.numberOfAggregateIDs)
-        outputStream.write_unsigned_short(self.numberOfEntityIDs)
-        outputStream.write_unsigned_short(self.numberOfSilentAggregateSystems)
+        outputStream.write_uint16(self.aggregateIDCount)
+        outputStream.write_uint16(self.entityIDCount)
+        outputStream.write_uint16(self.silentAggregateSystemsCount)
         outputStream.write_uint16(self.silentEntitySystemsCount)
         for aggregateID in self.aggregateIDs:
             aggregateID.serialize(outputStream)
@@ -7274,7 +7274,7 @@ class AggregateStatePdu(EntityManagementFamilyPdu):
             silentAggregateSystem.serialize(outputStream)
         for silentEntitySystem in self.silentEntitySystems:
             silentEntitySystem.serialize(outputStream)
-        outputStream.write_unsigned_int(self.numberOfVariableDatumRecords)
+        outputStream.write_unsigned_int(self.variableDatumCount)
         for variableDatumRecord in self.variableDatumRecords:
             variableDatumRecord.serialize(outputStream)
 
@@ -7291,19 +7291,19 @@ class AggregateStatePdu(EntityManagementFamilyPdu):
         self.orientation.parse(inputStream)
         self.centerOfMass.parse(inputStream)
         self.velocity.parse(inputStream)
-        numberOfAggregateIDs = inputStream.read_unsigned_short()
-        numberOfEntityIDs = inputStream.read_unsigned_short()
-        numberOfSilentAggregateSystems = inputStream.read_unsigned_short()
+        aggregateIDCount = inputStream.read_uint16()
+        entityIDCount = inputStream.read_uint16()
+        silentAggregateSystemsCount = inputStream.read_uint16()
         silentEntitySystemsCount = inputStream.read_uint16()
-        for idx in range(0, numberOfAggregateIDs):
+        for _ in range(0, aggregateIDCount):
             element = AggregateIdentifier()
             element.parse(inputStream)
             self.aggregateIDs.append(element)
-        for idx in range(0, numberOfEntityIDs):
+        for _ in range(0, entityIDCount):
             element = record.EntityIdentifier()
             element.parse(inputStream)
             self.entityIDs.append(element)
-        for idx in range(0, numberOfSilentAggregateSystems):
+        for _ in range(0, silentAggregateSystemsCount):
             element = SilentAggregateSystem()
             element.parse(inputStream)
             self.silentAggregateSystems.append(element)
@@ -7312,6 +7312,8 @@ class AggregateStatePdu(EntityManagementFamilyPdu):
             sesRecord = record.SilentEntitySystem()
             sesRecord.parse(inputStream)
             self.silentEntitySystems.append(sesRecord)
+        variableDatumCount = inputStream.read_unsigned_int()
+        for _ in range(0, variableDatumCount):
             element = VariableDatum()
             element.parse(inputStream)
             self.variableDatumRecords.append(element)
