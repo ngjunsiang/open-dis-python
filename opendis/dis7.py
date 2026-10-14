@@ -285,7 +285,7 @@ class GroupID:
 
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
-        self.simulationAddress.parse(inputStream)
+        self.simulationAddress = SimulationAddress.parse(inputStream)
         self.groupNumber = inputStream.read_unsigned_short()
 
 
@@ -523,7 +523,7 @@ class EntityAssociation:
         self.changeIndicator = inputStream.read_unsigned_byte()
         self.associationStatus = inputStream.read_unsigned_byte()
         self.associationType = inputStream.read_unsigned_byte()
-        self.entityID.parse(inputStream)
+        self.entityID = EntityIdentifier.parse(inputStream)
         self.ownStationLocation = inputStream.read_unsigned_short()
         self.physicalConnectionType = inputStream.read_unsigned_byte()
         self.groupMemberType = inputStream.read_unsigned_byte()
@@ -640,7 +640,7 @@ class MinefieldIdentifier:
 
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
-        self.simulationAddress.parse(inputStream)
+        self.simulationAddress = SimulationAddress.parse(inputStream)
         self.minefieldNumber = inputStream.read_unsigned_short()
 
 
@@ -768,7 +768,7 @@ class OwnershipStatus:
 
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
-        self.entityId.parse(inputStream)
+        self.entityId = EntityIdentifier.parse(inputStream)
         self.ownershipStatus = inputStream.read_unsigned_byte()
         self.padding = inputStream.read_unsigned_byte()
 
@@ -975,7 +975,7 @@ class Association:
         """Parse a message. This may recursively call embedded objects."""
         self.associationType = inputStream.read_unsigned_byte()
         self.padding4 = inputStream.read_unsigned_byte()
-        self.associatedEntityID.parse(inputStream)
+        self.associatedEntityID = EntityIdentifier.parse(inputStream)
         self.associatedLocation.parse(inputStream)
 
 
@@ -1069,7 +1069,7 @@ class ObjectIdentifier:
 
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
-        self.simulationAddress.parse(inputStream)
+        self.simulationAddress = SimulationAddress.parse(inputStream)
         self.objectNumber = inputStream.read_unsigned_short()
 
 
@@ -1093,7 +1093,7 @@ class AggregateIdentifier:
 
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
-        self.simulationAddress.parse(inputStream)
+        self.simulationAddress = SimulationAddress.parse(inputStream)
         self.aggregateID = inputStream.read_unsigned_short()
 
 
@@ -1473,7 +1473,7 @@ class MineEntityIdentifier:
 
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
-        self.simulationAddress.parse(inputStream)
+        self.simulationAddress = SimulationAddress.parse(inputStream)
         self.mineEntityNumber = inputStream.read_unsigned_short()
 
 
@@ -1834,7 +1834,7 @@ class TrackJamData:
 
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
-        self.entityID.parse(inputStream)
+        self.entityID = EntityIdentifier.parse(inputStream)
         self.emitterNumber = inputStream.read_unsigned_byte()
         self.beamNumber = inputStream.read_unsigned_byte()
 
@@ -1916,7 +1916,7 @@ class SimulationManagementPduHeader:
         """Parse a message. This may recursively call embedded objects."""
         self.pduHeader.parse(inputStream)
         self.originatingID.parse(inputStream)
-        self.receivingID.parse(inputStream)
+        self.receivingID = SimulationAddress.parse(inputStream)
 
 
 class BeamData:
@@ -2073,7 +2073,7 @@ class SimulationIdentifier:
 
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
-        self.simulationAddress.parse(inputStream)
+        self.simulationAddress = SimulationAddress.parse(inputStream)
         self.referenceNumber = inputStream.read_unsigned_short()
 
 
@@ -2341,11 +2341,11 @@ class LaunchedMunitionRecord:
 
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
-        self.fireEventID.parse(inputStream)
+        self.fireEventID = EventIdentifier.parse(inputStream)
         self.padding = inputStream.read_unsigned_short()
-        self.firingEntityID.parse(inputStream)
+        self.firingEntityID = EntityIdentifier.parse(inputStream)
         self.padding2 = inputStream.read_unsigned_short()
-        self.targetEntityID.parse(inputStream)
+        self.targetEntityID = EntityIdentifier.parse(inputStream)
         self.padding3 = inputStream.read_unsigned_short()
         self.targetLocation.parse(inputStream)
 
@@ -3105,7 +3105,7 @@ class UnattachedIdentifier:
 
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
-        self.simulationAddress.parse(inputStream)
+        self.simulationAddress = SimulationAddress.parse(inputStream)
         self.referenceNumber = inputStream.read_unsigned_short()
 
 
@@ -3497,7 +3497,7 @@ class CommunicationsNodeID:
 
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
-        self.entityID.parse(inputStream)
+        self.entityID = EntityIdentifier.parse(inputStream)
         self.elementID = inputStream.read_unsigned_short()
 
 
@@ -3616,7 +3616,7 @@ class SeparationVP:
         self.reasonForSeparation = inputStream.read_unsigned_byte()
         self.preEntityIndicator = inputStream.read_unsigned_byte()
         self.padding1 = inputStream.read_unsigned_byte()
-        self.parentEntityID.parse(inputStream)
+        self.parentEntityID = EntityIdentifier.parse(inputStream)
         self.padding2 = inputStream.read_unsigned_short()
         self.stationLocation = inputStream.read_unsigned_int()
 
@@ -3807,7 +3807,7 @@ class EntityStateUpdatePdu(EntityInformationFamilyPdu):
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
         super(EntityStateUpdatePdu, self).parse(inputStream)
-        self.entityID.parse(inputStream)
+        self.entityID = EntityIdentifier.parse(inputStream)
         self.padding1 = inputStream.read_byte()
         numberOfVariableParameters = inputStream.read_unsigned_byte()
         self.entityLinearVelocity.parse(inputStream)
@@ -3861,8 +3861,8 @@ class ServiceRequestPdu(LogisticsFamilyPdu):
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
         super(ServiceRequestPdu, self).parse(inputStream)
-        self.requestingEntityID.parse(inputStream)
-        self.servicingEntityID.parse(inputStream)
+        self.requestingEntityID = EntityIdentifier.parse(inputStream)
+        self.servicingEntityID = EntityIdentifier.parse(inputStream)
         self.serviceTypeRequested = inputStream.read_unsigned_byte()
         numberOfSupplyTypes = inputStream.read_unsigned_byte()
         self.serviceRequestPadding = inputStream.read_short()
@@ -3904,8 +3904,8 @@ class RepairCompletePdu(LogisticsFamilyPdu):
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
         super(RepairCompletePdu, self).parse(inputStream)
-        self.receivingEntityID.parse(inputStream)
-        self.repairingEntityID.parse(inputStream)
+        self.receivingEntityID = EntityIdentifier.parse(inputStream)
+        self.repairingEntityID = EntityIdentifier.parse(inputStream)
         self.repair = inputStream.read_unsigned_short()
         self.padding4 = inputStream.read_short()
 
@@ -3977,9 +3977,9 @@ class CollisionPdu(EntityInformationFamilyPdu):
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
         super(CollisionPdu, self).parse(inputStream)
-        self.issuingEntityID.parse(inputStream)
-        self.collidingEntityID.parse(inputStream)
-        self.eventID.parse(inputStream)
+        self.issuingEntityID = EntityIdentifier.parse(inputStream)
+        self.collidingEntityID = EntityIdentifier.parse(inputStream)
+        self.eventID = EventIdentifier.parse(inputStream)
         self.collisionType = inputStream.read_unsigned_byte()
         self.pad = inputStream.read_byte()
         self.velocity.parse(inputStream)
@@ -4020,8 +4020,8 @@ class RepairResponsePdu(LogisticsFamilyPdu):
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
         super(RepairResponsePdu, self).parse(inputStream)
-        self.receivingEntityID.parse(inputStream)
-        self.repairingEntityID.parse(inputStream)
+        self.receivingEntityID = EntityIdentifier.parse(inputStream)
+        self.repairingEntityID = EntityIdentifier.parse(inputStream)
         self.repairResult = inputStream.read_unsigned_byte()
         self.padding1 = inputStream.read_short()
         self.padding2 = inputStream.read_byte()
@@ -4052,8 +4052,8 @@ class SimulationManagementFamilyPdu(Pdu):
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
         super(SimulationManagementFamilyPdu, self).parse(inputStream)
-        self.originatingEntityID.parse(inputStream)
-        self.receivingEntityID.parse(inputStream)
+        self.originatingEntityID = EntityIdentifier.parse(inputStream)
+        self.receivingEntityID = EntityIdentifier.parse(inputStream)
 
 
 class DataQueryPdu(SimulationManagementFamilyPdu):
@@ -4161,13 +4161,13 @@ class LinearObjectStatePdu(SyntheticEnvironmentFamilyPdu):
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
         super(LinearObjectStatePdu, self).parse(inputStream)
-        self.objectID.parse(inputStream)
-        self.referencedObjectID.parse(inputStream)
+        self.objectID = EntityIdentifier.parse(inputStream)
+        self.referencedObjectID = EntityIdentifier.parse(inputStream)
         self.updateNumber = inputStream.read_unsigned_short()
         self.forceID = inputStream.read_unsigned_byte()
         numberOfSegments = inputStream.read_unsigned_byte()
-        self.requesterID.parse(inputStream)
-        self.receivingID.parse(inputStream)
+        self.requesterID = SimulationAddress.parse(inputStream)
+        self.receivingID = SimulationAddress.parse(inputStream)
         self.objectType.parse(inputStream)
         for idx in range(0, numberOfSegments):
             element = LinearSegmentParameter()
@@ -4265,7 +4265,7 @@ class IntercomSignalPdu(RadioCommunicationsFamilyPdu):
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
         super(IntercomSignalPdu, self).parse(inputStream)
-        self.entityID.parse(inputStream)
+        self.entityID = EntityIdentifier.parse(inputStream)
         self.communicationsDeviceID = inputStream.read_unsigned_short()
         self.encodingScheme = inputStream.read_unsigned_short()
         self.tdlType = inputStream.read_unsigned_short()
@@ -4344,8 +4344,8 @@ class ResupplyReceivedPdu(LogisticsFamilyPdu):
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
         super(ResupplyReceivedPdu, self).parse(inputStream)
-        self.receivingEntityID.parse(inputStream)
-        self.supplyingEntityID.parse(inputStream)
+        self.receivingEntityID = EntityIdentifier.parse(inputStream)
+        self.supplyingEntityID = EntityIdentifier.parse(inputStream)
         numberOfSupplyTypes = inputStream.read_unsigned_byte()
         self.padding1 = inputStream.read_short()
         self.padding2 = inputStream.read_byte()
@@ -4381,8 +4381,8 @@ class WarfareFamilyPdu(Pdu):
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
         super(WarfareFamilyPdu, self).parse(inputStream)
-        self.firingEntityID.parse(inputStream)
-        self.targetEntityID.parse(inputStream)
+        self.firingEntityID = EntityIdentifier.parse(inputStream)
+        self.targetEntityID = EntityIdentifier.parse(inputStream)
 
 
 class CollisionElasticPdu(EntityInformationFamilyPdu):
@@ -4457,9 +4457,9 @@ class CollisionElasticPdu(EntityInformationFamilyPdu):
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
         super(CollisionElasticPdu, self).parse(inputStream)
-        self.issuingEntityID.parse(inputStream)
-        self.collidingEntityID.parse(inputStream)
-        self.collisionEventID.parse(inputStream)
+        self.issuingEntityID = EntityIdentifier.parse(inputStream)
+        self.collidingEntityID = EntityIdentifier.parse(inputStream)
+        self.collisionEventID = EventIdentifier.parse(inputStream)
         self.pad = inputStream.read_short()
         self.contactVelocity.parse(inputStream)
         self.mass = inputStream.read_float()
@@ -4606,8 +4606,8 @@ class SimulationManagementWithReliabilityFamilyPdu(Pdu):
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
         super(SimulationManagementWithReliabilityFamilyPdu, self).parse(inputStream)
-        self.originatingEntityID.parse(inputStream)
-        self.receivingEntityID.parse(inputStream)
+        self.originatingEntityID = EntityIdentifier.parse(inputStream)
+        self.receivingEntityID = EntityIdentifier.parse(inputStream)
 
 
 class ActionRequestReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
@@ -4739,9 +4739,9 @@ class DesignatorPdu(DistributedEmissionsFamilyPdu):
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
         super(DesignatorPdu, self).parse(inputStream)
-        self.designatingEntityID.parse(inputStream)
+        self.designatingEntityID = EntityIdentifier.parse(inputStream)
         self.codeName = inputStream.read_unsigned_short()
-        self.designatedEntityID.parse(inputStream)
+        self.designatedEntityID = EntityIdentifier.parse(inputStream)
         self.designatorCode = inputStream.read_unsigned_short()
         self.designatorPower = inputStream.read_float()
         self.designatorWavelength = inputStream.read_float()
@@ -4869,7 +4869,7 @@ class EntityStatePdu(EntityInformationFamilyPdu):
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
         super(EntityStatePdu, self).parse(inputStream)
-        self.entityID.parse(inputStream)
+        self.entityID = EntityIdentifier.parse(inputStream)
         self.forceId = inputStream.read_unsigned_byte()
         numberOfVariableParameters = inputStream.read_unsigned_byte()
         self.entityType.parse(inputStream)
@@ -5051,7 +5051,7 @@ class TransmitterPdu(RadioCommunicationsFamilyPdu):
 
     def parse(self, inputStream: DataInputStream) -> None:
         super(TransmitterPdu, self).parse(inputStream)
-        self.radioReferenceID.parse(inputStream)
+        self.radioReferenceID = EntityIdentifier.parse(inputStream)
         self.radioNumber = inputStream.read_uint16()
         self.radioEntityType.parse(inputStream)
         self.transmitState = inputStream.read_uint8()
@@ -5157,8 +5157,8 @@ class ElectromagneticEmissionsPdu(DistributedEmissionsFamilyPdu):
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
         super(ElectromagneticEmissionsPdu, self).parse(inputStream)
-        self.emittingEntityID.parse(inputStream)
-        self.eventID.parse(inputStream)
+        self.emittingEntityID = EntityIdentifier.parse(inputStream)
+        self.eventID = EventIdentifier.parse(inputStream)
         self.stateUpdateIndicator = inputStream.read_unsigned_byte()
         numberOfSystems = inputStream.read_unsigned_byte()
         self.paddingForEmissionsPdu = inputStream.read_unsigned_short()
@@ -5316,8 +5316,8 @@ class ResupplyOfferPdu(LogisticsFamilyPdu):
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
         super(ResupplyOfferPdu, self).parse(inputStream)
-        self.receivingEntityID.parse(inputStream)
-        self.supplyingEntityID.parse(inputStream)
+        self.receivingEntityID = EntityIdentifier.parse(inputStream)
+        self.supplyingEntityID = EntityIdentifier.parse(inputStream)
         numberOfSupplyTypes = inputStream.read_unsigned_byte()
         self.padding1 = inputStream.read_byte()
         self.padding2 = inputStream.read_short()
@@ -5380,7 +5380,7 @@ class AttributePdu(EntityInformationFamilyPdu):
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
         super(AttributePdu, self).parse(inputStream)
-        self.originatingSimulationAddress.parse(inputStream)
+        self.originatingSimulationAddress = SimulationAddress.parse(inputStream)
         self.padding1 = inputStream.read_int()
         self.padding2 = inputStream.read_short()
         self.attributeRecordPduType = inputStream.read_unsigned_byte()
@@ -5568,8 +5568,8 @@ class PointObjectStatePdu(SyntheticEnvironmentFamilyPdu):
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
         super(PointObjectStatePdu, self).parse(inputStream)
-        self.objectID.parse(inputStream)
-        self.referencedObjectID.parse(inputStream)
+        self.objectID = EntityIdentifier.parse(inputStream)
+        self.referencedObjectID = EntityIdentifier.parse(inputStream)
         self.updateNumber = inputStream.read_unsigned_short()
         self.forceID = inputStream.read_unsigned_byte()
         self.modifications = inputStream.read_unsigned_byte()
@@ -5577,8 +5577,8 @@ class PointObjectStatePdu(SyntheticEnvironmentFamilyPdu):
         self.objectLocation.parse(inputStream)
         self.objectOrientation.parse(inputStream)
         self.objectAppearance = inputStream.read_double()
-        self.requesterID.parse(inputStream)
-        self.receivingID.parse(inputStream)
+        self.requesterID = SimulationAddress.parse(inputStream)
+        self.receivingID = SimulationAddress.parse(inputStream)
         self.pad2 = inputStream.read_unsigned_int()
 
 
@@ -6008,8 +6008,8 @@ class ArealObjectStatePdu(SyntheticEnvironmentFamilyPdu):
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
         super(ArealObjectStatePdu, self).parse(inputStream)
-        self.objectID.parse(inputStream)
-        self.referencedObjectID.parse(inputStream)
+        self.objectID = EntityIdentifier.parse(inputStream)
+        self.referencedObjectID = EntityIdentifier.parse(inputStream)
         self.updateNumber = inputStream.read_unsigned_short()
         self.forceID = inputStream.read_unsigned_byte()
         self.modifications = inputStream.read_unsigned_byte()
@@ -6017,8 +6017,8 @@ class ArealObjectStatePdu(SyntheticEnvironmentFamilyPdu):
         self.specificObjectAppearance = inputStream.read_unsigned_int()
         self.generalObjectAppearance = inputStream.read_unsigned_short()
         numberOfPoints = inputStream.read_unsigned_short()
-        self.requesterID.parse(inputStream)
-        self.receivingID.parse(inputStream)
+        self.requesterID = SimulationAddress.parse(inputStream)
+        self.receivingID = SimulationAddress.parse(inputStream)
         for idx in range(0, numberOfPoints):
             element = WorldCoordinates()
             element.parse(inputStream)
@@ -6151,7 +6151,7 @@ class MinefieldStatePdu(MinefieldFamilyPdu):
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
         super(MinefieldStatePdu, self).parse(inputStream)
-        self.minefieldID.parse(inputStream)
+        self.minefieldID = EntityIdentifier.parse(inputStream)
         self.minefieldSequence = inputStream.read_unsigned_short()
         self.forceID = inputStream.read_unsigned_byte()
         numberOfPerimeterPoints = inputStream.read_unsigned_byte()
@@ -6460,8 +6460,8 @@ class DetonationPdu(WarfareFamilyPdu):
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
         super(DetonationPdu, self).parse(inputStream)
-        self.explodingEntityID.parse(inputStream)
-        self.eventID.parse(inputStream)
+        self.explodingEntityID = EntityIdentifier.parse(inputStream)
+        self.eventID = EventIdentifier.parse(inputStream)
         self.velocity.parse(inputStream)
         self.location.parse(inputStream)
         self.descriptor.parse(inputStream)
@@ -6665,7 +6665,7 @@ class EntityDamageStatusPdu(WarfareFamilyPdu):
 
     def parse(self, inputStream: DataInputStream) -> None:
         super(EntityDamageStatusPdu, self).parse(inputStream)
-        self.damagedEntityID.parse(inputStream)
+        self.damagedEntityID = EntityIdentifier.parse(inputStream)
         self.padding1 = inputStream.read_uint16()
         self.padding2 = inputStream.read_uint16()
         damageDescriptionCount = inputStream.read_uint16()
@@ -6724,8 +6724,8 @@ class FirePdu(WarfareFamilyPdu):
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
         super(FirePdu, self).parse(inputStream)
-        self.munitionExpendableID.parse(inputStream)
-        self.eventID.parse(inputStream)
+        self.munitionExpendableID = EntityIdentifier.parse(inputStream)
+        self.eventID = EventIdentifier.parse(inputStream)
         self.fireMissionIndex = inputStream.read_unsigned_int()
         self.location.parse(inputStream)
         self.descriptor.parse(inputStream)
@@ -6771,7 +6771,7 @@ class ReceiverPdu(RadioCommunicationsFamilyPdu):
         self.receiverState = inputStream.read_unsigned_short()
         self.padding1 = inputStream.read_unsigned_short()
         self.receivedPower = inputStream.read_float()
-        self.transmitterEntityID.parse(inputStream)
+        self.transmitterEntityID = EntityIdentifier.parse(inputStream)
         self.transmitterRadioId = inputStream.read_unsigned_short()
 
 
@@ -6847,8 +6847,8 @@ class UaPdu(DistributedEmissionsFamilyPdu):
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
         super(UaPdu, self).parse(inputStream)
-        self.emittingEntityID.parse(inputStream)
-        self.eventID.parse(inputStream)
+        self.emittingEntityID = EntityIdentifier.parse(inputStream)
+        self.eventID = EventIdentifier.parse(inputStream)
         self.stateChangeIndicator = inputStream.read_byte()
         self.pad = inputStream.read_byte()
         self.passiveParameterIndex = inputStream.read_unsigned_short()
@@ -6941,13 +6941,13 @@ class IntercomControlPdu(RadioCommunicationsFamilyPdu):
         super(IntercomControlPdu, self).parse(inputStream)
         self.controlType = inputStream.read_unsigned_byte()
         self.communicationsChannelType = inputStream.read_unsigned_byte()
-        self.sourceEntityID.parse(inputStream)
+        self.sourceEntityID = EntityIdentifier.parse(inputStream)
         self.sourceCommunicationsDeviceID = inputStream.read_unsigned_byte()
         self.sourceLineID = inputStream.read_unsigned_byte()
         self.transmitPriority = inputStream.read_unsigned_byte()
         self.transmitLineState = inputStream.read_unsigned_byte()
         self.command = inputStream.read_unsigned_byte()
-        self.masterEntityID.parse(inputStream)
+        self.masterEntityID = EntityIdentifier.parse(inputStream)
         self.masterCommunicationsDeviceID = inputStream.read_unsigned_short()
         intercomParametersLength = inputStream.read_unsigned_int()
         # TODO: Validate intercomParametersLength against rest of input stream?
@@ -7003,7 +7003,7 @@ class SignalPdu(RadioCommunicationsFamilyPdu):
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
         super(SignalPdu, self).parse(inputStream)
-        self.entityID.parse(inputStream)
+        self.entityID = EntityIdentifier.parse(inputStream)
         self.radioID = inputStream.read_unsigned_short()
         self.encodingScheme = inputStream.read_unsigned_short()
         self.tdlType = inputStream.read_unsigned_short()
@@ -7099,7 +7099,7 @@ class SeesPdu(DistributedEmissionsFamilyPdu):
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
         super(SeesPdu, self).parse(inputStream)
-        self.orginatingEntityID.parse(inputStream)
+        self.orginatingEntityID = EntityIdentifier.parse(inputStream)
         self.infraredSignatureRepresentationIndex = inputStream.read_unsigned_short(
         )
         self.acousticSignatureRepresentationIndex = inputStream.read_unsigned_short(
@@ -7289,8 +7289,8 @@ class MinefieldResponseNackPdu(MinefieldFamilyPdu):
         """Parse a message. This may recursively call embedded objects."""
 
         super(MinefieldResponseNackPdu, self).parse(inputStream)
-        self.minefieldID.parse(inputStream)
-        self.requestingEntityID.parse(inputStream)
+        self.minefieldID = EntityIdentifier.parse(inputStream)
+        self.requestingEntityID = EntityIdentifier.parse(inputStream)
         self.requestID = inputStream.read_unsigned_byte()
         numberOfMissingPdus = inputStream.read_unsigned_byte()
         for idx in range(0, numberOfMissingPdus):
@@ -7389,8 +7389,8 @@ class IsPartOfPdu(EntityManagementFamilyPdu):
     def parse(self, inputStream):
         """Parse a message. This may recursively call embedded objects."""
         super(IsPartOfPdu, self).parse(inputStream)
-        self.orginatingEntityID.parse(inputStream)
-        self.receivingEntityID.parse(inputStream)
+        self.orginatingEntityID = EntityIdentifier.parse(inputStream)
+        self.receivingEntityID = EntityIdentifier.parse(inputStream)
         self.relationship.parse(inputStream)
         self.partLocation.parse(inputStream)
         self.namedLocationID.parse(inputStream)

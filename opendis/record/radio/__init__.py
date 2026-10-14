@@ -480,6 +480,8 @@ class HighFidelityHAVEQUICKRadio(VariableTransmitterParametersRecord):
     
     def serialize(self, outputStream: DataOutputStream) -> None:
         super().serialize(outputStream)
+        outputStream.write_uint32(self.recordType)
+        outputStream.write_uint16(self.recordLength)
         outputStream.write_uint16(self.padding1)
         self.netId.serialize(outputStream)
         outputStream.write_uint8(self.todTransmitIndicator)
@@ -508,3 +510,534 @@ class HighFidelityHAVEQUICKRadio(VariableTransmitterParametersRecord):
         self.wod4 = inputStream.read_uint32()
         self.wod5 = inputStream.read_uint32()
         self.wod6 = inputStream.read_uint32()
+
+
+# ---------------------------------------------------------------------------
+# dis7-ng target-state PDUs (dataclass style, composed PduHeader).
+# Wire ground truth: xml-fixed/RadioCommunicationsFamilyPdus.xml; §7.7.
+# The Annex C modulation/antenna record classes above (PR #80 layer) are
+# reused for the Transmitter's dispatch — transitional until the generator
+# emits dataclass forms.
+# ---------------------------------------------------------------------------
+
+from dataclasses import dataclass, field  # noqa: E402
+from typing import ClassVar  # noqa: E402
+
+from opendis.enum_registry import rich_or_int  # noqa: E402
+from opendis.record.common import (  # noqa: E402
+    EntityIdentifier,
+    EntityType,
+    Vector3Float,
+    WorldCoordinates,
+)
+from opendis.record.pdu import Pdu  # noqa: E402
+from opendis.types import uint64  # noqa: E402
+
+
+def _padTo32(byteCount: int) -> int:
+    """Pad bytes needed to bring a datagram to a 32-bit boundary."""
+    return (4 - byteCount % 4) % 4
+
+
+@dataclass(slots=True)
+class RadioCommunicationsFamilyPdu(Pdu):
+    """Section 7.7 marker for the Radio Communications family."""
+
+    protocolFamily: ClassVar[int] = 4  # [UID 5]
+
+
+# generator: the XML's RadioCommsHeader is flattened onto the PDU (the
+# composed PDU header already owns the attribute name ``header``); legacy
+# dis7.py made the same flattening call.
+@dataclass(slots=True)
+class TransmitterPdu(RadioCommunicationsFamilyPdu):
+    """Section 7.7.2 Transmitter PDU
+
+    Detailed state of one radio transmitter or simple intercom. The
+    Modulation Parameters record and Antenna Pattern record are SINGLE
+    records (not lists — the XML's objectlists are wrong there; the
+    standard allows one of each, §7.7.2/Annex C/§6.2.8), followed by the
+    variable transmitter parameter records (uid-66 SV format). All three
+    counts are derived.
+    """
+
+    pduType: ClassVar[int] = 25  # [UID 4]
+
+    FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
+        "transmitState": 164,
+        "inputSource": 165,
+        "antennaPatternType": 167,
+        "cryptoSystem": 166,
+    }
+
+    radioReferenceID: EntityIdentifier = field(default_factory=EntityIdentifier)
+    radioNumber: uint16 = 0
+    radioEntityType: EntityType = field(default_factory=EntityType)
+    transmitState: enum8 = 0  # [UID 164]
+    inputSource: enum8 = 0  # [UID 165]
+    antennaLocation: WorldCoordinates = field(default_factory=WorldCoordinates)
+    relativeAntennaLocation: Vector3Float = field(default_factory=Vector3Float)
+    antennaPatternType: enum16 = 0  # [UID 167]
+    frequency: uint64 = 0
+    transmitFrequencyBandwidth: float32 = 0.0
+    power: float32 = 0.0
+    modulationType: ModulationType = field(default_factory=ModulationType)
+    cryptoSystem: enum16 = 0  # [UID 166]
+    cryptoKeyId: uint16 = 0
+    modulationParameters: ModulationParametersRecord | None = None
+    antennaPattern: AntennaPatternRecord | None = None
+    variableTransmitterParameters: list = field(default_factory=list)
+
+    # XML order after the modulation-parameter count is pad-u8 + pad-u16
+    # (legacy dis7.py wrote u16 + u8 — same 4 bytes, different layout;
+    # zeros either way).
+    padding1: uint8 = field(init=False, default=0)
+    padding2: uint16 = field(init=False, default=0)
+
+    @property
+    def modulationParameterCount(self) -> uint8:
+        """Length in bytes of the Modulation Parameters record (0 if
+        absent)."""
+        return self.modulationParameters.marshalledSize() \
+            if self.modulationParameters is not None else 0
+
+    @property
+    def antennaPatternCount(self) -> uint16:
+        """Length in bytes of the Antenna Pattern record (0 if absent)."""
+        return self.antennaPattern.marshalledSize() \
+            if self.antennaPattern is not None else 0
+
+    @property
+    def variableTransmitterParameterCount(self) -> uint16:
+        """How many variable transmitter parameter records follow."""
+        return len(self.variableTransmitterParameters)
+
+    def _marshalledBodySize(self) -> int:
+        size = (self.radioReferenceID.marshalledSize()
+                + 2
+                + self.radioEntityType.marshalledSize()
+                + 1 + 1
+                + 2  # variableTransmitterParameterCount
+                + self.antennaLocation.marshalledSize()
+                + self.relativeAntennaLocation.marshalledSize()
+                + 2 + 2  # antennaPatternType + antennaPatternCount
+                + 8 + 4 + 4
+                + self.modulationType.marshalledSize()
+                + 2 + 2  # cryptoSystem + cryptoKeyId
+                + 1 + 1 + 2)  # modulationParameterCount + pads
+        if self.modulationParameters is not None:
+            size += self.modulationParameters.marshalledSize()
+        if self.antennaPattern is not None:
+            size += self.antennaPattern.marshalledSize()
+        size += sum(vtp.marshalledSize()
+                    for vtp in self.variableTransmitterParameters)
+        return size
+
+    def _serializeBody(self, outputStream: DataOutputStream) -> None:
+        self.radioReferenceID.serialize(outputStream)
+        outputStream.write_uint16(self.radioNumber)
+        self.radioEntityType.serialize(outputStream)
+        outputStream.write_uint8(self.transmitState)
+        outputStream.write_uint8(self.inputSource)
+        outputStream.write_uint16(self.variableTransmitterParameterCount)
+        self.antennaLocation.serialize(outputStream)
+        self.relativeAntennaLocation.serialize(outputStream)
+        outputStream.write_uint16(self.antennaPatternType)
+        outputStream.write_uint16(self.antennaPatternCount)
+        outputStream.write_uint64(self.frequency)
+        outputStream.write_float32(self.transmitFrequencyBandwidth)
+        outputStream.write_float32(self.power)
+        self.modulationType.serialize(outputStream)
+        outputStream.write_uint16(self.cryptoSystem)
+        outputStream.write_uint16(self.cryptoKeyId)
+        outputStream.write_uint8(self.modulationParameterCount)
+        outputStream.write_uint8(self.padding1)
+        outputStream.write_uint16(self.padding2)
+        if self.modulationParameters is not None:
+            self.modulationParameters.serialize(outputStream)
+        if self.antennaPattern is not None:
+            self.antennaPattern.serialize(outputStream)
+        for vtp in self.variableTransmitterParameters:
+            vtp.serialize(outputStream)
+
+    def _parseBody(self, inputStream: DataInputStream) -> None:
+        from opendis.record import parseStandardVariableRecord
+        self.radioReferenceID = EntityIdentifier.parse(inputStream)
+        self.radioNumber = inputStream.read_uint16()
+        self.radioEntityType = EntityType.parse(inputStream)
+        self.transmitState = rich_or_int(164, inputStream.read_uint8())
+        self.inputSource = rich_or_int(165, inputStream.read_uint8())
+        variableTransmitterParameterCount = inputStream.read_uint16()
+        self.antennaLocation.parse(inputStream)
+        self.relativeAntennaLocation.parse(inputStream)
+        self.antennaPatternType = rich_or_int(
+            167, inputStream.read_uint16())
+        antennaPatternLength = inputStream.read_uint16()
+        self.frequency = inputStream.read_uint64()
+        self.transmitFrequencyBandwidth = inputStream.read_float32()
+        self.power = inputStream.read_float32()
+        self.modulationType = ModulationType()
+        self.modulationType.parse(inputStream)
+        self.cryptoSystem = rich_or_int(166, inputStream.read_uint16())
+        self.cryptoKeyId = inputStream.read_uint16()
+        modulationParametersLength = inputStream.read_uint8()
+        self.padding1 = inputStream.read_uint8()
+        self.padding2 = inputStream.read_uint16()
+
+        # generator: single-record MP/AP dispatch is beyond mechanical
+        # generation (record boundaries depend on the radio system and
+        # antenna pattern type)
+        if modulationParametersLength > 0:
+            radioSystem = int(self.modulationType.radioSystem)
+            if radioSystem == 1:  # generic radio or simple intercom
+                radio = (SimpleIntercomRadio()
+                         if int(self.modulationType.majorModulation) == 0
+                         else GenericRadio())
+                radio.parse(inputStream)
+            elif radioSystem in (2, 3, 4):  # HAVE QUICK I/II/IIA
+                radio = BasicHaveQuickMP()
+                radio.parse(inputStream)
+            elif radioSystem == 6:  # CCTT SINCGARS
+                radio = CCTTSincgarsMP()
+                radio.parse(inputStream)
+            else:
+                radio = UnknownRadio()
+                radio.parse(inputStream, bytelength=modulationParametersLength)
+            self.modulationParameters = radio
+        else:
+            self.modulationParameters = None
+
+        if antennaPatternLength > 0:
+            if int(self.antennaPatternType) == 1:
+                pattern = BeamAntennaPattern()
+                pattern.parse(inputStream)
+            else:
+                pattern = UnknownAntennaPattern()
+                pattern.parse(inputStream, bytelength=antennaPatternLength)
+            self.antennaPattern = pattern
+        else:
+            self.antennaPattern = None
+
+        self.variableTransmitterParameters = [
+            parseStandardVariableRecord(inputStream)
+            for _ in range(variableTransmitterParameterCount)
+        ]
+
+
+@dataclass(slots=True)
+class SignalPdu(RadioCommunicationsFamilyPdu):
+    """Section 7.7.3 Signal PDU
+
+    Conveys the audio or digital data carried by a simulated radio
+    transmission. ``dataLength`` is IN BITS and derived from the byte
+    payload (bit counts not divisible by 8 are unsupported, same ruling
+    as VariableDatum); the datagram is padded to a 32-bit boundary by the
+    packer.
+    """
+
+    pduType: ClassVar[int] = 26  # [UID 4]
+
+    FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
+        "tdlType": 178,
+    }
+
+    radioReferenceID: EntityIdentifier = field(default_factory=EntityIdentifier)
+    radioNumber: uint16 = 0
+    encodingScheme: uint16 = 0
+    tdlType: enum16 = 0  # [UID 178]
+    sampleRate: uint32 = 0
+    samples: uint16 = 0
+    data: bytes = b""
+
+    @property
+    def dataLength(self) -> uint16:
+        """Length of the data field IN BITS — derived, never stored."""
+        return len(self.data) * 8
+
+    def _marshalledBodySize(self) -> int:
+        prefix = (self.radioReferenceID.marshalledSize()
+                  + 2 + 2 + 2 + 4 + 2 + 2)
+        return prefix + len(self.data) \
+            + _padTo32(12 + prefix + len(self.data))
+
+    def _serializeBody(self, outputStream: DataOutputStream) -> None:
+        self.radioReferenceID.serialize(outputStream)
+        outputStream.write_uint16(self.radioNumber)
+        outputStream.write_uint16(self.encodingScheme)
+        outputStream.write_uint16(self.tdlType)
+        outputStream.write_uint32(self.sampleRate)
+        outputStream.write_uint16(self.dataLength)
+        outputStream.write_uint16(self.samples)
+        outputStream.write_bytes(self.data)
+        padding = _padTo32(self._marshalledBodySize())
+        if padding:
+            outputStream.write_bytes(b"\x00" * padding)
+
+    def _parseBody(self, inputStream: DataInputStream) -> None:
+        self.radioReferenceID = EntityIdentifier.parse(inputStream)
+        self.radioNumber = inputStream.read_uint16()
+        self.encodingScheme = inputStream.read_uint16()
+        self.tdlType = rich_or_int(178, inputStream.read_uint16())
+        self.sampleRate = inputStream.read_uint32()
+        dataLength = inputStream.read_uint16()
+        self.samples = inputStream.read_uint16()
+        self.data = inputStream.read_bytes(dataLength // 8)
+        padding = _padTo32(12 + 20 + len(self.data))
+        if padding:
+            inputStream.read_bytes(padding)
+
+
+@dataclass(slots=True)
+class ReceiverPdu(RadioCommunicationsFamilyPdu):
+    """Section 7.7.4 Receiver PDU
+
+    Communicates the state of a particular radio receiver, primarily for
+    network monitors, data loggers, and after-action review. Total PDU
+    size is 36 bytes.
+    """
+
+    pduType: ClassVar[int] = 27  # [UID 4]
+
+    FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
+        "receiverState": 179,
+    }
+
+    radioReferenceID: EntityIdentifier = field(default_factory=EntityIdentifier)
+    radioNumber: uint16 = 0
+    receiverState: enum16 = 0  # [UID 179]
+    receivedPower: float32 = 0.0
+    transmitterEntityId: EntityIdentifier = field(default_factory=EntityIdentifier)
+    transmitterRadioId: uint16 = 0
+
+    padding1: uint16 = field(init=False, default=0)
+
+    def _marshalledBodySize(self) -> int:
+        return (self.radioReferenceID.marshalledSize()
+                + 2 + 2 + 2  # radioNumber + receiverState + padding1
+                + 4
+                + self.transmitterEntityId.marshalledSize()
+                + 2)
+
+    def _serializeBody(self, outputStream: DataOutputStream) -> None:
+        self.radioReferenceID.serialize(outputStream)
+        outputStream.write_uint16(self.radioNumber)
+        outputStream.write_uint16(self.receiverState)
+        outputStream.write_uint16(self.padding1)
+        outputStream.write_float32(self.receivedPower)
+        self.transmitterEntityId.serialize(outputStream)
+        outputStream.write_uint16(self.transmitterRadioId)
+
+    def _parseBody(self, inputStream: DataInputStream) -> None:
+        self.radioReferenceID = EntityIdentifier.parse(inputStream)
+        self.radioNumber = inputStream.read_uint16()
+        self.receiverState = rich_or_int(179, inputStream.read_uint16())
+        self.padding1 = inputStream.read_uint16()
+        self.receivedPower = inputStream.read_float32()
+        self.transmitterEntityId = EntityIdentifier.parse(inputStream)
+        self.transmitterRadioId = inputStream.read_uint16()
+
+
+@dataclass(slots=True)
+class IntercomReferenceID:
+    """Section 6.2.47 Intercom Reference Identifier record
+
+    Unique designation of an attached or unattached intercom: site,
+    application, and reference number. Not an EntityIdentifier — the
+    reference number may address an unattached intercom."""
+
+    siteNumber: uint16 = 0
+    applicationNumber: uint16 = 0
+    referenceNumber: uint16 = 0
+
+    def marshalledSize(self) -> int:
+        return 6
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        outputStream.write_uint16(self.siteNumber)
+        outputStream.write_uint16(self.applicationNumber)
+        outputStream.write_uint16(self.referenceNumber)
+
+    @classmethod
+    def parse(cls, inputStream: DataInputStream) -> "IntercomReferenceID":
+        return cls(inputStream.read_uint16(),
+                   inputStream.read_uint16(),
+                   inputStream.read_uint16())
+
+
+@dataclass(slots=True)
+class IntercomSignalPdu(RadioCommunicationsFamilyPdu):
+    """Section 7.7.6 Intercom Signal PDU
+
+    Conveys the audio or digital data used to communicate between
+    simulated intercom devices. ``dataLength`` is IN BITS and derived;
+    the datagram is padded to a 32-bit boundary by the packer (the
+    xml-fixed set sized this list — legacy byte-counted a bits field).
+    """
+
+    pduType: ClassVar[int] = 31  # [UID 4]
+
+    FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
+        "tdlType": 178,
+    }
+
+    intercomReferenceID: IntercomReferenceID = field(
+        default_factory=IntercomReferenceID)
+    intercomNumber: uint16 = 0
+    encodingScheme: uint16 = 0
+    tdlType: enum16 = 0  # [UID 178]
+    sampleRate: uint32 = 0
+    samples: uint16 = 0
+    data: bytes = b""
+
+    @property
+    def dataLength(self) -> uint16:
+        """Length of the data field IN BITS — derived, never stored."""
+        return len(self.data) * 8
+
+    def _marshalledBodySize(self) -> int:
+        prefix = (self.intercomReferenceID.marshalledSize()
+                  + 2 + 2 + 2 + 4 + 2)
+        return prefix + len(self.data) \
+            + _padTo32(12 + prefix + len(self.data))
+
+    def _serializeBody(self, outputStream: DataOutputStream) -> None:
+        self.intercomReferenceID.serialize(outputStream)
+        outputStream.write_uint16(self.intercomNumber)
+        outputStream.write_uint16(self.encodingScheme)
+        outputStream.write_uint16(self.tdlType)
+        outputStream.write_uint32(self.sampleRate)
+        outputStream.write_uint16(self.dataLength)
+        outputStream.write_uint16(self.samples)
+        outputStream.write_bytes(self.data)
+        padding = _padTo32(self._marshalledBodySize())
+        if padding:
+            outputStream.write_bytes(b"\x00" * padding)
+
+    def _parseBody(self, inputStream: DataInputStream) -> None:
+        self.intercomReferenceID = IntercomReferenceID.parse(inputStream)
+        self.intercomNumber = inputStream.read_uint16()
+        self.encodingScheme = inputStream.read_uint16()
+        self.tdlType = rich_or_int(178, inputStream.read_uint16())
+        self.sampleRate = inputStream.read_uint32()
+        dataLength = inputStream.read_uint16()
+        self.samples = inputStream.read_uint16()
+        self.data = inputStream.read_bytes(dataLength // 8)
+        padding = _padTo32(12 + 20 + len(self.data))
+        if padding:
+            inputStream.read_bytes(padding)
+
+
+@dataclass(slots=True)
+class IntercomCommunicationsParameters:
+    """Section 6.2.46 Intercom Communications Parameter record
+
+    A record type, a record length, and record-specific fields (held as
+    raw bytes; ``recordLength`` counts the record-specific bytes,
+    following the xml-fixed reading)."""
+
+    FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
+        "recordType": 185,
+    }
+
+    recordType: enum16 = 0  # [UID 185]
+    recordLength: uint16 = 0
+    recordSpecificField: bytes = b""
+
+    def marshalledSize(self) -> int:
+        return 4 + len(self.recordSpecificField)
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        outputStream.write_uint16(self.recordType)
+        outputStream.write_uint16(self.recordLength)
+        outputStream.write_bytes(self.recordSpecificField)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        self.recordType = rich_or_int(185, inputStream.read_uint16())
+        self.recordLength = inputStream.read_uint16()
+        self.recordSpecificField = inputStream.read_bytes(self.recordLength)
+
+
+@dataclass(slots=True)
+class IntercomControlPdu(RadioCommunicationsFamilyPdu):
+    """Section 7.7.7 Intercom Control PDU
+
+    Communicates the state of a particular intercom device, requests an
+    action of another intercom device, or responds to an action request.
+    """
+
+    pduType: ClassVar[int] = 32  # [UID 4]
+
+    FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
+        "controlType": 180,
+        "transmitLineState": 183,
+        "command": 182,
+    }
+
+    controlType: enum8 = 0  # [UID 180]
+    communicationsChannelType: uint8 = 0
+    sourceEntityID: EntityIdentifier = field(default_factory=EntityIdentifier)
+    sourceIntercomNumber: uint16 = 0
+    sourceLineID: uint8 = 0
+    transmitPriority: uint8 = 0
+    transmitLineState: enum8 = 0  # [UID 183]
+    command: enum8 = 0  # [UID 182]
+    masterIntercomReferenceID: EntityIdentifier = field(
+        default_factory=EntityIdentifier)
+    masterIntercomNumber: uint16 = 0
+    masterChannelID: uint16 = 0
+    intercomParameters: list[IntercomCommunicationsParameters] = field(
+        default_factory=list)
+
+    @property
+    def intercomParametersLength(self) -> uint32:
+        """How many intercom communications parameter records follow."""
+        return len(self.intercomParameters)
+
+    def _marshalledBodySize(self) -> int:
+        return (1 + 1
+                + self.sourceEntityID.marshalledSize()
+                + 2 + 1 + 1 + 1 + 1
+                + self.masterIntercomReferenceID.marshalledSize()
+                + 2 + 2 + 4
+                + sum(p.marshalledSize() for p in self.intercomParameters))
+
+    def _serializeBody(self, outputStream: DataOutputStream) -> None:
+        outputStream.write_uint8(self.controlType)
+        outputStream.write_uint8(self.communicationsChannelType)
+        self.sourceEntityID.serialize(outputStream)
+        outputStream.write_uint16(self.sourceIntercomNumber)
+        outputStream.write_uint8(self.sourceLineID)
+        outputStream.write_uint8(self.transmitPriority)
+        outputStream.write_uint8(self.transmitLineState)
+        outputStream.write_uint8(self.command)
+        self.masterIntercomReferenceID.serialize(outputStream)
+        outputStream.write_uint16(self.masterIntercomNumber)
+        outputStream.write_uint16(self.masterChannelID)
+        outputStream.write_uint32(self.intercomParametersLength)
+        for parameter in self.intercomParameters:
+            parameter.serialize(outputStream)
+
+    def _parseBody(self, inputStream: DataInputStream) -> None:
+        self.controlType = rich_or_int(180, inputStream.read_uint8())
+        self.communicationsChannelType = inputStream.read_uint8()
+        self.sourceEntityID = EntityIdentifier.parse(inputStream)
+        self.sourceIntercomNumber = inputStream.read_uint16()
+        self.sourceLineID = inputStream.read_uint8()
+        self.transmitPriority = inputStream.read_uint8()
+        self.transmitLineState = rich_or_int(183, inputStream.read_uint8())
+        self.command = rich_or_int(182, inputStream.read_uint8())
+        self.masterIntercomReferenceID = EntityIdentifier.parse(inputStream)
+        self.masterIntercomNumber = inputStream.read_uint16()
+        self.masterChannelID = inputStream.read_uint16()
+        intercomParametersLength = inputStream.read_uint32()
+        self.intercomParameters = [
+            self._parseIntercomParameter(inputStream)
+            for _ in range(intercomParametersLength)
+        ]
+
+    @staticmethod
+    def _parseIntercomParameter(
+            inputStream: DataInputStream) -> IntercomCommunicationsParameters:
+        parameter = IntercomCommunicationsParameters()
+        parameter.parse(inputStream)
+        return parameter

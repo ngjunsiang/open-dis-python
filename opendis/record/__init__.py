@@ -37,6 +37,13 @@ __variableRecordClasses: dict[int, type[base.StandardVariableRecord]] = {
     4500: DirectedEnergyDamage,
 }
 
+def isKnownStandardVariableRecord(recordType: int) -> bool:
+    """True when a typed decoder is registered for this record type [UID 66]."""
+    return (isinstance(recordType, int)
+            and recordType >= 0
+            and recordType in __variableRecordClasses)
+
+
 def getStandardVariableClass(
         recordType: int,
         expectedType: type[SV] = base.StandardVariableRecord
@@ -83,3 +90,20 @@ def getStandardVariableClass(
             f"a subclass of {expectedType.__name__}"
         )
     return vrClass
+
+
+def parseStandardVariableRecord(
+        inputStream: DataInputStream) -> base.StandardVariableRecord:
+    """Parse one uid-66 Standard Variable record from the stream.
+
+    Consumes the record header (recordType u32 + recordLength u16,
+    §6.2.83) and delegates the remainder to the registered class; an
+    unregistered recordType parses as the opaque placeholder whose
+    ``data`` preserves the raw bytes byte-exact.
+    """
+    recordType = inputStream.read_uint32()
+    recordLength = inputStream.read_uint16()
+    vrClass = getStandardVariableClass(recordType)
+    record = vrClass()
+    record.parse(inputStream, recordLength)
+    return record
