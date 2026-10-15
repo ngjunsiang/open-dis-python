@@ -19,7 +19,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import overrides
+from . import ir, overrides
 from .emit import emit_module
 from .emit_bitfields import emit_bitfield_module
 from .ref010 import load_ref010
@@ -62,14 +62,26 @@ def main(argv: list[str] | None = None) -> int:
 
     root = load_spec(args.xml_dir)
     resolver = Resolver(root)
+    resolved = {}
     for module_key, order in overrides.RECORD_MODULES.items():
+        resolved[module_key] = (order, resolver.resolve(order))
+    # list-parse helpers must exist on every record used as a list element
+    # in ANY module — the element's home module cannot see the consumers
+    all_list_elements = {
+        shape.element
+        for order, records in resolved.values()
+        for name in order
+        for attr in records[name].attributes
+        if isinstance((shape := attr.shape), ir.ObjectList)
+        and (name, attr.name) not in overrides.REGISTRY_LISTS
+    }
+    for module_key, (order, records) in resolved.items():
         rel = (
             "record/common.py"
             if module_key == "common"
             else f"record/{module_key}/__init__.py"
         )
-        records = resolver.resolve(order)
-        src = emit_module(records, order, module_key)
+        src = emit_module(records, order, module_key, all_list_elements)
         path = _write(out_root, rel, src)
         print(
             f"wrote {path} ({len(src.splitlines())} lines, "

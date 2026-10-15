@@ -25,7 +25,26 @@ from . import base, bitfield, symbolic_names as sym
 from .base import StandardVariableRecord
 from .common import *
 from .radio import *
+from .radio.annexc import (
+    AntennaPatternRecord,
+    BasicHaveQuickMP,
+    BeamAntennaPattern,
+    CCTTSincgarsMP,
+    GenericRadio,
+    HighFidelityHAVEQUICKRadio,
+    ModulationParametersRecord,
+    SimpleIntercomRadio,
+    UnknownAntennaPattern,
+    UnknownRadio,
+    VariableTransmitterParametersRecord,
+)
 from .warfare import *
+from .warfare.damage import (
+    DamageDescriptionRecord,
+    DirectedEnergyAreaAimpoint,
+    DirectedEnergyDamage,
+    DirectedEnergyPrecisionAimpoint,
+)
 
 SV = TypeVar("SV", bound=base.StandardVariableRecord)
 

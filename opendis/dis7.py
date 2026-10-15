@@ -12,7 +12,6 @@ from .record import (
     UnknownAntennaPattern,
     EulerAngles,
     Vector3Float,
-    DEFireFlags,
     WorldCoordinates,
     EntityIdentifier,
     EventIdentifier,
@@ -6332,7 +6331,7 @@ class DirectedEnergyFirePdu(WarfareFamilyPdu):
                  wavelength: float32 = 0.0,  # in meters
                  pulseRepetitionFrequency: float32 = 0.0,  # in Hz
                  pulseWidth: float32 = 0,  # in seconds
-                 flags: DEFireFlags | None = None,  # [UID 313]
+                 flags: int | None = None,  # [UID 313] raw bits (DEFireFlags view retired)
                  pulseShape: enum8 = 0,  # [UID 312]
                  dERecords: list[DamageDescriptionRecord] | None = None):
         super(DirectedEnergyFirePdu, self).__init__()
@@ -6347,7 +6346,7 @@ class DirectedEnergyFirePdu(WarfareFamilyPdu):
         self.padding1: uint32 = 0
         self.pulseRepetitionFrequency = pulseRepetitionFrequency
         self.pulseWidth = pulseWidth
-        self.flags = flags or DEFireFlags()
+        self.flags = flags if flags is not None else 0
         self.pulseShape = pulseShape
         self.padding2: uint8 = 0
         self.padding3: uint32 = 0
@@ -6369,7 +6368,7 @@ class DirectedEnergyFirePdu(WarfareFamilyPdu):
         outputStream.write_uint32(self.padding1)
         outputStream.write_float32(self.pulseRepetitionFrequency)
         outputStream.write_float32(self.pulseWidth)
-        self.flags.serialize(outputStream)
+        outputStream.write_uint16(int(self.flags))
         outputStream.write_uint8(self.pulseShape)
         outputStream.write_uint8(self.padding2)
         outputStream.write_uint32(self.padding3)
@@ -6389,7 +6388,7 @@ class DirectedEnergyFirePdu(WarfareFamilyPdu):
         self.padding1 = inputStream.read_uint32()
         self.pulseRepetitionFrequency = inputStream.read_float32()
         self.pulseWidth = inputStream.read_float32()
-        self.flags.parse(inputStream)
+        self.flags = inputStream.read_uint16()
         self.pulseShape = inputStream.read_uint8()
         self.padding2 = inputStream.read_uint8()
         self.padding3 = inputStream.read_uint32()

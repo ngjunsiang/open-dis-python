@@ -73,7 +73,9 @@ class SimulationAddress:
 
     @classmethod
     def parse(cls, inputStream: DataInputStream) -> "SimulationAddress":
-        return cls(inputStream.read_uint16(), inputStream.read_uint16())
+        site = inputStream.read_uint16()
+        application = inputStream.read_uint16()
+        return cls(site, application)
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,7 +106,9 @@ class EntityIdentifier:
 
     @classmethod
     def parse(cls, inputStream: DataInputStream) -> "EntityIdentifier":
-        return cls(SimulationAddress.parse(inputStream), inputStream.read_uint16())
+        simulationAddress = SimulationAddress.parse(inputStream)
+        entityNumber = inputStream.read_uint16()
+        return cls(simulationAddress, entityNumber)
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,7 +136,9 @@ class EventIdentifier:
 
     @classmethod
     def parse(cls, inputStream: DataInputStream) -> "EventIdentifier":
-        return cls(SimulationAddress.parse(inputStream), inputStream.read_uint16())
+        simulationAddress = SimulationAddress.parse(inputStream)
+        eventNumber = inputStream.read_uint16()
+        return cls(simulationAddress, eventNumber)
 
 
 @dataclass(frozen=True, slots=True)
@@ -183,15 +189,11 @@ class EntityType:
         domainUid = MUNITION_DOMAIN_UID if int(entityKind) == 2 else PLATFORM_DOMAIN_UID
         domain = rich_or_int(domainUid, domainRaw)
         country = rich_or_int(29, inputStream.read_uint16())
-        return cls(
-            entityKind,
-            domain,
-            country,
-            inputStream.read_uint8(),
-            inputStream.read_uint8(),
-            inputStream.read_uint8(),
-            inputStream.read_uint8(),
-        )
+        category = inputStream.read_uint8()
+        subCategory = inputStream.read_uint8()
+        specific = inputStream.read_uint8()
+        extra = inputStream.read_uint8()
+        return cls(entityKind, domain, country, category, subCategory, specific, extra)
 
 
 @dataclass(slots=True)
@@ -219,6 +221,14 @@ class EulerAngles:
         self.theta = inputStream.read_float32()
         self.phi = inputStream.read_float32()
 
+    @classmethod
+    def parseFrom(cls, inputStream: DataInputStream) -> "EulerAngles":
+        """Construct a new record from the stream (list-parse helper; the
+        mutating ``parse`` above satisfies the Record protocol)."""
+        item = cls()
+        item.parse(inputStream)
+        return item
+
 
 @dataclass(slots=True)
 class Vector3Float:
@@ -243,6 +253,14 @@ class Vector3Float:
         self.x = inputStream.read_float32()
         self.y = inputStream.read_float32()
         self.z = inputStream.read_float32()
+
+    @classmethod
+    def parseFrom(cls, inputStream: DataInputStream) -> "Vector3Float":
+        """Construct a new record from the stream (list-parse helper; the
+        mutating ``parse`` above satisfies the Record protocol)."""
+        item = cls()
+        item.parse(inputStream)
+        return item
 
 
 @dataclass(slots=True)
@@ -278,6 +296,14 @@ class Vector3Double:
         self.x = inputStream.read_float64()
         self.y = inputStream.read_float64()
         self.z = inputStream.read_float64()
+
+    @classmethod
+    def parseFrom(cls, inputStream: DataInputStream) -> "Vector3Double":
+        """Construct a new record from the stream (list-parse helper; the
+        mutating ``parse`` above satisfies the Record protocol)."""
+        item = cls()
+        item.parse(inputStream)
+        return item
 
 
 # generator: plain alias per the 2026-10-14 ruling — never re-declare as a

@@ -1,18 +1,28 @@
-"""Simulation Management family (IEEE 1278.1-2012 §5.6) — datum showcase.
+"""Simulation Management family (IEEE 1278.1-2012 §7.5) — datum showcase.
 
+Wire ground truth: submodules/open-dis-spec-xml/xml/SimulationManagementFamilyPdus.xml.
 DataPdu with FixedDatum records and VariableDatum records whose payloads
 are ``bytes`` (never per-byte lists), 64-bit padding computed by the
 packer, and a typed uid-66 decoder path through the existing
 StandardVariableRecord registry (opendis/record/__init__.py).
+
+Python-side deltas from the XML (sample-review rulings): the base's
+originator/receiver fields are EntityIdentifier-shaped
+``originatingEntityID``/``receivingEntityID`` (the XML's
+SimulationIdentifier classRef is the same 6-byte wire shape, §6.2.81);
+Data Query carries datum-ID lists (u32 each, §7.5.9), not FixedDatum
+records; datum list field names are fixedDatumRecords/variableDatumRecords
+uniformly (the XML mixes fixedDatums/variableDatums spellings).
 """
 
 import io
 from dataclasses import dataclass, field
 from typing import ClassVar
 
+from opendis.bitfields import StopFreezeFrozenBehavior
 from opendis.enum_registry import rich_or_int
 from opendis.record.base import StandardVariableRecord
-from opendis.record.common import EntityIdentifier
+from opendis.record.common import ClockTime, EntityIdentifier
 from opendis.record.pdu import Pdu
 from opendis.stream import DataInputStream, DataOutputStream
 from opendis.types import enum8, enum16, enum32, uint8, uint16, uint32
@@ -36,18 +46,23 @@ __all__ = [
 ]
 
 
+def _padTo32(byteCount: int) -> int:
+    """Pad bytes needed to bring a datagram to a 32-bit boundary."""
+    return (4 - byteCount % 4) % 4
+
+
 @dataclass(slots=True)
 class FixedDatum:
     """§6.2.37 Fixed Datum record
 
-    The fixed datum type, and a 32-bit value for that fixed datum type.
+    Fixed Datum Record.
     """
 
     FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
         "fixedDatumID": 66,
     }
 
-    fixedDatumID: enum32 = 0  # [UID 66] Variable Record Type
+    fixedDatumID: enum32 = 0  # [UID 66]
     fixedDatumValue: uint32 = 0
 
     def marshalledSize(self) -> int:
@@ -63,10 +78,11 @@ class FixedDatum:
 
     @classmethod
     def parseFrom(cls, inputStream: DataInputStream) -> "FixedDatum":
-        """Construct a new record from the stream (list-parse helper)."""
-        fd = cls()
-        fd.parse(inputStream)
-        return fd
+        """Construct a new record from the stream (list-parse helper; the
+        mutating ``parse`` above satisfies the Record protocol)."""
+        item = cls()
+        item.parse(inputStream)
+        return item
 
 
 def _paddedDatumSize(byteCount: int) -> int:
@@ -81,11 +97,13 @@ def _paddedDatumSize(byteCount: int) -> int:
 class VariableDatum:
     """§6.2.93 Variable Datum record
 
-    The variable datum type, the datum length in bits, and the value for
-    that variable datum type. ``variableData`` is the raw payload as
-    ``bytes``; ``variableDatumLength`` (in bits) is derived at serialize
-    time and the 64-bit padding is computed by the packer — neither is
-    user-settable state.
+    The variable datum type, the datum length, and the value for that
+    variable datum type.
+
+    ``variableData`` is the raw payload as ``bytes``;
+    ``variableDatumLength`` (in bits) is derived at serialize time and the
+    64-bit padding is computed by the packer — neither is user-settable
+    state.
 
     # generator: payload carries the complete serialized record when the
     # datum ID is a uid-66 record type, so a known record re-serializes
@@ -96,19 +114,18 @@ class VariableDatum:
         "variableDatumID": 66,
     }
 
-    variableDatumID: enum32 = 0  # [UID 66] Variable Record Type
+    variableDatumID: enum32 = 0  # [UID 66]
     variableData: bytes = b""
 
     @property
     def variableDatumLength(self) -> uint32:
-        """Length, IN BITS, of the variable datum — derived from the
-        payload, never stored."""
+        """Length, IN BITS, of the variable datum."""
         return len(self.variableData) * 8
 
-    def marshalledSize(self) -> int:
+    def marshalledSize(self):
         return 8 + _paddedDatumSize(len(self.variableData))
 
-    def serialize(self, outputStream: DataOutputStream) -> None:
+    def serialize(self, outputStream: DataOutputStream):
         outputStream.write_uint32(self.variableDatumID)
         outputStream.write_uint32(self.variableDatumLength)
         outputStream.write_bytes(self.variableData)
@@ -116,22 +133,13 @@ class VariableDatum:
         if padding:
             outputStream.write_bytes(b"\x00" * padding)
 
-    def parse(
-        self, inputStream: DataInputStream, bytelength: int | None = None
-    ) -> None:
+    def parse(self, inputStream: DataInputStream):
         self.variableDatumID = rich_or_int(66, inputStream.read_uint32())
         variableDatumLength = inputStream.read_uint32()
         self.variableData = inputStream.read_bytes(variableDatumLength // 8)
         padding = _paddedDatumSize(len(self.variableData)) - len(self.variableData)
         if padding:
             inputStream.read_bytes(padding)
-
-    @classmethod
-    def parseFrom(cls, inputStream: DataInputStream) -> "VariableDatum":
-        """Construct a new record from the stream (list-parse helper)."""
-        vd = cls()
-        vd.parse(inputStream)
-        return vd
 
     @property
     def decodedRecord(self) -> StandardVariableRecord | None:
@@ -164,13 +172,28 @@ class VariableDatum:
             # remain the truth (tolerance rule).
             return None
 
+    @classmethod
+    def parseFrom(cls, inputStream: DataInputStream) -> "VariableDatum":
+        """Construct a new record from the stream (list-parse helper; the
+        mutating ``parse`` above satisfies the Record protocol)."""
+        item = cls()
+        item.parse(inputStream)
+        return item
+
 
 @dataclass(slots=True)
 class SimulationManagementFamilyPdu(Pdu):
-    """§5.6 marker; carries the §6.2.82 Simulation Management PDU
-    Header fields (originating and receiving entity IDs)."""
+    """§7.5 Simulation Management family PDU
 
-    protocolFamily: ClassVar[int] = 5  # [UID 5]
+    First part of a simulation management (SIMAN) PDU and SIMAN-Reliability
+    (SIMAN-R) PDU.
+
+    Not a thin marker: carries the §6.2.82 Simulation Management PDU header
+    fields (originating and receiving entity IDs, EntityIdentifier-shaped
+    per the sample-review ruling).
+    """
+
+    protocolFamily: ClassVar[int] = 5  # [UID 5] Simulation Management
 
     originatingEntityID: EntityIdentifier = field(default_factory=EntityIdentifier)
     receivingEntityID: EntityIdentifier = field(default_factory=EntityIdentifier)
@@ -195,37 +218,39 @@ class DataPdu(SimulationManagementFamilyPdu):
     """§7.5.11 Data PDU
 
     Information issued in response to a Data Query PDU or Set Data PDU.
-    The request ID is followed by four pad bytes (packer-computed) and the
-    fixed and variable datum lists; both counts are ``len()`` properties
-    written at serialize time.
+    §5.6.5.11.
     """
 
     pduType: ClassVar[int] = 20  # [UID 4]
 
     requestID: uint32 = 0
-    padding1: uint32 = field(init=False, default=0)
     fixedDatumRecords: list[FixedDatum] = field(default_factory=list)
     variableDatumRecords: list[VariableDatum] = field(default_factory=list)
+    # Padding ruling: explicit attribute, out of __init__ (zero by default,
+    # holds the wire value after parse so odd pads round-trip byte-exact).
+    padding1: uint32 = field(init=False, default=0)
 
     @property
     def numberOfFixedDatumRecords(self) -> uint32:
+        """Number of fixed datum records."""
         return len(self.fixedDatumRecords)
 
     @property
     def numberOfVariableDatumRecords(self) -> uint32:
+        """Number of variable datum records, handled automatically by marshaller at
+        run time (and not modifiable by end-user programmers).
+        """
         return len(self.variableDatumRecords)
 
-    # generator: two-arg super() — zero-arg super()'s __class__ cell points
-    # at the pre-slots class when @dataclass(slots=True) recreates it
     def _marshalledBodySize(self) -> int:
         return (
             super(DataPdu, self)._marshalledBodySize()
             + 4
-            + 4  # requestID + padding1
             + 4
-            + 4  # counts
-            + sum(fd.marshalledSize() for fd in self.fixedDatumRecords)
-            + sum(vd.marshalledSize() for vd in self.variableDatumRecords)
+            + 4
+            + 4
+            + sum(item.marshalledSize() for item in self.fixedDatumRecords)
+            + sum(item.marshalledSize() for item in self.variableDatumRecords)
         )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
@@ -234,10 +259,10 @@ class DataPdu(SimulationManagementFamilyPdu):
         outputStream.write_uint32(self.padding1)
         outputStream.write_uint32(self.numberOfFixedDatumRecords)
         outputStream.write_uint32(self.numberOfVariableDatumRecords)
-        for anObj in self.fixedDatumRecords:
-            anObj.serialize(outputStream)
-        for anObj in self.variableDatumRecords:
-            anObj.serialize(outputStream)
+        for item in self.fixedDatumRecords:
+            item.serialize(outputStream)
+        for item in self.variableDatumRecords:
+            item.serialize(outputStream)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         super(DataPdu, self)._parseBody(inputStream)
@@ -245,81 +270,13 @@ class DataPdu(SimulationManagementFamilyPdu):
         self.padding1 = inputStream.read_uint32()
         numberOfFixedDatumRecords = inputStream.read_uint32()
         numberOfVariableDatumRecords = inputStream.read_uint32()
-        self.fixedDatumRecords = [
-            self._parseFixedDatum(inputStream) for _ in range(numberOfFixedDatumRecords)
-        ]
-        self.variableDatumRecords = [
-            self._parseVariableDatum(inputStream)
-            for _ in range(numberOfVariableDatumRecords)
-        ]
-
-    @staticmethod
-    def _parseFixedDatum(inputStream: DataInputStream) -> FixedDatum:
-        fd = FixedDatum()
-        fd.parse(inputStream)
-        return fd
-
-    @staticmethod
-    def _parseVariableDatum(inputStream: DataInputStream) -> VariableDatum:
-        vd = VariableDatum()
-        vd.parse(inputStream)
-        return vd
-
-
-# ---------------------------------------------------------------------------
-# Remaining Simulation Management PDUs (§7.5) in the target-state style.
-# Wire ground truth: submodules/open-dis-spec-xml/xml/SimulationManagementFamilyPdus.xml.
-#
-# XML deltas applied deliberately (see docs/design/sample-review.md):
-# - the base's 48-bit originator/receiver fields keep the exemplar's
-#   EntityIdentifier shape/names (originatingEntityID/receivingEntityID);
-#   the XML's SimulationIdentifier classRef is the same 6-byte wire shape
-#   (§6.2.81 — the field may hold either form).
-# - Data Query carries datum ID lists (u32 each, §7.5.9), not FixedDatum
-#   records — the XML's objectlist classRef is wrong there.
-# - datum list field names are fixedDatumRecords/variableDatumRecords
-#   uniformly (the XML mixes fixedDatums/variableDatums spellings).
-# ---------------------------------------------------------------------------
-
-from opendis.bitfields import StopFreezeFrozenBehavior  # noqa: E402
-from opendis.record.common import ClockTime  # noqa: E402
-
-
-class _DatumListsMixin:
-    """Shared Datum Specification tail (§5.6.7): two u32 counts, fixed
-    datum records, variable datum records. Hosts declare the two list
-    fields; counts are always derived."""
-
-    @property
-    def numberOfFixedDatumRecords(self) -> uint32:
-        return len(self.fixedDatumRecords)
-
-    @property
-    def numberOfVariableDatumRecords(self) -> uint32:
-        return len(self.variableDatumRecords)
-
-    def _datumTailSize(self) -> int:
-        return (
-            4
-            + 4
-            + sum(fd.marshalledSize() for fd in self.fixedDatumRecords)
-            + sum(vd.marshalledSize() for vd in self.variableDatumRecords)
-        )
-
-    def _serializeDatumTail(self, outputStream: DataOutputStream) -> None:
-        outputStream.write_uint32(self.numberOfFixedDatumRecords)
-        outputStream.write_uint32(self.numberOfVariableDatumRecords)
-        for fd in self.fixedDatumRecords:
-            fd.serialize(outputStream)
-        for vd in self.variableDatumRecords:
-            vd.serialize(outputStream)
-
-    def _parseDatumTail(self, inputStream: DataInputStream) -> None:
-        numberOfFixedDatumRecords = inputStream.read_uint32()
-        numberOfVariableDatumRecords = inputStream.read_uint32()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
         self.fixedDatumRecords = [
             FixedDatum.parseFrom(inputStream) for _ in range(numberOfFixedDatumRecords)
         ]
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
         self.variableDatumRecords = [
             VariableDatum.parseFrom(inputStream)
             for _ in range(numberOfVariableDatumRecords)
@@ -330,8 +287,9 @@ class _DatumListsMixin:
 class CreateEntityPdu(SimulationManagementFamilyPdu):
     """§7.5.2 Create Entity PDU
 
-    Communicates the creation of a new entity. Total PDU size is 28
-    bytes."""
+    The creation of a new entity shall be communicated using a Create Entity
+    PDU. See §5.6.5.2.
+    """
 
     pduType: ClassVar[int] = 11  # [UID 4]
 
@@ -353,8 +311,9 @@ class CreateEntityPdu(SimulationManagementFamilyPdu):
 class RemoveEntityPdu(SimulationManagementFamilyPdu):
     """§7.5.3 Remove Entity PDU
 
-    Communicates the removal of an entity from an exercise. Total PDU
-    size is 28 bytes."""
+    The removal of an entity from an exercise shall be communicated with a
+    Remove Entity PDU. See §5.6.5.3.
+    """
 
     pduType: ClassVar[int] = 12  # [UID 4]
 
@@ -376,8 +335,9 @@ class RemoveEntityPdu(SimulationManagementFamilyPdu):
 class StartResumePdu(SimulationManagementFamilyPdu):
     """§7.5.4 Start/Resume PDU
 
-    Communicates the start/resume of an entity or exercise. Total PDU
-    size is 44 bytes."""
+    The Start/Resume of an entity/exercise shall be communicated using a
+    Start/Resume PDU. See §5.6.5.4.
+    """
 
     pduType: ClassVar[int] = 13  # [UID 4]
 
@@ -410,9 +370,9 @@ class StartResumePdu(SimulationManagementFamilyPdu):
 class StopFreezePdu(SimulationManagementFamilyPdu):
     """§7.5.5 Stop/Freeze PDU
 
-    Communicates the stopping or freezing of an entity or exercise.
-    ``frozenBehavior`` holds the raw uint8 until parsed, then the
-    [UID 68] view. Total PDU size is 40 bytes."""
+    The stopping or freezing of an entity/exercise shall be communicated
+    using a Stop/Freeze PDU. See §5.6.5.5.
+    """
 
     pduType: ClassVar[int] = 14  # [UID 4]
 
@@ -424,7 +384,6 @@ class StopFreezePdu(SimulationManagementFamilyPdu):
     reason: enum8 = 0  # [UID 67]
     frozenBehavior: uint8 = 0  # [UID 68] or the view
     requestID: uint32 = 0
-
     padding1: uint16 = field(init=False, default=0)
 
     def _marshalledBodySize(self) -> int:
@@ -458,8 +417,9 @@ class StopFreezePdu(SimulationManagementFamilyPdu):
 class AcknowledgePdu(SimulationManagementFamilyPdu):
     """§7.5.6 Acknowledge PDU
 
-    Acknowledges receipt of a Start/Resume, Stop/Freeze, Create Entity,
-    or Remove Entity PDU. Total PDU size is 32 bytes."""
+    Acknowledges the receipt of a Start/Resume PDU, Stop/Freeze PDU, Create
+    Entity PDU, or Remove Entity PDU. See §5.6.5.6.
+    """
 
     pduType: ClassVar[int] = 15  # [UID 4]
 
@@ -489,11 +449,12 @@ class AcknowledgePdu(SimulationManagementFamilyPdu):
 
 
 @dataclass(slots=True)
-class ActionRequestPdu(_DatumListsMixin, SimulationManagementFamilyPdu):
+class ActionRequestPdu(SimulationManagementFamilyPdu):
     """§7.5.7 Action Request PDU
 
-    A request from a simulation manager to a managed entity to perform a
-    specified action, carrying a Datum Specification."""
+    A request from a Simulation Manager (SM) to a managed entity to perform
+    a specified action. See §5.6.5.7.
+    """
 
     pduType: ClassVar[int] = 16  # [UID 4]
 
@@ -506,32 +467,67 @@ class ActionRequestPdu(_DatumListsMixin, SimulationManagementFamilyPdu):
     fixedDatumRecords: list[FixedDatum] = field(default_factory=list)
     variableDatumRecords: list[VariableDatum] = field(default_factory=list)
 
+    @property
+    def numberOfFixedDatumRecords(self) -> uint32:
+        """Number of fixed datum records."""
+        return len(self.fixedDatumRecords)
+
+    @property
+    def numberOfVariableDatumRecords(self) -> uint32:
+        """Number of variable datum records, handled automatically by marshaller at
+        run time (and not modifiable by end-user programmers).
+        """
+        return len(self.variableDatumRecords)
+
     def _marshalledBodySize(self) -> int:
         return (
             super(ActionRequestPdu, self)._marshalledBodySize()
             + 4
             + 4
-            + self._datumTailSize()
+            + 4
+            + 4
+            + sum(item.marshalledSize() for item in self.fixedDatumRecords)
+            + sum(item.marshalledSize() for item in self.variableDatumRecords)
         )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(ActionRequestPdu, self)._serializeBody(outputStream)
         outputStream.write_uint32(self.requestID)
         outputStream.write_uint32(self.actionID)
-        self._serializeDatumTail(outputStream)
+        outputStream.write_uint32(self.numberOfFixedDatumRecords)
+        outputStream.write_uint32(self.numberOfVariableDatumRecords)
+        for item in self.fixedDatumRecords:
+            item.serialize(outputStream)
+        for item in self.variableDatumRecords:
+            item.serialize(outputStream)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         super(ActionRequestPdu, self)._parseBody(inputStream)
         self.requestID = inputStream.read_uint32()
         self.actionID = rich_or_int(71, inputStream.read_uint32())
-        self._parseDatumTail(inputStream)
+        numberOfFixedDatumRecords = inputStream.read_uint32()
+        numberOfVariableDatumRecords = inputStream.read_uint32()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.fixedDatumRecords = [
+            FixedDatum.parseFrom(inputStream) for _ in range(numberOfFixedDatumRecords)
+        ]
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.variableDatumRecords = [
+            VariableDatum.parseFrom(inputStream)
+            for _ in range(numberOfVariableDatumRecords)
+        ]
 
 
 @dataclass(slots=True)
-class ActionResponsePdu(_DatumListsMixin, SimulationManagementFamilyPdu):
+class ActionResponsePdu(SimulationManagementFamilyPdu):
     """§7.5.8 Action Response PDU
 
-    Acknowledges an Action Request PDU, carrying a Datum Specification."""
+    When an entity receives an Action Request PDU, that entity shall
+    acknowledge the receipt of the Action Request PDU with an Action
+    Response PDU. See §5.6.5.8.
+    """
 
     pduType: ClassVar[int] = 17  # [UID 4]
 
@@ -544,34 +540,66 @@ class ActionResponsePdu(_DatumListsMixin, SimulationManagementFamilyPdu):
     fixedDatumRecords: list[FixedDatum] = field(default_factory=list)
     variableDatumRecords: list[VariableDatum] = field(default_factory=list)
 
+    @property
+    def numberOfFixedDatumRecords(self) -> uint32:
+        """Number of fixed datum records."""
+        return len(self.fixedDatumRecords)
+
+    @property
+    def numberOfVariableDatumRecords(self) -> uint32:
+        """Number of variable datum records, handled automatically by marshaller at
+        run time (and not modifiable by end-user programmers).
+        """
+        return len(self.variableDatumRecords)
+
     def _marshalledBodySize(self) -> int:
         return (
             super(ActionResponsePdu, self)._marshalledBodySize()
             + 4
             + 4
-            + self._datumTailSize()
+            + 4
+            + 4
+            + sum(item.marshalledSize() for item in self.fixedDatumRecords)
+            + sum(item.marshalledSize() for item in self.variableDatumRecords)
         )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(ActionResponsePdu, self)._serializeBody(outputStream)
         outputStream.write_uint32(self.requestID)
         outputStream.write_uint32(self.requestStatus)
-        self._serializeDatumTail(outputStream)
+        outputStream.write_uint32(self.numberOfFixedDatumRecords)
+        outputStream.write_uint32(self.numberOfVariableDatumRecords)
+        for item in self.fixedDatumRecords:
+            item.serialize(outputStream)
+        for item in self.variableDatumRecords:
+            item.serialize(outputStream)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         super(ActionResponsePdu, self)._parseBody(inputStream)
         self.requestID = inputStream.read_uint32()
         self.requestStatus = rich_or_int(72, inputStream.read_uint32())
-        self._parseDatumTail(inputStream)
+        numberOfFixedDatumRecords = inputStream.read_uint32()
+        numberOfVariableDatumRecords = inputStream.read_uint32()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.fixedDatumRecords = [
+            FixedDatum.parseFrom(inputStream) for _ in range(numberOfFixedDatumRecords)
+        ]
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.variableDatumRecords = [
+            VariableDatum.parseFrom(inputStream)
+            for _ in range(numberOfVariableDatumRecords)
+        ]
 
 
 @dataclass(slots=True)
 class DataQueryPdu(SimulationManagementFamilyPdu):
     """§7.5.9 Data Query PDU
 
-    A request for data from an entity. The lists carry datum IDs (u32
-    each, [UID 66]), not datum records — the query names the datums it
-    wants (§7.5.9). Total PDU size is 40 + 4·n bytes."""
+    A request for data from an entity shall be communicated by issuing a
+    Data Query PDU. See §5.6.5.9.
+    """
 
     pduType: ClassVar[int] = 18  # [UID 4]
 
@@ -582,10 +610,14 @@ class DataQueryPdu(SimulationManagementFamilyPdu):
 
     @property
     def numberOfFixedDatumIDs(self) -> uint32:
+        """Number of fixed datum records."""
         return len(self.fixedDatumIDs)
 
     @property
     def numberOfVariableDatumIDs(self) -> uint32:
+        """Number of variable datum records, handled automatically by marshaller at
+        run time (and not modifiable by end-user programmers).
+        """
         return len(self.variableDatumIDs)
 
     def _marshalledBodySize(self) -> int:
@@ -605,10 +637,10 @@ class DataQueryPdu(SimulationManagementFamilyPdu):
         outputStream.write_uint32(self.timeInterval)
         outputStream.write_uint32(self.numberOfFixedDatumIDs)
         outputStream.write_uint32(self.numberOfVariableDatumIDs)
-        for datumID in self.fixedDatumIDs:
-            outputStream.write_uint32(datumID)
-        for datumID in self.variableDatumIDs:
-            outputStream.write_uint32(datumID)
+        for item in self.fixedDatumIDs:
+            outputStream.write_uint32(item)
+        for item in self.variableDatumIDs:
+            outputStream.write_uint32(item)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         super(DataQueryPdu, self)._parseBody(inputStream)
@@ -616,10 +648,14 @@ class DataQueryPdu(SimulationManagementFamilyPdu):
         self.timeInterval = inputStream.read_uint32()
         numberOfFixedDatumIDs = inputStream.read_uint32()
         numberOfVariableDatumIDs = inputStream.read_uint32()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
         self.fixedDatumIDs = [
             rich_or_int(66, inputStream.read_uint32())
             for _ in range(numberOfFixedDatumIDs)
         ]
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
         self.variableDatumIDs = [
             rich_or_int(66, inputStream.read_uint32())
             for _ in range(numberOfVariableDatumIDs)
@@ -627,47 +663,80 @@ class DataQueryPdu(SimulationManagementFamilyPdu):
 
 
 @dataclass(slots=True)
-class SetDataPdu(_DatumListsMixin, SimulationManagementFamilyPdu):
+class SetDataPdu(SimulationManagementFamilyPdu):
     """§7.5.10 Set Data PDU
 
-    Initializes or changes internal state information, carrying a Datum
-    Specification."""
+    Initializing or changing internal state information shall be
+    communicated using a Set Data PDU. See §5.6.5.10.
+    """
 
     pduType: ClassVar[int] = 19  # [UID 4]
 
     requestID: uint32 = 0
     fixedDatumRecords: list[FixedDatum] = field(default_factory=list)
     variableDatumRecords: list[VariableDatum] = field(default_factory=list)
-
     padding1: uint32 = field(init=False, default=0)
+
+    @property
+    def numberOfFixedDatumRecords(self) -> uint32:
+        """Number of fixed datum records."""
+        return len(self.fixedDatumRecords)
+
+    @property
+    def numberOfVariableDatumRecords(self) -> uint32:
+        """Number of variable datum records, handled automatically by marshaller at
+        run time (and not modifiable by end-user programmers).
+        """
+        return len(self.variableDatumRecords)
 
     def _marshalledBodySize(self) -> int:
         return (
             super(SetDataPdu, self)._marshalledBodySize()
             + 4
             + 4
-            + self._datumTailSize()
+            + 4
+            + 4
+            + sum(item.marshalledSize() for item in self.fixedDatumRecords)
+            + sum(item.marshalledSize() for item in self.variableDatumRecords)
         )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(SetDataPdu, self)._serializeBody(outputStream)
         outputStream.write_uint32(self.requestID)
         outputStream.write_uint32(self.padding1)
-        self._serializeDatumTail(outputStream)
+        outputStream.write_uint32(self.numberOfFixedDatumRecords)
+        outputStream.write_uint32(self.numberOfVariableDatumRecords)
+        for item in self.fixedDatumRecords:
+            item.serialize(outputStream)
+        for item in self.variableDatumRecords:
+            item.serialize(outputStream)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         super(SetDataPdu, self)._parseBody(inputStream)
         self.requestID = inputStream.read_uint32()
         self.padding1 = inputStream.read_uint32()
-        self._parseDatumTail(inputStream)
+        numberOfFixedDatumRecords = inputStream.read_uint32()
+        numberOfVariableDatumRecords = inputStream.read_uint32()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.fixedDatumRecords = [
+            FixedDatum.parseFrom(inputStream) for _ in range(numberOfFixedDatumRecords)
+        ]
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.variableDatumRecords = [
+            VariableDatum.parseFrom(inputStream)
+            for _ in range(numberOfVariableDatumRecords)
+        ]
 
 
 @dataclass(slots=True)
-class EventReportPdu(_DatumListsMixin, SimulationManagementFamilyPdu):
+class EventReportPdu(SimulationManagementFamilyPdu):
     """§7.5.12 Event Report PDU
 
-    A managed entity reports the occurrence of a significant event to
-    the simulation manager, carrying a Datum Specification."""
+    A managed entity shall report the occurrence of a significant event to
+    the simulation manager (SM) using an Event Report PDU. See §5.6.5.12.
+    """
 
     pduType: ClassVar[int] = 21  # [UID 4]
 
@@ -678,51 +747,120 @@ class EventReportPdu(_DatumListsMixin, SimulationManagementFamilyPdu):
     eventType: enum32 = 0  # [UID 73]
     fixedDatumRecords: list[FixedDatum] = field(default_factory=list)
     variableDatumRecords: list[VariableDatum] = field(default_factory=list)
-
     padding1: uint32 = field(init=False, default=0)
+
+    @property
+    def numberOfFixedDatumRecords(self) -> uint32:
+        """Number of fixed datum records."""
+        return len(self.fixedDatumRecords)
+
+    @property
+    def numberOfVariableDatumRecords(self) -> uint32:
+        """Number of variable datum records, handled automatically by marshaller at
+        run time (and not modifiable by end-user programmers).
+        """
+        return len(self.variableDatumRecords)
 
     def _marshalledBodySize(self) -> int:
         return (
             super(EventReportPdu, self)._marshalledBodySize()
             + 4
             + 4
-            + self._datumTailSize()
+            + 4
+            + 4
+            + sum(item.marshalledSize() for item in self.fixedDatumRecords)
+            + sum(item.marshalledSize() for item in self.variableDatumRecords)
         )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(EventReportPdu, self)._serializeBody(outputStream)
         outputStream.write_uint32(self.eventType)
         outputStream.write_uint32(self.padding1)
-        self._serializeDatumTail(outputStream)
+        outputStream.write_uint32(self.numberOfFixedDatumRecords)
+        outputStream.write_uint32(self.numberOfVariableDatumRecords)
+        for item in self.fixedDatumRecords:
+            item.serialize(outputStream)
+        for item in self.variableDatumRecords:
+            item.serialize(outputStream)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         super(EventReportPdu, self)._parseBody(inputStream)
         self.eventType = rich_or_int(73, inputStream.read_uint32())
         self.padding1 = inputStream.read_uint32()
-        self._parseDatumTail(inputStream)
+        numberOfFixedDatumRecords = inputStream.read_uint32()
+        numberOfVariableDatumRecords = inputStream.read_uint32()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.fixedDatumRecords = [
+            FixedDatum.parseFrom(inputStream) for _ in range(numberOfFixedDatumRecords)
+        ]
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.variableDatumRecords = [
+            VariableDatum.parseFrom(inputStream)
+            for _ in range(numberOfVariableDatumRecords)
+        ]
 
 
 @dataclass(slots=True)
-class CommentPdu(_DatumListsMixin, SimulationManagementFamilyPdu):
+class CommentPdu(SimulationManagementFamilyPdu):
     """§7.5.13 Comment PDU
 
-    Used to enter arbitrary messages (character strings, for example)
-    via variable datums. The fixed datum count is not used by this PDU
-    (shall be zero); the list is kept so malformed-but-parseable
-    datagrams still round-trip byte-exact."""
+    Used to enter arbitrary messages (character strings, for example). See
+    §5.6.5.13.
+
+    The fixed datum count is not used by this PDU (shall be zero); the list
+    is kept so malformed-but-parseable datagrams still round-trip byte-
+    exact.
+    """
 
     pduType: ClassVar[int] = 22  # [UID 4]
 
-    fixedDatumRecords: list[FixedDatum] = field(default_factory=list)
     variableDatumRecords: list[VariableDatum] = field(default_factory=list)
+    fixedDatumRecords: list[FixedDatum] = field(default_factory=list)
+
+    @property
+    def numberOfFixedDatumRecords(self) -> uint32:
+        """Number of fixed datum records, not used in this Pdu."""
+        return len(self.fixedDatumRecords)
+
+    @property
+    def numberOfVariableDatumRecords(self) -> uint32:
+        """Number of variable datum records, handled automatically by marshaller at
+        run time (and not modifiable by end-user programmers).
+        """
+        return len(self.variableDatumRecords)
 
     def _marshalledBodySize(self) -> int:
-        return super(CommentPdu, self)._marshalledBodySize() + self._datumTailSize()
+        return (
+            super(CommentPdu, self)._marshalledBodySize()
+            + 4
+            + 4
+            + sum(item.marshalledSize() for item in self.variableDatumRecords)
+            + sum(item.marshalledSize() for item in self.fixedDatumRecords)
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(CommentPdu, self)._serializeBody(outputStream)
-        self._serializeDatumTail(outputStream)
+        outputStream.write_uint32(self.numberOfFixedDatumRecords)
+        outputStream.write_uint32(self.numberOfVariableDatumRecords)
+        for item in self.variableDatumRecords:
+            item.serialize(outputStream)
+        for item in self.fixedDatumRecords:
+            item.serialize(outputStream)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         super(CommentPdu, self)._parseBody(inputStream)
-        self._parseDatumTail(inputStream)
+        numberOfFixedDatumRecords = inputStream.read_uint32()
+        numberOfVariableDatumRecords = inputStream.read_uint32()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.variableDatumRecords = [
+            VariableDatum.parseFrom(inputStream)
+            for _ in range(numberOfVariableDatumRecords)
+        ]
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.fixedDatumRecords = [
+            FixedDatum.parseFrom(inputStream) for _ in range(numberOfFixedDatumRecords)
+        ]

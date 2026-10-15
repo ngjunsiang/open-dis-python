@@ -7,13 +7,12 @@ aliasFor ruling the descriptive name is canonical and the abbreviation
 is a plain module-level alias (e.g. ``CreateEntityRPdu =
 CreateEntityReliablePdu``).
 
-XML deltas applied deliberately (see docs/design/sample-review.md):
-- originator/receiver keep the exemplar's EntityIdentifier
-  shape/names (same 6-byte wire field, §6.2.81).
-- Record Query-R carries a flat datum-ID list; Record-R/Set Record-R
-  carry a flat record-set list — the XML wraps each in an extra
-  RecordQuerySpecification/RecordSpecification layer the standard's
-  §5.12.4.14–16 tables do not have.
+Python-side deltas from the XML (sample-review rulings): originator/
+receiver keep the exemplar's EntityIdentifier shape/names (same 6-byte
+wire field, §6.2.81); Record Query-R carries a flat datum-ID list and
+Record-R/Set Record-R carry flat record-set lists — the XML wraps each
+in an extra RecordQuerySpecification/RecordSpecification layer the
+standard's §5.12.4.14–16 tables do not have.
 """
 
 from dataclasses import dataclass, field
@@ -23,41 +22,64 @@ from opendis.bitfields import StopFreezeFrozenBehavior
 from opendis.enum_registry import rich_or_int
 from opendis.record.common import ClockTime, EntityIdentifier
 from opendis.record.pdu import Pdu
-from opendis.record.simulation_management import (
-    FixedDatum,
-    VariableDatum,
-    _DatumListsMixin,
-)
+from opendis.record.simulation_management import FixedDatum, VariableDatum
 from opendis.stream import DataInputStream, DataOutputStream
 from opendis.types import enum8, enum16, enum32, uint8, uint16, uint32
 
 __all__ = [
+    "AcknowledgeRPdu",
     "AcknowledgeReliablePdu",
+    "ActionRequestRPdu",
     "ActionRequestReliablePdu",
+    "ActionResponseRPdu",
     "ActionResponseReliablePdu",
+    "CommentRPdu",
     "CommentReliablePdu",
+    "CreateEntityRPdu",
     "CreateEntityReliablePdu",
+    "DataQueryRPdu",
     "DataQueryReliablePdu",
+    "DataRPdu",
     "DataReliablePdu",
+    "EventReportRPdu",
     "EventReportReliablePdu",
+    "RecordQueryRPdu",
     "RecordQueryReliablePdu",
+    "RecordRPdu",
     "RecordReliablePdu",
     "RecordSpecificationElement",
+    "RemoveEntityRPdu",
     "RemoveEntityReliablePdu",
+    "SetDataRPdu",
     "SetDataReliablePdu",
+    "SetRecordRPdu",
     "SetRecordReliablePdu",
     "SimulationManagementWithReliabilityFamilyPdu",
+    "StartResumeRPdu",
     "StartResumeReliablePdu",
+    "StopFreezeRPdu",
     "StopFreezeReliablePdu",
 ]
 
 
+def _padTo32(byteCount: int) -> int:
+    """Pad bytes needed to bring a datagram to a 32-bit boundary."""
+    return (4 - byteCount % 4) % 4
+
+
 @dataclass(slots=True)
 class SimulationManagementWithReliabilityFamilyPdu(Pdu):
-    """§5.12.4 base: Simulation Management PDU header fields plus the
-    reliability-service conventions of the -R family."""
+    """Simulation Management with Reliability PDUs with reliability service
+    levels in a DIS exercise are an alternative to the Simulation Management
+    PDUs, and may or may not be required for participation in an DIS
+    exercise,.
 
-    protocolFamily: ClassVar[int] = 10  # [UID 5]
+    Not a thin marker: the §6.2.82 header fields (EntityIdentifier-shaped
+    per the sample-review ruling) plus the reliability-service conventions
+    of the -R family.
+    """
+
+    protocolFamily: ClassVar[int] = 10  # [UID 5] Simulation Management with Reliability
 
     originatingEntityID: EntityIdentifier = field(default_factory=EntityIdentifier)
     receivingEntityID: EntityIdentifier = field(default_factory=EntityIdentifier)
@@ -79,35 +101,35 @@ class SimulationManagementWithReliabilityFamilyPdu(Pdu):
 
 @dataclass(slots=True)
 class RecordSpecificationElement:
-    """§6.2.73 Record Set (one element of a Record Specification)
+    """Synthetic record, made up from §6.2.73. This is used to achieve a
+    repeating variable list element.<p>recordLength, recordCount and
+    recordValues must be set by hand so the.
 
-    A block of same-typed records: record ID, serial number, the length
-    of ONE record in bits, how many records, then the concatenated
-    record values (byte granularity — bit lengths not divisible by 8
-    are unsupported, same ruling as VariableDatum). The set is padded to
-    a 64-bit boundary by the packer."""
+    One element of a §6.2.73 Record Specification: a block of same-typed
+    records. ``recordValues`` is the concatenated block as ``bytes`` (byte
+    granularity — bit lengths not divisible by 8 are unsupported, same
+    ruling as VariableDatum); the set is padded to a 64-bit boundary by the
+    packer.
+    """
 
     FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
         "recordID": 66,
     }
 
-    recordID: enum32 = 0  # [UID 66] Variable Record Type
+    recordID: enum32 = 0  # [UID 66]
     recordSetSerialNumber: uint32 = 0
-    recordLength: uint16 = 0  # bits, per record
+    recordLength: uint16 = 0
     recordCount: uint16 = 0
     recordValues: bytes = b""
-
+    # Padding ruling: explicit attribute, out of __init__ (zero by default,
+    # holds the wire value after parse so odd pads round-trip byte-exact).
     padding: uint32 = field(init=False, default=0)
 
-    def marshalledSize(self) -> int:
+    def marshalledSize(self):
         prefix = 4 + 4 + 4 + 2 + 2
         return prefix + len(self.recordValues) + self._padTo64(prefix)
 
-    @staticmethod
-    def _padTo64(byteCount: int) -> int:
-        return (8 - byteCount % 8) % 8
-
-    def serialize(self, outputStream: DataOutputStream) -> None:
+    def serialize(self, outputStream: DataOutputStream):
         outputStream.write_uint32(self.recordID)
         outputStream.write_uint32(self.recordSetSerialNumber)
         outputStream.write_uint32(self.padding)
@@ -118,7 +140,7 @@ class RecordSpecificationElement:
         if padding:
             outputStream.write_bytes(b"\x00" * padding)
 
-    def parse(self, inputStream: DataInputStream) -> None:
+    def parse(self, inputStream: DataInputStream):
         self.recordID = rich_or_int(66, inputStream.read_uint32())
         self.recordSetSerialNumber = inputStream.read_uint32()
         self.padding = inputStream.read_uint32()
@@ -130,18 +152,27 @@ class RecordSpecificationElement:
         if padding:
             inputStream.read_bytes(padding)
 
+    @staticmethod
+    def _padTo64(byteCount: int) -> int:
+        return (8 - byteCount % 8) % 8
+
     @classmethod
     def parseFrom(cls, inputStream: DataInputStream) -> "RecordSpecificationElement":
-        """Construct a new record set from the stream (list-parse helper)."""
-        record = cls()
-        record.parse(inputStream)
-        return record
+        """Construct a new record from the stream (list-parse helper; the
+        mutating ``parse`` above satisfies the Record protocol)."""
+        item = cls()
+        item.parse(inputStream)
+        return item
 
 
 @dataclass(slots=True)
 class CreateEntityReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
-    """§5.12.4.2 Create Entity-R PDU — Create Entity with reliability
-    service levels. Total PDU size is 32 bytes."""
+    """§5.12.4.2 Create Entity-R PDU
+
+    Serves the same function as the Create Entity PDU but with the addition
+    of reliability service levels. Canonical descriptive name;
+    CreateEntityRPdu is an alias.
+    """
 
     pduType: ClassVar[int] = 51  # [UID 4]
 
@@ -151,7 +182,6 @@ class CreateEntityReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
 
     requiredReliabilityService: enum8 = 0  # [UID 74]
     requestID: uint32 = 0
-
     pad1: uint8 = field(init=False, default=0)
     pad2: uint16 = field(init=False, default=0)
 
@@ -182,7 +212,13 @@ CreateEntityRPdu = CreateEntityReliablePdu
 
 @dataclass(slots=True)
 class RemoveEntityReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
-    """§5.12.4.3 Remove Entity-R PDU. Total PDU size is 32 bytes."""
+    """§5.12.4.3 Remove Entity-R PDU
+
+    Contains the same information as found in the Remove Entity PDU with the
+    addition of the level of reliability service to be used for the removal
+    action being requested. Canonical descriptive name; RemoveEntityRPdu is
+    an alias.
+    """
 
     pduType: ClassVar[int] = 52  # [UID 4]
 
@@ -192,7 +228,6 @@ class RemoveEntityReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
 
     requiredReliabilityService: enum8 = 0  # [UID 74]
     requestID: uint32 = 0
-
     pad1: uint8 = field(init=False, default=0)
     pad2: uint16 = field(init=False, default=0)
 
@@ -221,7 +256,12 @@ RemoveEntityRPdu = RemoveEntityReliablePdu
 
 @dataclass(slots=True)
 class StartResumeReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
-    """§5.12.4.4 Start/Resume-R PDU. Total PDU size is 48 bytes."""
+    """§5.12.4.4 Start/Resume-R PDU
+
+    Serves the same function as the Start/Resume PDU but with the addition
+    of reliability service levels. Canonical descriptive name;
+    StartResumeRPdu is an alias.
+    """
 
     pduType: ClassVar[int] = 53  # [UID 4]
 
@@ -233,7 +273,6 @@ class StartResumeReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
     simulationTime: ClockTime = field(default_factory=ClockTime)
     requiredReliabilityService: enum8 = 0  # [UID 74]
     requestID: uint32 = 0
-
     pad1: uint8 = field(init=False, default=0)
     pad2: uint16 = field(init=False, default=0)
 
@@ -272,8 +311,12 @@ StartResumeRPdu = StartResumeReliablePdu
 
 @dataclass(slots=True)
 class StopFreezeReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
-    """§5.12.4.5 Stop/Freeze-R PDU — Stop/Freeze with reliability service
-    levels. Total PDU size is 40 bytes."""
+    """§5.12.4.5 Stop/Freeze-R PDU
+
+    Serves the same function as the Stop/Freeze PDU (see 5.6.5.5.1) but with
+    the addition of reliability service levels. Canonical descriptive name;
+    StopFreezeRPdu is an alias.
+    """
 
     pduType: ClassVar[int] = 54  # [UID 4]
 
@@ -287,7 +330,6 @@ class StopFreezeReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
     frozenBehavior: uint8 = 0  # [UID 68] or the view
     requiredReliabilityService: enum8 = 0  # [UID 74]
     requestID: uint32 = 0
-
     pad1: uint8 = field(init=False, default=0)
 
     def _marshalledBodySize(self) -> int:
@@ -325,8 +367,13 @@ StopFreezeRPdu = StopFreezeReliablePdu
 
 @dataclass(slots=True)
 class AcknowledgeReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
-    """§5.12.4.6 Acknowledge-R PDU — acknowledges the -R Create/Remove/
-    Start/Stop requests. Total PDU size is 32 bytes."""
+    """§5.12.4.6 Acknowledge-R PDU
+
+    Serves the same function as the Acknowledge PDU but is used to
+    acknowledge the receipt of a Create Entity-R PDU, a Remove Entity-R PDU,
+    a Start/Resume-R PDU, or a Stop/Freeze-R PDU. Canonical descriptive
+    name; AcknowledgeRPdu is an alias.
+    """
 
     pduType: ClassVar[int] = 55  # [UID 4]
 
@@ -359,11 +406,13 @@ AcknowledgeRPdu = AcknowledgeReliablePdu
 
 
 @dataclass(slots=True)
-class ActionRequestReliablePdu(
-    _DatumListsMixin, SimulationManagementWithReliabilityFamilyPdu
-):
-    """§5.12.4.7 Action Request-R PDU. Total base PDU size is 44 bytes
-    plus datums."""
+class ActionRequestReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
+    """§5.12.4.7 Action Request-R PDU
+
+    Serves the same function as the Action Request PDU but with the addition
+    of reliability service levels. Canonical descriptive name;
+    ActionRequestRPdu is an alias.
+    """
 
     pduType: ClassVar[int] = 56  # [UID 4]
 
@@ -377,9 +426,18 @@ class ActionRequestReliablePdu(
     actionID: enum32 = 0  # [UID 71]
     fixedDatumRecords: list[FixedDatum] = field(default_factory=list)
     variableDatumRecords: list[VariableDatum] = field(default_factory=list)
-
     pad1: uint8 = field(init=False, default=0)
     pad2: uint16 = field(init=False, default=0)
+
+    @property
+    def numberOfFixedDatumRecords(self) -> uint32:
+        """Fixed datum record count."""
+        return len(self.fixedDatumRecords)
+
+    @property
+    def numberOfVariableDatumRecords(self) -> uint32:
+        """variable datum record count."""
+        return len(self.variableDatumRecords)
 
     def _marshalledBodySize(self) -> int:
         return (
@@ -389,7 +447,10 @@ class ActionRequestReliablePdu(
             + 2
             + 4
             + 4
-            + self._datumTailSize()
+            + 4
+            + 4
+            + sum(item.marshalledSize() for item in self.fixedDatumRecords)
+            + sum(item.marshalledSize() for item in self.variableDatumRecords)
         )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
@@ -399,7 +460,12 @@ class ActionRequestReliablePdu(
         outputStream.write_uint16(self.pad2)
         outputStream.write_uint32(self.requestID)
         outputStream.write_uint32(self.actionID)
-        self._serializeDatumTail(outputStream)
+        outputStream.write_uint32(self.numberOfFixedDatumRecords)
+        outputStream.write_uint32(self.numberOfVariableDatumRecords)
+        for item in self.fixedDatumRecords:
+            item.serialize(outputStream)
+        for item in self.variableDatumRecords:
+            item.serialize(outputStream)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         super(ActionRequestReliablePdu, self)._parseBody(inputStream)
@@ -408,18 +474,32 @@ class ActionRequestReliablePdu(
         self.pad2 = inputStream.read_uint16()
         self.requestID = inputStream.read_uint32()
         self.actionID = rich_or_int(71, inputStream.read_uint32())
-        self._parseDatumTail(inputStream)
+        numberOfFixedDatumRecords = inputStream.read_uint32()
+        numberOfVariableDatumRecords = inputStream.read_uint32()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.fixedDatumRecords = [
+            FixedDatum.parseFrom(inputStream) for _ in range(numberOfFixedDatumRecords)
+        ]
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.variableDatumRecords = [
+            VariableDatum.parseFrom(inputStream)
+            for _ in range(numberOfVariableDatumRecords)
+        ]
 
 
 ActionRequestRPdu = ActionRequestReliablePdu
 
 
 @dataclass(slots=True)
-class ActionResponseReliablePdu(
-    _DatumListsMixin, SimulationManagementWithReliabilityFamilyPdu
-):
-    """§5.12.4.8 Action Response-R PDU. Total base PDU size is 40 bytes
-    plus datums."""
+class ActionResponseReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
+    """§5.12.4.8 Action Response-R PDU
+
+    Serves the same function as the Action Response PDU (see 5.6.5.8.1) but
+    is used to acknowledge the receipt of an Action Request-R PDU. Canonical
+    descriptive name; ActionResponseRPdu is an alias.
+    """
 
     pduType: ClassVar[int] = 57  # [UID 4]
 
@@ -432,25 +512,55 @@ class ActionResponseReliablePdu(
     fixedDatumRecords: list[FixedDatum] = field(default_factory=list)
     variableDatumRecords: list[VariableDatum] = field(default_factory=list)
 
+    @property
+    def numberOfFixedDatumRecords(self) -> uint32:
+        """Fixed datum record count."""
+        return len(self.fixedDatumRecords)
+
+    @property
+    def numberOfVariableDatumRecords(self) -> uint32:
+        """variable datum record count."""
+        return len(self.variableDatumRecords)
+
     def _marshalledBodySize(self) -> int:
         return (
             super(ActionResponseReliablePdu, self)._marshalledBodySize()
             + 4
             + 4
-            + self._datumTailSize()
+            + 4
+            + 4
+            + sum(item.marshalledSize() for item in self.fixedDatumRecords)
+            + sum(item.marshalledSize() for item in self.variableDatumRecords)
         )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(ActionResponseReliablePdu, self)._serializeBody(outputStream)
         outputStream.write_uint32(self.requestID)
         outputStream.write_uint32(self.responseStatus)
-        self._serializeDatumTail(outputStream)
+        outputStream.write_uint32(self.numberOfFixedDatumRecords)
+        outputStream.write_uint32(self.numberOfVariableDatumRecords)
+        for item in self.fixedDatumRecords:
+            item.serialize(outputStream)
+        for item in self.variableDatumRecords:
+            item.serialize(outputStream)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         super(ActionResponseReliablePdu, self)._parseBody(inputStream)
         self.requestID = inputStream.read_uint32()
         self.responseStatus = rich_or_int(72, inputStream.read_uint32())
-        self._parseDatumTail(inputStream)
+        numberOfFixedDatumRecords = inputStream.read_uint32()
+        numberOfVariableDatumRecords = inputStream.read_uint32()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.fixedDatumRecords = [
+            FixedDatum.parseFrom(inputStream) for _ in range(numberOfFixedDatumRecords)
+        ]
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.variableDatumRecords = [
+            VariableDatum.parseFrom(inputStream)
+            for _ in range(numberOfVariableDatumRecords)
+        ]
 
 
 ActionResponseRPdu = ActionResponseReliablePdu
@@ -458,8 +568,12 @@ ActionResponseRPdu = ActionResponseReliablePdu
 
 @dataclass(slots=True)
 class DataQueryReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
-    """§5.12.4.9 Data Query-R PDU — datum ID lists (u32 each), like the
-    Data Query PDU. Total base PDU size is 44 bytes plus IDs."""
+    """§5.12.4.9 Data Query-R PDU
+
+    Serves the same function as the Data Query PDU but with the addition of
+    reliability service levels. Canonical descriptive name; DataQueryRPdu is
+    an alias.
+    """
 
     pduType: ClassVar[int] = 58  # [UID 4]
 
@@ -472,16 +586,17 @@ class DataQueryReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
     timeInterval: uint32 = 0
     fixedDatumIDs: list[enum32] = field(default_factory=list)
     variableDatumIDs: list[enum32] = field(default_factory=list)
-
     pad1: uint8 = field(init=False, default=0)
     pad2: uint16 = field(init=False, default=0)
 
     @property
     def numberOfFixedDatumIDs(self) -> uint32:
+        """Fixed datum record count."""
         return len(self.fixedDatumIDs)
 
     @property
     def numberOfVariableDatumIDs(self) -> uint32:
+        """variable datum record count."""
         return len(self.variableDatumIDs)
 
     def _marshalledBodySize(self) -> int:
@@ -507,10 +622,10 @@ class DataQueryReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
         outputStream.write_uint32(self.timeInterval)
         outputStream.write_uint32(self.numberOfFixedDatumIDs)
         outputStream.write_uint32(self.numberOfVariableDatumIDs)
-        for datumID in self.fixedDatumIDs:
-            outputStream.write_uint32(datumID)
-        for datumID in self.variableDatumIDs:
-            outputStream.write_uint32(datumID)
+        for item in self.fixedDatumIDs:
+            outputStream.write_uint32(item)
+        for item in self.variableDatumIDs:
+            outputStream.write_uint32(item)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         super(DataQueryReliablePdu, self)._parseBody(inputStream)
@@ -521,10 +636,14 @@ class DataQueryReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
         self.timeInterval = inputStream.read_uint32()
         numberOfFixedDatumIDs = inputStream.read_uint32()
         numberOfVariableDatumIDs = inputStream.read_uint32()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
         self.fixedDatumIDs = [
             rich_or_int(66, inputStream.read_uint32())
             for _ in range(numberOfFixedDatumIDs)
         ]
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
         self.variableDatumIDs = [
             rich_or_int(66, inputStream.read_uint32())
             for _ in range(numberOfVariableDatumIDs)
@@ -535,11 +654,13 @@ DataQueryRPdu = DataQueryReliablePdu
 
 
 @dataclass(slots=True)
-class SetDataReliablePdu(
-    _DatumListsMixin, SimulationManagementWithReliabilityFamilyPdu
-):
-    """§5.12.4.10 Set Data-R PDU. Total base PDU size is 40 bytes plus
-    datums."""
+class SetDataReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
+    """§5.12.4.10 Set Data-R PDU
+
+    Serves the same function as the Set Data PDU but with the addition of
+    reliability service levels. Canonical descriptive name; SetDataRPdu is
+    an alias.
+    """
 
     pduType: ClassVar[int] = 59  # [UID 4]
 
@@ -551,9 +672,18 @@ class SetDataReliablePdu(
     requestID: uint32 = 0
     fixedDatumRecords: list[FixedDatum] = field(default_factory=list)
     variableDatumRecords: list[VariableDatum] = field(default_factory=list)
-
     pad1: uint8 = field(init=False, default=0)
     pad2: uint16 = field(init=False, default=0)
+
+    @property
+    def numberOfFixedDatumRecords(self) -> uint32:
+        """Fixed datum record count."""
+        return len(self.fixedDatumRecords)
+
+    @property
+    def numberOfVariableDatumRecords(self) -> uint32:
+        """variable datum record count."""
+        return len(self.variableDatumRecords)
 
     def _marshalledBodySize(self) -> int:
         return (
@@ -562,7 +692,10 @@ class SetDataReliablePdu(
             + 1
             + 2
             + 4
-            + self._datumTailSize()
+            + 4
+            + 4
+            + sum(item.marshalledSize() for item in self.fixedDatumRecords)
+            + sum(item.marshalledSize() for item in self.variableDatumRecords)
         )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
@@ -571,7 +704,12 @@ class SetDataReliablePdu(
         outputStream.write_uint8(self.pad1)
         outputStream.write_uint16(self.pad2)
         outputStream.write_uint32(self.requestID)
-        self._serializeDatumTail(outputStream)
+        outputStream.write_uint32(self.numberOfFixedDatumRecords)
+        outputStream.write_uint32(self.numberOfVariableDatumRecords)
+        for item in self.fixedDatumRecords:
+            item.serialize(outputStream)
+        for item in self.variableDatumRecords:
+            item.serialize(outputStream)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         super(SetDataReliablePdu, self)._parseBody(inputStream)
@@ -579,16 +717,33 @@ class SetDataReliablePdu(
         self.pad1 = inputStream.read_uint8()
         self.pad2 = inputStream.read_uint16()
         self.requestID = inputStream.read_uint32()
-        self._parseDatumTail(inputStream)
+        numberOfFixedDatumRecords = inputStream.read_uint32()
+        numberOfVariableDatumRecords = inputStream.read_uint32()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.fixedDatumRecords = [
+            FixedDatum.parseFrom(inputStream) for _ in range(numberOfFixedDatumRecords)
+        ]
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.variableDatumRecords = [
+            VariableDatum.parseFrom(inputStream)
+            for _ in range(numberOfVariableDatumRecords)
+        ]
 
 
 SetDataRPdu = SetDataReliablePdu
 
 
 @dataclass(slots=True)
-class DataReliablePdu(_DatumListsMixin, SimulationManagementWithReliabilityFamilyPdu):
-    """§5.12.4.11 Data-R PDU — response to Data Query-R / Set Data-R.
-    Total base PDU size is 40 bytes plus datums."""
+class DataReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
+    """§5.12.4.11 Data-R PDU
+
+    Serves the same function as the Data PDU but with the addition of
+    reliability service levels and is used in response to a Data Query-R
+    PDU, a Data-R PDU, or a Set Data-R PDU. Canonical descriptive name;
+    DataRPdu is an alias.
+    """
 
     pduType: ClassVar[int] = 60  # [UID 4]
 
@@ -600,9 +755,18 @@ class DataReliablePdu(_DatumListsMixin, SimulationManagementWithReliabilityFamil
     requiredReliabilityService: enum8 = 0  # [UID 74]
     fixedDatumRecords: list[FixedDatum] = field(default_factory=list)
     variableDatumRecords: list[VariableDatum] = field(default_factory=list)
-
     pad1: uint8 = field(init=False, default=0)
     pad2: uint16 = field(init=False, default=0)
+
+    @property
+    def numberOfFixedDatumRecords(self) -> uint32:
+        """Fixed datum record count."""
+        return len(self.fixedDatumRecords)
+
+    @property
+    def numberOfVariableDatumRecords(self) -> uint32:
+        """variable datum record count."""
+        return len(self.variableDatumRecords)
 
     def _marshalledBodySize(self) -> int:
         return (
@@ -611,7 +775,10 @@ class DataReliablePdu(_DatumListsMixin, SimulationManagementWithReliabilityFamil
             + 1
             + 1
             + 2
-            + self._datumTailSize()
+            + 4
+            + 4
+            + sum(item.marshalledSize() for item in self.fixedDatumRecords)
+            + sum(item.marshalledSize() for item in self.variableDatumRecords)
         )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
@@ -620,7 +787,12 @@ class DataReliablePdu(_DatumListsMixin, SimulationManagementWithReliabilityFamil
         outputStream.write_uint8(self.requiredReliabilityService)
         outputStream.write_uint8(self.pad1)
         outputStream.write_uint16(self.pad2)
-        self._serializeDatumTail(outputStream)
+        outputStream.write_uint32(self.numberOfFixedDatumRecords)
+        outputStream.write_uint32(self.numberOfVariableDatumRecords)
+        for item in self.fixedDatumRecords:
+            item.serialize(outputStream)
+        for item in self.variableDatumRecords:
+            item.serialize(outputStream)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         super(DataReliablePdu, self)._parseBody(inputStream)
@@ -628,18 +800,31 @@ class DataReliablePdu(_DatumListsMixin, SimulationManagementWithReliabilityFamil
         self.requiredReliabilityService = rich_or_int(74, inputStream.read_uint8())
         self.pad1 = inputStream.read_uint8()
         self.pad2 = inputStream.read_uint16()
-        self._parseDatumTail(inputStream)
+        numberOfFixedDatumRecords = inputStream.read_uint32()
+        numberOfVariableDatumRecords = inputStream.read_uint32()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.fixedDatumRecords = [
+            FixedDatum.parseFrom(inputStream) for _ in range(numberOfFixedDatumRecords)
+        ]
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.variableDatumRecords = [
+            VariableDatum.parseFrom(inputStream)
+            for _ in range(numberOfVariableDatumRecords)
+        ]
 
 
 DataRPdu = DataReliablePdu
 
 
 @dataclass(slots=True)
-class EventReportReliablePdu(
-    _DatumListsMixin, SimulationManagementWithReliabilityFamilyPdu
-):
-    """§5.12.4.12 Event Report-R PDU. Total base PDU size is 40 bytes
-    plus datums."""
+class EventReportReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
+    """§5.12.4.12 Event Report-R PDU
+
+    Contains the same information as found in the Event Report PDU.
+    Canonical descriptive name; EventReportRPdu is an alias.
+    """
 
     pduType: ClassVar[int] = 61  # [UID 4]
 
@@ -650,60 +835,122 @@ class EventReportReliablePdu(
     eventType: enum32 = 0  # [UID 73]
     fixedDatumRecords: list[FixedDatum] = field(default_factory=list)
     variableDatumRecords: list[VariableDatum] = field(default_factory=list)
-
     pad1: uint32 = field(init=False, default=0)
+
+    @property
+    def numberOfFixedDatumRecords(self) -> uint32:
+        """Fixed datum record count."""
+        return len(self.fixedDatumRecords)
+
+    @property
+    def numberOfVariableDatumRecords(self) -> uint32:
+        """variable datum record count."""
+        return len(self.variableDatumRecords)
 
     def _marshalledBodySize(self) -> int:
         return (
             super(EventReportReliablePdu, self)._marshalledBodySize()
             + 4
             + 4
-            + self._datumTailSize()
+            + 4
+            + 4
+            + sum(item.marshalledSize() for item in self.fixedDatumRecords)
+            + sum(item.marshalledSize() for item in self.variableDatumRecords)
         )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(EventReportReliablePdu, self)._serializeBody(outputStream)
         outputStream.write_uint32(self.eventType)
         outputStream.write_uint32(self.pad1)
-        self._serializeDatumTail(outputStream)
+        outputStream.write_uint32(self.numberOfFixedDatumRecords)
+        outputStream.write_uint32(self.numberOfVariableDatumRecords)
+        for item in self.fixedDatumRecords:
+            item.serialize(outputStream)
+        for item in self.variableDatumRecords:
+            item.serialize(outputStream)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         super(EventReportReliablePdu, self)._parseBody(inputStream)
         self.eventType = rich_or_int(73, inputStream.read_uint32())
         self.pad1 = inputStream.read_uint32()
-        self._parseDatumTail(inputStream)
+        numberOfFixedDatumRecords = inputStream.read_uint32()
+        numberOfVariableDatumRecords = inputStream.read_uint32()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.fixedDatumRecords = [
+            FixedDatum.parseFrom(inputStream) for _ in range(numberOfFixedDatumRecords)
+        ]
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.variableDatumRecords = [
+            VariableDatum.parseFrom(inputStream)
+            for _ in range(numberOfVariableDatumRecords)
+        ]
 
 
 EventReportRPdu = EventReportReliablePdu
 
 
 @dataclass(slots=True)
-class CommentReliablePdu(
-    _DatumListsMixin, SimulationManagementWithReliabilityFamilyPdu
-):
-    """§5.12.4.13 Comment-R PDU. The fixed datum count is not used by
-    this PDU (shall be zero); the list is kept so malformed-but-parseable
-    datagrams still round-trip byte-exact. Total base PDU size is 32
-    bytes plus datums."""
+class CommentReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
+    """§5.12.4.13 Comment-R PDU
+
+    Serves the same function as the Comment PDU. Canonical descriptive name;
+    CommentRPdu is an alias.
+
+    The fixed datum count is not used by this PDU (shall be zero); the list
+    is kept so malformed-but-parseable datagrams still round-trip byte-
+    exact.
+    """
 
     pduType: ClassVar[int] = 62  # [UID 4]
 
-    fixedDatumRecords: list[FixedDatum] = field(default_factory=list)
     variableDatumRecords: list[VariableDatum] = field(default_factory=list)
+    fixedDatumRecords: list[FixedDatum] = field(default_factory=list)
+
+    @property
+    def numberOfFixedDatumRecords(self) -> uint32:
+        """Fixed datum record count, not used in this Pdu."""
+        return len(self.fixedDatumRecords)
+
+    @property
+    def numberOfVariableDatumRecords(self) -> uint32:
+        """variable datum record count."""
+        return len(self.variableDatumRecords)
 
     def _marshalledBodySize(self) -> int:
         return (
             super(CommentReliablePdu, self)._marshalledBodySize()
-            + self._datumTailSize()
+            + 4
+            + 4
+            + sum(item.marshalledSize() for item in self.variableDatumRecords)
+            + sum(item.marshalledSize() for item in self.fixedDatumRecords)
         )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(CommentReliablePdu, self)._serializeBody(outputStream)
-        self._serializeDatumTail(outputStream)
+        outputStream.write_uint32(self.numberOfFixedDatumRecords)
+        outputStream.write_uint32(self.numberOfVariableDatumRecords)
+        for item in self.variableDatumRecords:
+            item.serialize(outputStream)
+        for item in self.fixedDatumRecords:
+            item.serialize(outputStream)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         super(CommentReliablePdu, self)._parseBody(inputStream)
-        self._parseDatumTail(inputStream)
+        numberOfFixedDatumRecords = inputStream.read_uint32()
+        numberOfVariableDatumRecords = inputStream.read_uint32()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.variableDatumRecords = [
+            VariableDatum.parseFrom(inputStream)
+            for _ in range(numberOfVariableDatumRecords)
+        ]
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.fixedDatumRecords = [
+            FixedDatum.parseFrom(inputStream) for _ in range(numberOfFixedDatumRecords)
+        ]
 
 
 CommentRPdu = CommentReliablePdu
@@ -711,9 +958,15 @@ CommentRPdu = CommentReliablePdu
 
 @dataclass(slots=True)
 class RecordReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
-    """§5.12.4.16 Record-R PDU — responds to Record Query-R / Set
-    Record-R with record sets. Total base PDU size is 36 bytes plus
-    record sets."""
+    """§5.12.4.16 Record-R PDU
+
+    Used to respond to a Record Query-R PDU or a Set Record-R PDU. It is
+    used to provide information requested in a Record Query-R PDU, to
+    confirm the information received in a Set Record-R PDU, and to confirm
+    the receipt of a periodic or unsolicited Record-R PDU when the
+    acknowledged service level is used. Canonical descriptive name;
+    RecordRPdu is an alias.
+    """
 
     pduType: ClassVar[int] = 63  # [UID 4]
 
@@ -724,13 +977,14 @@ class RecordReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
 
     requestID: uint32 = 0
     requiredReliabilityService: enum8 = 0  # [UID 74]
-    eventType: enum16 = 0  # [UID 333] Record-R event type
+    eventType: enum16 = 0  # [UID 333]
+    responseSerialNumber: uint32 = 0
     recordSets: list[RecordSpecificationElement] = field(default_factory=list)
-
     pad1: uint8 = field(init=False, default=0)
 
     @property
     def numberOfRecordSets(self) -> uint32:
+        """Number of record sets in list."""
         return len(self.recordSets)
 
     def _marshalledBodySize(self) -> int:
@@ -741,7 +995,8 @@ class RecordReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
             + 1
             + 2
             + 4
-            + sum(rs.marshalledSize() for rs in self.recordSets)
+            + 4
+            + sum(item.marshalledSize() for item in self.recordSets)
         )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
@@ -750,9 +1005,10 @@ class RecordReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
         outputStream.write_uint8(self.requiredReliabilityService)
         outputStream.write_uint8(self.pad1)
         outputStream.write_uint16(self.eventType)
+        outputStream.write_uint32(self.responseSerialNumber)
         outputStream.write_uint32(self.numberOfRecordSets)
-        for recordSet in self.recordSets:
-            recordSet.serialize(outputStream)
+        for item in self.recordSets:
+            item.serialize(outputStream)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         super(RecordReliablePdu, self)._parseBody(inputStream)
@@ -760,7 +1016,10 @@ class RecordReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
         self.requiredReliabilityService = rich_or_int(74, inputStream.read_uint8())
         self.pad1 = inputStream.read_uint8()
         self.eventType = rich_or_int(333, inputStream.read_uint16())
+        self.responseSerialNumber = inputStream.read_uint32()
         numberOfRecordSets = inputStream.read_uint32()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
         self.recordSets = [
             RecordSpecificationElement.parseFrom(inputStream)
             for _ in range(numberOfRecordSets)
@@ -772,8 +1031,13 @@ RecordRPdu = RecordReliablePdu
 
 @dataclass(slots=True)
 class SetRecordReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
-    """§5.12.4.15 Set Record-R PDU. Total base PDU size is 40 bytes plus
-    record sets."""
+    """§5.12.4.15 Set Record-R PDU
+
+    Used to set or change certain parameter values. These parameter values
+    are contained within a record format as compared to the datum format
+    used in the Set Data-R PDU. Canonical descriptive name; SetRecordRPdu is
+    an alias.
+    """
 
     pduType: ClassVar[int] = 64  # [UID 4]
 
@@ -784,13 +1048,13 @@ class SetRecordReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
     requestID: uint32 = 0
     requiredReliabilityService: enum8 = 0  # [UID 74]
     recordSets: list[RecordSpecificationElement] = field(default_factory=list)
-
     pad1: uint8 = field(init=False, default=0)
     pad2: uint16 = field(init=False, default=0)
     pad3: uint32 = field(init=False, default=0)
 
     @property
     def numberOfRecordSets(self) -> uint32:
+        """Number of record sets in list."""
         return len(self.recordSets)
 
     def _marshalledBodySize(self) -> int:
@@ -802,7 +1066,7 @@ class SetRecordReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
             + 2
             + 4
             + 4
-            + sum(rs.marshalledSize() for rs in self.recordSets)
+            + sum(item.marshalledSize() for item in self.recordSets)
         )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
@@ -813,8 +1077,8 @@ class SetRecordReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
         outputStream.write_uint16(self.pad2)
         outputStream.write_uint32(self.pad3)
         outputStream.write_uint32(self.numberOfRecordSets)
-        for recordSet in self.recordSets:
-            recordSet.serialize(outputStream)
+        for item in self.recordSets:
+            item.serialize(outputStream)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         super(SetRecordReliablePdu, self)._parseBody(inputStream)
@@ -824,6 +1088,8 @@ class SetRecordReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
         self.pad2 = inputStream.read_uint16()
         self.pad3 = inputStream.read_uint32()
         numberOfRecordSets = inputStream.read_uint32()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
         self.recordSets = [
             RecordSpecificationElement.parseFrom(inputStream)
             for _ in range(numberOfRecordSets)
@@ -835,9 +1101,11 @@ SetRecordRPdu = SetRecordReliablePdu
 
 @dataclass(slots=True)
 class RecordQueryReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
-    """§5.12.4.14 Record Query-R PDU — requests data in record format;
-    the flat record-ID list is the §6.2.72 Record Query Specification.
-    Total base PDU size is 40 bytes plus IDs."""
+    """§5.12.4.14 Record Query-R PDU
+
+    Used to communicate a request for data in record format. Canonical
+    descriptive name; RecordQueryRPdu is an alias.
+    """
 
     pduType: ClassVar[int] = 65  # [UID 4]
 
@@ -848,14 +1116,14 @@ class RecordQueryReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
 
     requestID: uint32 = 0
     requiredReliabilityService: enum8 = 0  # [UID 74]
-    eventType: enum16 = 0  # [UID 334] Record Query-R event type
+    eventType: enum16 = 0  # [UID 334]
     time: uint32 = 0
     recordIDs: list[enum32] = field(default_factory=list)
-
     pad1: uint8 = field(init=False, default=0)
 
     @property
     def numberOfRecords(self) -> uint32:
+        """numberOfRecords."""
         return len(self.recordIDs)
 
     def _marshalledBodySize(self) -> int:
@@ -878,8 +1146,8 @@ class RecordQueryReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
         outputStream.write_uint16(self.eventType)
         outputStream.write_uint32(self.time)
         outputStream.write_uint32(self.numberOfRecords)
-        for recordID in self.recordIDs:
-            outputStream.write_uint32(recordID)
+        for item in self.recordIDs:
+            outputStream.write_uint32(item)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         super(RecordQueryReliablePdu, self)._parseBody(inputStream)
@@ -889,6 +1157,8 @@ class RecordQueryReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
         self.eventType = rich_or_int(334, inputStream.read_uint16())
         self.time = inputStream.read_uint32()
         numberOfRecords = inputStream.read_uint32()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
         self.recordIDs = [
             rich_or_int(66, inputStream.read_uint32()) for _ in range(numberOfRecords)
         ]

@@ -1,13 +1,7 @@
-"""Minefield family (IEEE 1278.1-2012 §7.9) — target-state PDUs.
+"""Minefield family (IEEE 1278.1-2012 §7.9) — target-state PDUs (QRP mode).
 
-Wire ground truth: submodules/open-dis-spec-xml/xml/MinefieldFamilyPdus.xml. Minefield State,
-Query, Data, and Response NACK, with MinefieldDataPdu exercising the
-conditional-attribute vocabulary (presentIf on dataFilter bits, §6.2.16
-Table 38) in FIELD-major order per Table 189 — each per-mine list is a
-contiguous run.
-
-Bitfield maps [UID 192]/[UID 202] ride as raw integers inside the
-per-mine lists; [UID 190] gets a view on the single appearance field.
+Wire ground truth: submodules/open-dis-spec-xml/xml/MinefieldFamilyPdus.xml.
+Minefield State, Query, Data, and Response NACK.
 """
 
 from dataclasses import dataclass, field
@@ -30,6 +24,7 @@ from opendis.types import enum8, enum16, float32, uint8, uint16, uint32
 __all__ = [
     "MineEmplacementTime",
     "MinefieldDataPdu",
+    "MinefieldFamilyPdu",
     "MinefieldIdentifier",
     "MinefieldQueryPdu",
     "MinefieldResponseNACKPdu",
@@ -38,11 +33,17 @@ __all__ = [
 ]
 
 
+def _padTo32(byteCount: int) -> int:
+    """Pad bytes needed to bring a datagram to a 32-bit boundary."""
+    return (4 - byteCount % 4) % 4
+
+
 @dataclass(frozen=True, slots=True)
 class MinefieldIdentifier:
     """§6.2.56 Minefield Identifier record
 
-    Simulation address plus minefield number. Frozen identity type."""
+    The unique designation of a minefield.
+    """
 
     simulationAddress: SimulationAddress = field(default_factory=SimulationAddress)
     minefieldNumber: uint16 = 0
@@ -56,12 +57,14 @@ class MinefieldIdentifier:
 
     @classmethod
     def parse(cls, inputStream: DataInputStream) -> "MinefieldIdentifier":
-        return cls(SimulationAddress.parse(inputStream), inputStream.read_uint16())
+        simulationAddress = SimulationAddress.parse(inputStream)
+        minefieldNumber = inputStream.read_uint16()
+        return cls(simulationAddress, minefieldNumber)
 
 
 @dataclass(slots=True)
 class Vector2Float:
-    """Two 32-bit floating point values (perimeter points, §5.10.2)."""
+    """Two floating point values, x, y."""
 
     x: float32 = 0.0
     y: float32 = 0.0
@@ -79,15 +82,19 @@ class Vector2Float:
 
     @classmethod
     def parseFrom(cls, inputStream: DataInputStream) -> "Vector2Float":
-        vector = cls()
-        vector.parse(inputStream)
-        return vector
+        """Construct a new record from the stream (list-parse helper; the
+        mutating ``parse`` above satisfies the Record protocol)."""
+        item = cls()
+        item.parse(inputStream)
+        return item
 
 
 @dataclass(slots=True)
 class MineEmplacementTime:
-    """Simulation time of mine emplacement (§5.10.4): hour + time past
-    the hour, both 32 bits."""
+    """§6.2.14 Mine Emplacement Time record
+
+    simulation time of emplacement of the mine; Clock Time record,.
+    """
 
     hour: uint32 = 0
     timePastTheHour: uint32 = 0
@@ -105,28 +112,30 @@ class MineEmplacementTime:
 
     @classmethod
     def parseFrom(cls, inputStream: DataInputStream) -> "MineEmplacementTime":
-        time = cls()
-        time.parse(inputStream)
-        return time
-
-
-def _padTo32(byteCount: int) -> int:
-    return (4 - byteCount % 4) % 4
+        """Construct a new record from the stream (list-parse helper; the
+        mutating ``parse`` above satisfies the Record protocol)."""
+        item = cls()
+        item.parse(inputStream)
+        return item
 
 
 @dataclass(slots=True)
 class MinefieldFamilyPdu(Pdu):
-    """§7.9 marker for the Minefield family."""
+    """§7.9 Minefield family PDU
 
-    protocolFamily: ClassVar[int] = 8  # [UID 5]
+    Abstract superclass for PDUs relating to minefields.
+    """
+
+    protocolFamily: ClassVar[int] = 8  # [UID 5] Minefield
 
 
 @dataclass(slots=True)
 class MinefieldStatePdu(MinefieldFamilyPdu):
     """§7.9.2 Minefield State PDU
 
-    Presence, perimeter, protocol mode, and mine types of a minefield.
-    Base PDU size is 72 bytes plus perimeter points and mine types."""
+    Communicate information about the minefield, including the location,
+    perimeter, and types of mines contained within it.
+    """
 
     pduType: ClassVar[int] = 37  # [UID 4]
 
@@ -147,10 +156,12 @@ class MinefieldStatePdu(MinefieldFamilyPdu):
 
     @property
     def numberOfPerimeterPoints(self) -> uint8:
+        """Number of permieter points."""
         return len(self.perimeterPoints)
 
     @property
     def numberOfMineTypes(self) -> uint16:
+        """the number of different mine types employed in the minefield."""
         return len(self.mineType)
 
     def _marshalledBodySize(self) -> int:
@@ -165,8 +176,8 @@ class MinefieldStatePdu(MinefieldFamilyPdu):
             + self.minefieldOrientation.marshalledSize()
             + 2
             + 2
-            + sum(p.marshalledSize() for p in self.perimeterPoints)
-            + sum(t.marshalledSize() for t in self.mineType)
+            + sum(item.marshalledSize() for item in self.perimeterPoints)
+            + sum(item.marshalledSize() for item in self.mineType)
         )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
@@ -179,11 +190,11 @@ class MinefieldStatePdu(MinefieldFamilyPdu):
         self.minefieldLocation.serialize(outputStream)
         self.minefieldOrientation.serialize(outputStream)
         outputStream.write_uint16(int(self.appearance))
-        outputStream.write_uint16(self.protocolMode)
-        for point in self.perimeterPoints:
-            point.serialize(outputStream)
-        for mineType in self.mineType:
-            mineType.serialize(outputStream)
+        outputStream.write_uint16(int(self.protocolMode))
+        for item in self.perimeterPoints:
+            item.serialize(outputStream)
+        for item in self.mineType:
+            item.serialize(outputStream)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         self.minefieldID = MinefieldIdentifier.parse(inputStream)
@@ -196,9 +207,13 @@ class MinefieldStatePdu(MinefieldFamilyPdu):
         self.minefieldOrientation.parse(inputStream)
         self.appearance = MinefieldStateAppearance(inputStream.read_uint16())
         self.protocolMode = inputStream.read_uint16()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
         self.perimeterPoints = [
             Vector2Float.parseFrom(inputStream) for _ in range(numberOfPerimeterPoints)
         ]
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
         self.mineType = [
             EntityType.parse(inputStream) for _ in range(numberOfMineTypes)
         ]
@@ -206,12 +221,11 @@ class MinefieldStatePdu(MinefieldFamilyPdu):
 
 @dataclass(slots=True)
 class MinefieldQueryPdu(MinefieldFamilyPdu):
-    """§7.9.3 Minefield Query PDU (QRP mode)
+    """§7.9.3 Minefield Query PDU
 
-    Requests information on individual mines in a region. The 32-bit
-    dataFilter (§6.2.16 Table 38) selects which per-mine fields the
-    response shall carry. Base PDU size is 40 bytes plus points and
-    sensor types."""
+    Contains information about the requesting entity and the region and mine
+    types of interest to the requesting entity.
+    """
 
     pduType: ClassVar[int] = 38  # [UID 4]
 
@@ -222,18 +236,21 @@ class MinefieldQueryPdu(MinefieldFamilyPdu):
     requestedMineType: EntityType = field(default_factory=EntityType)
     requestedPerimeterPoints: list[Vector2Float] = field(default_factory=list)
     sensorTypes: list[uint16] = field(default_factory=list)
-
+    # Padding ruling: explicit attribute, out of __init__ (zero by default,
+    # holds the wire value after parse so odd pads round-trip byte-exact).
     padding: uint8 = field(init=False, default=0)
 
     @property
     def numberOfPerimeterPoints(self) -> uint8:
+        """Number of perimeter points for the minefield."""
         return len(self.requestedPerimeterPoints)
 
     @property
     def numberOfSensorTypes(self) -> uint8:
+        """Number of sensor types."""
         return len(self.sensorTypes)
 
-    def _marshalledBodySize(self) -> int:
+    def _unpaddedBodySize(self) -> int:
         return (
             self.minefieldID.marshalledSize()
             + self.requestingEntityID.marshalledSize()
@@ -243,9 +260,12 @@ class MinefieldQueryPdu(MinefieldFamilyPdu):
             + 1
             + 4
             + self.requestedMineType.marshalledSize()
-            + sum(p.marshalledSize() for p in self.requestedPerimeterPoints)
+            + sum(item.marshalledSize() for item in self.requestedPerimeterPoints)
             + 2 * len(self.sensorTypes)
         )
+
+    def _marshalledBodySize(self) -> int:
+        return self._unpaddedBodySize() + _padTo32(12 + self._unpaddedBodySize())
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         self.minefieldID.serialize(outputStream)
@@ -256,10 +276,13 @@ class MinefieldQueryPdu(MinefieldFamilyPdu):
         outputStream.write_uint8(self.numberOfSensorTypes)
         outputStream.write_uint32(self.dataFilter)
         self.requestedMineType.serialize(outputStream)
-        for point in self.requestedPerimeterPoints:
-            point.serialize(outputStream)
-        for sensorType in self.sensorTypes:
-            outputStream.write_uint16(sensorType)
+        for item in self.requestedPerimeterPoints:
+            item.serialize(outputStream)
+        for item in self.sensorTypes:
+            outputStream.write_uint16(item)
+        padding = _padTo32(12 + self._unpaddedBodySize())
+        if padding:
+            outputStream.write_bytes(b"\x00" * padding)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         self.minefieldID = MinefieldIdentifier.parse(inputStream)
@@ -270,27 +293,35 @@ class MinefieldQueryPdu(MinefieldFamilyPdu):
         numberOfSensorTypes = inputStream.read_uint8()
         self.dataFilter = inputStream.read_uint32()
         self.requestedMineType = EntityType.parse(inputStream)
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
         self.requestedPerimeterPoints = [
             Vector2Float.parseFrom(inputStream) for _ in range(numberOfPerimeterPoints)
         ]
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
         self.sensorTypes = [
             inputStream.read_uint16() for _ in range(numberOfSensorTypes)
         ]
+        padding = _padTo32(12 + self._unpaddedBodySize())
+        if padding:
+            inputStream.read_bytes(padding)
 
 
 @dataclass(slots=True)
 class MinefieldDataPdu(MinefieldFamilyPdu):
-    """§7.9.4 Minefield Data PDU (QRP mode)
+    """§7.9.4 Minefield Data PDU
 
-    Per-mine data in FIELD-major order (Table 189): each conditional
-    per-mine list is one contiguous run, present when its dataFilter
-    bit (§6.2.16 Table 38) is set — bit 0 ground burial depth offset,
-    1 water, 2 snow, 3 mine orientation, 4 thermal contrast, 5
-    reflectance, 6 emplacement time, 7 trip/detonation wires, 8 fusing,
-    9 scalar detection coefficient, 10 paint scheme. ``mineEntityNumber``
-    is unconditional; scalar detection is N×S (mines × sensor types).
-    The trip-wire section is mine-major for its count lists with all
-    vertices pooled at the end (§5.10.4.5).
+    Information about the location and status of a collection of mines in a
+    minefield is conveyed through the Minefield Data PDU on an individual
+    mine basis.
+
+    Per-mine data in FIELD-major order (Table 189): each conditional per-
+    mine list is one contiguous run, present when its dataFilter bit
+    (§6.2.16 Table 38) is set. ``mineEntityNumber`` is unconditional; scalar
+    detection is N×S (mines × sensor types); the trip-wire section is mine-
+    major for its count lists with all vertices pooled at the end
+    (§5.10.4.5).
 
     # generator: presentIf-driven section presence — the conditional
     # vocabulary's reference implementation; absent sections are simply
@@ -305,7 +336,7 @@ class MinefieldDataPdu(MinefieldFamilyPdu):
     minefieldSequenceNumber: uint16 = 0
     requestID: uint8 = 0
     pduSequenceNumber: uint8 = 0
-    numberOfPdus: uint8 = 0  # PDUs in the whole response (stored field)
+    numberOfPdus: uint8 = 0
     dataFilter: uint32 = 0
     mineType: EntityType = field(default_factory=EntityType)
     sensorTypes: list[uint16] = field(default_factory=list)
@@ -318,14 +349,23 @@ class MinefieldDataPdu(MinefieldFamilyPdu):
     reflectance: list[float32] = field(default_factory=list)
     mineEmplacementTime: list[MineEmplacementTime] = field(default_factory=list)
     mineEntityNumber: list[uint16] = field(default_factory=list)
-    fusing: list[uint16] = field(default_factory=list)  # [UID 192]
+    fusing: list[enum16] = field(default_factory=list)  # [UID 192]
     scalarDetectionCoefficient: list[uint8] = field(default_factory=list)
-    paintScheme: list[uint8] = field(default_factory=list)  # [UID 202]
+    paintScheme: list[enum8] = field(default_factory=list)  # [UID 202]
     numberOfTripDetonationWires: list[uint8] = field(default_factory=list)
     numberOfVertices: list[uint8] = field(default_factory=list)
     vertices: list[Vector3Float] = field(default_factory=list)
-
     padding: uint8 = field(init=False, default=0)
+
+    @property
+    def numberOfMinesInThisPdu(self) -> uint8:
+        """how many mines are in this PDU."""
+        return len(self.mineLocation)
+
+    @property
+    def numberOfSensorTypes(self) -> uint8:
+        """how many sensor type are in this PDU."""
+        return len(self.sensorTypes)
 
     # dataFilter bit numbers (§6.2.16 Table 38)
     GROUND: ClassVar[int] = 0
@@ -339,14 +379,6 @@ class MinefieldDataPdu(MinefieldFamilyPdu):
     FUSING: ClassVar[int] = 8
     SCALAR: ClassVar[int] = 9
     PAINT: ClassVar[int] = 10
-
-    @property
-    def numberOfMinesInThisPdu(self) -> uint8:
-        return len(self.mineLocation)
-
-    @property
-    def numberOfSensorTypes(self) -> uint8:
-        return len(self.sensorTypes)
 
     def _filter(self, bit: int) -> bool:
         return bool((int(self.dataFilter) >> bit) & 1)
@@ -387,7 +419,7 @@ class MinefieldDataPdu(MinefieldFamilyPdu):
     def _wireVertexCount(self) -> int:
         return sum(self.numberOfVertices)
 
-    def _marshalledBodySize(self) -> int:
+    def _marshalledBodySize(self):
         n = self.numberOfMinesInThisPdu
         s = self.numberOfSensorTypes
         consumed = 12 + self._prefixSize()
@@ -423,7 +455,7 @@ class MinefieldDataPdu(MinefieldFamilyPdu):
             consumed += 12 * self._wireVertexCount()
         return consumed - 12
 
-    def _serializeBody(self, outputStream: DataOutputStream) -> None:
+    def _serializeBody(self, outputStream: DataOutputStream):
         n = self.numberOfMinesInThisPdu
         consumed = 12 + self._prefixSize()
         self.minefieldID.serialize(outputStream)
@@ -504,7 +536,7 @@ class MinefieldDataPdu(MinefieldFamilyPdu):
                 vertex.serialize(outputStream)
             consumed += 12 * len(self.vertices)
 
-    def _parseBody(self, inputStream: DataInputStream) -> None:
+    def _parseBody(self, inputStream: DataInputStream):
         self.minefieldID = MinefieldIdentifier.parse(inputStream)
         self.requestingEntityID = EntityIdentifier.parse(inputStream)
         self.minefieldSequenceNumber = inputStream.read_uint16()
@@ -604,10 +636,12 @@ class MinefieldDataPdu(MinefieldFamilyPdu):
 
 @dataclass(slots=True)
 class MinefieldResponseNACKPdu(MinefieldFamilyPdu):
-    """§7.9.5 Minefield Response NACK PDU (QRP mode)
+    """§7.9.5 Minefield Response NACK PDU
 
-    Requests retransmission of Minefield Data PDUs not received. Base
-    PDU size is 26 bytes plus missing sequence numbers."""
+    Contains information about the requesting entity and the PDU(s) that
+    were not received in response to a query. NACK = Negative
+    Acknowledgment.
+    """
 
     pduType: ClassVar[int] = 40  # [UID 4]
 
@@ -618,9 +652,10 @@ class MinefieldResponseNACKPdu(MinefieldFamilyPdu):
 
     @property
     def numberOfMissingPdus(self) -> uint8:
+        """how many pdus were missing."""
         return len(self.missingPduSequenceNumbers)
 
-    def _marshalledBodySize(self) -> int:
+    def _unpaddedBodySize(self) -> int:
         return (
             self.minefieldID.marshalledSize()
             + self.requestingEntityID.marshalledSize()
@@ -629,19 +664,30 @@ class MinefieldResponseNACKPdu(MinefieldFamilyPdu):
             + len(self.missingPduSequenceNumbers)
         )
 
+    def _marshalledBodySize(self) -> int:
+        return self._unpaddedBodySize() + _padTo32(12 + self._unpaddedBodySize())
+
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         self.minefieldID.serialize(outputStream)
         self.requestingEntityID.serialize(outputStream)
         outputStream.write_uint8(self.requestID)
         outputStream.write_uint8(self.numberOfMissingPdus)
-        for sequenceNumber in self.missingPduSequenceNumbers:
-            outputStream.write_uint8(sequenceNumber)
+        for item in self.missingPduSequenceNumbers:
+            outputStream.write_uint8(item)
+        padding = _padTo32(12 + self._unpaddedBodySize())
+        if padding:
+            outputStream.write_bytes(b"\x00" * padding)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         self.minefieldID = MinefieldIdentifier.parse(inputStream)
         self.requestingEntityID = EntityIdentifier.parse(inputStream)
         self.requestID = inputStream.read_uint8()
         numberOfMissingPdus = inputStream.read_uint8()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
         self.missingPduSequenceNumbers = [
             inputStream.read_uint8() for _ in range(numberOfMissingPdus)
         ]
+        padding = _padTo32(12 + self._unpaddedBodySize())
+        if padding:
+            inputStream.read_bytes(padding)

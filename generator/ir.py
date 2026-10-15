@@ -87,6 +87,74 @@ class ObjectList:
 
 
 @dataclass(frozen=True)
+class PrimitiveList:
+    """A variable-length list of one primitive type with a count field.
+
+    Same counts-as-length contract as ObjectList; elements may be rich
+    enums when ``element_uid`` is set (Data Query datum-ID lists).
+    ``count_expr``/``count_list`` carry the minefield count vocabulary
+    (N×M products and per-element count lists) — both are beyond the
+    plain count-field form and fail loud in the emitter.
+    """
+
+    element: str  # primitive wire type, e.g. "uint16"
+    count_field: str
+    element_uid: int | None = None
+    count_expr: str | None = None
+    count_list: str | None = None
+
+
+@dataclass(frozen=True)
+class BytesPayload:
+    """A byte payload whose wire length counts BITS.
+
+    The paired hidden count field is derived: ``len(payload) * 8``. The
+    2012 standard uses bit counts here (Variable Datum §6.2.93, Signal
+    and Intercom Signal §7.7); non-multiple-of-8 counts are unsupported
+    (sample-review open question 6 ruling). ``bit_count_field=None``
+    marks an expression-sized payload (§6.2.73 record sets): every wire
+    method is curated.
+    """
+
+    bit_count_field: str | None
+    count_is_bits: bool = True  # False: the paired count is in bytes
+
+
+@dataclass(frozen=True)
+class OptionalRecord:
+    """A single record that may be absent on the wire (Transmitter's
+    Modulation Parameters / Antenna Pattern): ``X | None = None``. The
+    wire methods are always curated (presence dispatch is beyond
+    mechanical generation)."""
+
+    target: str  # Python class name (usually a hand seam class)
+
+
+@dataclass(frozen=True)
+class CuratedField:
+    """A field whose shape is fully curated (annotation + default +
+    rider text): the flag-conditional optionals of the LE conditional
+    vocabulary. The owning class's wire methods are curated."""
+
+    annotation: str
+    default: str
+    rider: str | None = None
+
+
+@dataclass(frozen=True)
+class PadToBoundary:
+    """An alignment pad computed by the packer, never instance state.
+
+    The exemplar's shape: size/serialize/parse compute the pad from the
+    running byte count (unnamed alignment pads stay packer-computed,
+    2026-10-14 ruling). Mechanical method emission refuses these classes
+    — their wire methods are curated.
+    """
+
+    length: int  # bit boundary (32/64)
+
+
+@dataclass(frozen=True)
 class Unsupported:
     """A construct this generator version does not handle — fail loud."""
 
@@ -114,6 +182,11 @@ Shape = (
     | FixedBytes
     | BitfieldRef
     | ObjectList
+    | PrimitiveList
+    | BytesPayload
+    | OptionalRecord
+    | CuratedField
+    | PadToBoundary
     | Unsupported
     | VariantGroup
 )
@@ -127,7 +200,9 @@ class Attribute:
     present_if: str | None = None
     hidden: bool = False  # wire-only count field, derived on the Python side
     count_for: str | None = None  # for hidden counts: the list field sized
+    count_bits: bool = False  # hidden count is a bit count (BytesPayload)
     viewable: bool = False  # primitive-bound: parse may attach a curated view
+    pad: bool = False  # named padding primitive: field(init=False), grouped last
 
 
 @dataclass

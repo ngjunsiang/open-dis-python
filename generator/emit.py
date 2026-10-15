@@ -16,6 +16,10 @@ from .xmlload import SpecError
 
 ENUM_IO = {8: "uint8", 16: "uint16", 32: "uint32"}
 
+# The kernel PduHeader's marshalled size (bytes). Whole-datagram alignment
+# pads are computed against header + body (opendis/record/pdu.py).
+HEADER_BYTES = 12
+
 # types-import ordering: kind group (enum, float, uint, int, ...), then
 # width — matches the exemplar's hand order (enum8, enum16, float32,
 # float64, uint8, uint16, uint32)
@@ -78,6 +82,19 @@ def canonical_docstring(comment: str | None, title: str | None, fallback: str) -
     return doc
 
 
+def _count_doc(attr: ir.Attribute) -> str:
+    """Count-property docstring: the XML comment's body with trailing
+    citations stripped (the §N.N header hoist is a class-docstring rule;
+    count properties stand as plain prose)."""
+    text = _normalize_cites((attr.comment or "").strip())
+    text = re.sub(rf"[,;]?\s*§{_CITE}\.?$", "", text).rstrip()
+    if not text:
+        return attr.name
+    if not text.endswith((".", "!", "?", ":")):
+        text += "."
+    return "\n".join(textwrap.wrap(text, width=72) or [text])
+
+
 def _wrap_prose(text: str) -> str:
     """Wrap curated prose at 72 cols; paragraphs made entirely of comment
     lines (``# generator:`` notes) stay verbatim."""
@@ -94,7 +111,8 @@ def _wrap_prose(text: str) -> str:
 
 def _import_stmt(module: str, names: list[str]) -> list[str]:
     """One-line import when it fits 88 cols (black-stable), else the
-    magic-trailing-comma exploded form black preserves."""
+    magic-trailing-comma exploded form black preserves. Entries may
+    carry ``orig as alias`` forms verbatim."""
     single = f"from {module} import {', '.join(names)}"
     if len(single) <= 88:
         return [single]
@@ -218,11 +236,35 @@ class _ModuleInfo:
             pass
         elif isinstance(shape, ir.BitfieldRef):
             self.type_names.add(f"uint{shape.size}")
+            view = overrides.VIEW_ATTACHES.get((owner, attr.name))
+            if view:
+                # local names ending in ``View`` are aliased imports
+                canonical = view[:-4] if view.endswith("View") else view
+                self.add_import(
+                    "opendis.bitfields", f"{canonical} as {view}" if canonical != view else view
+                )
         elif isinstance(shape, ir.ObjectList):
             self.uses_dataclass_field = True
+            if (owner, attr.name) in overrides.REGISTRY_LISTS:
+                return  # plain list; elements decode via the SV registry
             home = self.module_path(shape.element)
             if home and home != f"opendis.record.{self.module}":
                 self.add_import(home, shape.element)
+        elif isinstance(shape, ir.PrimitiveList):
+            self.uses_dataclass_field = True
+            if shape.element_uid is not None:
+                self.uses_rich_or_int = True
+                self.type_names.add(
+                    ir.ENUM_ANN[ir.PRIM_BITS[shape.element]]
+                )
+            else:
+                self.type_names.add(shape.element)
+        elif isinstance(shape, ir.CuratedField):
+            # curated annotations still need their type imports
+            for tok in re.findall(r"\b(enum\d+|u?int\d+|float\d+)\b", shape.annotation):
+                self.type_names.add(tok)
+        elif isinstance(shape, (ir.BytesPayload, ir.OptionalRecord, ir.PadToBoundary)):
+            pass  # payload is bytes; optional records parse curated; pads packer-computed
         elif isinstance(shape, ir.VariantGroup):
             when_member, default = _variant_members(shape, attr.name)
             for member in (when_member, default):
@@ -259,7 +301,10 @@ def _doc_block(text: str, pad: str, close_alone: bool = True) -> list[str]:
 
 
 def emit_module(
-    records: dict[str, ir.RecordClass], order: list[str], module: str
+    records: dict[str, ir.RecordClass],
+    order: list[str],
+    module: str,
+    list_elements: set[str] = frozenset(),
 ) -> str:
     info = _ModuleInfo(records, order, module)
     lines: list[str] = []
@@ -268,6 +313,9 @@ def emit_module(
     if doc:
         lines += _doc_block(doc, pad="", close_alone=True)
         lines.append("")
+
+    for extra in overrides.MODULE_IMPORT_LINES.get(module, []):
+        lines.append(extra)
 
     dc_names = ["dataclass"] + (["field"] if info.uses_dataclass_field else [])
     lines.append(f"from dataclasses import {', '.join(dc_names)}")
@@ -329,16 +377,33 @@ def emit_module(
             lines.append(f"{const} = {uid}")
 
     insertions = dict(overrides.MODULE_SOURCES.get(module, []))
-    list_elements = {
-        s.element
-        for name in order
-        for attr in records[name].attributes
-        if isinstance((s := attr.shape), ir.ObjectList)
-    }
+    # the padding ruling comment rides the first pad field of the module
+    pad_owner = next(
+        (
+            name
+            for name in order
+            if any(a.pad for a in records[name].attributes)
+        ),
+        None,
+    )
+    # trailing whole-datagram alignment pads need the shared helper
+    needs_pad_helper = any(
+        attrs
+        and isinstance(attrs[-1].shape, ir.PadToBoundary)
+        for attrs in (records[name].attributes for name in order)
+    )
+    if needs_pad_helper:
+        lines.append("")
+        lines.append("")
+        lines.append("def _padTo32(byteCount: int) -> int:")
+        lines.append('    """Pad bytes needed to bring a datagram to a 32-bit boundary."""')
+        lines.append("    return (4 - byteCount % 4) % 4")
     for name in order:
         lines.append("")
         lines.append("")
-        _emit_record(records[name], records, lines, list_elements)
+        _emit_record(
+            records[name], records, lines, list_elements, name == pad_owner
+        )
         tail = overrides.CLASS_TAILS.get(name)
         if tail:
             lines.append("")
@@ -353,11 +418,18 @@ def emit_module(
     return "\n".join(lines) + "\n"
 
 
+_PAD_RULING = (
+    "# Padding ruling: explicit attribute, out of __init__ (zero by default,\n"
+    "# holds the wire value after parse so odd pads round-trip byte-exact)."
+)
+
+
 def _emit_record(
     rec: ir.RecordClass,
     records: dict[str, ir.RecordClass],
     lines: list[str],
     list_elements: set[str] = frozenset(),
+    first_pad: bool = False,
 ) -> None:
     if rec.frozen:
         lines.append("@dataclass(frozen=True, slots=True)")
@@ -369,8 +441,12 @@ def _emit_record(
         lines.append(f"class {rec.name}:")
     doc = overrides.DOCSTRING_OVERRIDES.get(rec.name)
     if doc is None:
+        cite = overrides.DOCSTRING_CITES.get(rec.name)
+        comment = rec.comment
+        if cite is not None:
+            comment = _replace_leading_cite(comment, cite)
         doc = canonical_docstring(
-            rec.comment, overrides.DOCSTRING_TITLES.get(rec.name), rec.name
+            comment, overrides.DOCSTRING_TITLES.get(rec.name), rec.name
         )
         addendum = overrides.DOCSTRING_ADDENDA.get(rec.name)
         if addendum:
@@ -392,65 +468,177 @@ def _emit_record(
         lines.append("    }")
         lines.append("")
 
-    for attr in rec.attributes:
-        if attr.hidden:
-            continue  # wire-only count: derived property below, never state
+    super_base = _super_base(rec, records)
+    # fields inherited from a generated PDU base come through the class
+    # hierarchy (its body methods run via the two-arg super calls)
+    inherited = (
+        {a.name for a in records[super_base].attributes} if super_base else set()
+    )
+    wire = [a for a in rec.attributes if a.name not in inherited]
+
+    pads = [a for a in wire if a.pad]
+    for attr in wire:
+        if attr.hidden or attr.pad or isinstance(attr.shape, ir.PadToBoundary):
+            continue  # hidden counts: property below; pads: grouped last;
+            # alignment pads: packer-computed, never fields
         lines.append(_field_line(rec.name, attr))
         field_doc = overrides.FIELD_DOCSTRINGS.get((rec.name, attr.name))
         if field_doc:
             lines += _doc_block(field_doc, pad="    ", close_alone=False)
 
-    for attr in rec.attributes:
+    if pads:
+        if first_pad:
+            for ln in _PAD_RULING.split("\n"):
+                lines.append(f"    {ln}")
+        for attr in pads:
+            lines.append(_field_line(rec.name, attr))
+
+    for attr in wire:
         if attr.hidden:
             lines.append("")
             lines.append("    @property")
             lines.append(f"    def {attr.name}(self) -> {attr.shape.type}:")
-            prop_doc = canonical_docstring(attr.comment, None, attr.name)
-            lines += _doc_block(prop_doc, pad="        ")
-            lines.append(f"        return len(self.{attr.count_for})")
+            lines += _doc_block(_count_doc(attr), pad="        ")
+            if attr.count_bits:
+                lines.append(f"        return len(self.{attr.count_for}) * 8")
+            else:
+                lines.append(f"        return len(self.{attr.count_for})")
 
     if not rec.is_pdu:
         _emit_class_vars(class_vars, lines, leading_blank=True)
 
     member = overrides.CLASS_MEMBERS.get(rec.name)
-    if member:
+    if member and not member.after_methods:
         lines.append("")
         lines += [f"    {ln}" if ln.strip() else "" for ln in member.source.split("\n")]
 
     if not rec.attributes:
         return  # family markers carry no wire body — methods inherit
 
+    body = overrides.METHOD_BODIES.get(rec.name)
     size_name, ser_name, parse_name = (
         ("_marshalledBodySize", "_serializeBody", "_parseBody")
         if rec.is_pdu
         else ("marshalledSize", "serialize", "parse")
     )
-    lines.append("")
-    lines.append(f"    def {size_name}(self) -> int:")
-    lines.append(f"        {_marshalled_expr(rec)}")
-    lines.append("")
-    lines.append(f"    def {ser_name}(self, outputStream: DataOutputStream) -> None:")
-    for attr in rec.attributes:
-        lines.append(_serialize_line(attr))
-    lines.append("")
-    if rec.frozen:
-        lines.append("    @classmethod")
+    trailing_pad = wire and isinstance(wire[-1].shape, ir.PadToBoundary)
+    mid_body_pads = [
+        a
+        for a in (wire[:-1] if trailing_pad else wire)
+        if isinstance(a.shape, ir.PadToBoundary)
+    ]
+    if mid_body_pads and not (body and size_name in body):
+        raise SpecError(
+            f"{rec.name!r} carries mid-body alignment pads — its wire "
+            "methods must be curated (METHOD_BODIES)"
+        )
+    if body and size_name in body:
+        _emit_method(lines, size_name, ["self"], body[size_name])
+    elif trailing_pad:
+        # whole-datagram alignment pad: size + pad(12-header + size), and
+        # the pad bytes ride serialize/parse via the unpadded helper
+        lines.append("")
+        lines.append(f"    def _unpaddedBodySize(self) -> int:")
+        for ln in _size_stmts(rec, super_base, wire[:-1]):
+            lines.append(ln)
+        lines.append("")
+        lines.append(f"    def {size_name}(self) -> int:")
         lines.append(
-            f'    def parse(cls, inputStream: DataInputStream) -> "{rec.name}":'
+            f"        return self._unpaddedBodySize() + "
+            f"_padTo32({HEADER_BYTES} + self._unpaddedBodySize())"
         )
     else:
-        lines.append(
-            f"    def {parse_name}(self, inputStream: DataInputStream) -> None:"
+        lines.append("")
+        lines.append(f"    def {size_name}(self) -> int:")
+        for ln in _size_stmts(rec, super_base, wire):
+            lines.append(ln)
+    if body and ser_name in body:
+        _emit_method(
+            lines, ser_name, ["self", "outputStream: DataOutputStream"], body[ser_name]
         )
-    stmts, args = _parse_pieces(rec, records)
-    lines += stmts
-    if rec.frozen:
-        lines.append(f"        return cls({', '.join(args)})")
+    else:
+        lines.append("")
+        lines.append(f"    def {ser_name}(self, outputStream: DataOutputStream) -> None:")
+        if super_base:
+            lines.append(f"        super({rec.name}, self).{ser_name}(outputStream)")
+        for attr in wire:
+            if isinstance(attr.shape, ir.PadToBoundary):
+                continue  # trailing alignment pad: emitted as a block below
+            lines += _serialize_line(rec.name, attr)
+        if trailing_pad:
+            lines.append(
+                f"        padding = _padTo32({HEADER_BYTES} + self._unpaddedBodySize())"
+            )
+            lines.append("        if padding:")
+            lines.append('            outputStream.write_bytes(b"\\x00" * padding)')
+        lines.append("")
+    parse_header = "inputStream: DataInputStream"
+    if body and parse_name in body:
+        params = overrides.METHOD_PARAMS.get((rec.name, parse_name))
+        if params is not None:
+            _emit_method(
+                lines,
+                parse_name,
+                params,
+                body[parse_name],
+                decorators=["classmethod"] if params and params[0] == "cls" else None,
+                ret=f'"{rec.name}"',
+            )
+        elif rec.frozen:
+            _emit_method(
+                lines,
+                parse_name,
+                ["cls", f"inputStream: DataInputStream"],
+                body[parse_name],
+                decorators=["classmethod"],
+                ret=f'"{rec.name}"',
+            )
+        else:
+            _emit_method(
+                lines, parse_name, ["self", parse_header], body[parse_name]
+            )
+    else:
+        if rec.frozen:
+            lines.append("    @classmethod")
+            lines.append(
+                f'    def parse(cls, inputStream: DataInputStream) -> "{rec.name}":'
+            )
+        else:
+            lines.append(
+                f"    def {parse_name}(self, inputStream: DataInputStream) -> None:"
+            )
+        stmts, args = _parse_pieces(rec, super_base, wire, records)
+        uses_registry = any(
+            isinstance(a.shape, ir.ObjectList)
+            and (rec.name, a.name) in overrides.REGISTRY_LISTS
+            for a in wire
+        )
+        if uses_registry:
+            stmts.insert(
+                1 if super_base else 0,
+                "        from opendis.record import parseStandardVariableRecord",
+            )
+            stmts.insert(
+                2 if super_base else 1, ""
+            )
+        if trailing_pad:
+            stmts.append(
+                f"        padding = _padTo32({HEADER_BYTES} + self._unpaddedBodySize())"
+            )
+            stmts.append("        if padding:")
+            stmts.append("            inputStream.read_bytes(padding)")
+        lines += stmts
+        if rec.frozen:
+            lines.append(f"        return cls({', '.join(args)})")
 
     tail = overrides.PARSE_TAILS.get(rec.name)
     if tail:
         lines.append("")
         lines += [f"        {ln}" if ln.strip() else "" for ln in tail.split("\n")]
+
+    if member and member.after_methods:
+        lines.append("")
+        lines += [f"    {ln}" if ln.strip() else "" for ln in member.source.split("\n")]
 
     if rec.name in list_elements and not rec.frozen:
         # list-parse helper (mechanical; the exemplar families' convention)
@@ -468,6 +656,62 @@ def _emit_record(
         lines.append("        item = cls()")
         lines.append("        item.parse(inputStream)")
         lines.append("        return item")
+
+
+def _super_base(
+    rec: ir.RecordClass, records: dict[str, ir.RecordClass]
+) -> str | None:
+    """Parent whose generated body methods this class extends (two-arg
+    super, ruled for slots dataclasses)."""
+    if not rec.is_pdu or rec.parent is None:
+        return None
+    parent = records.get(rec.parent)
+    if parent is None or not parent.is_pdu or not parent.attributes:
+        return None
+    return parent.name
+
+
+def _replace_leading_cite(comment: str | None, cite: str) -> str | None:
+    """Swap a stale XML leading citation (1995-edition PDU numbering)
+    for the standard's 2012 number; the body text stays XML-canonical."""
+    if not comment:
+        return comment
+    return re.sub(rf"^({_CITE})\.?[ \t]+", f"{cite} ", comment.strip(), count=1)
+
+
+def _emit_method(
+    lines: list[str],
+    name: str,
+    params: list[str],
+    source: str,
+    decorators: list[str] | None = None,
+    ret: str | None = None,
+) -> None:
+    sig = f"def {name}({', '.join(params)})"
+    if ret:
+        sig += f" -> {ret}"
+    for dec in decorators or []:
+        lines.append(f"    @{dec}")
+    lines.append(f"    {sig}:")
+    lines += [f"        {ln}" if ln.strip() else "" for ln in source.split("\n")]
+
+
+def _size_stmts(
+    rec: ir.RecordClass,
+    super_base: str | None,
+    wire: list[ir.Attribute],
+) -> list[str]:
+    expr = _marshalled_expr(rec, super_base, wire)
+    single = f"        return {expr}"
+    if len(single) <= 88:
+        return [single]
+    # black's style: one term per line inside parentheses
+    parts = expr.split(" + ")
+    lines = ["        return (", f"            {parts[0]}"]
+    for part in parts[1:]:
+        lines.append(f"            + {part}")
+    lines.append("        )")
+    return lines
 
 
 def _emit_class_vars(
@@ -500,7 +744,10 @@ def _field_enum_entries(rec: ir.RecordClass) -> list[tuple[str, str]]:
 def _field_line(owner: str, attr: ir.Attribute) -> str:
     shape = attr.shape
     if isinstance(shape, ir.Primitive):
-        ann, default = shape.type, _prim_default(shape.type)
+        if attr.pad:
+            ann, default = shape.type, "field(init=False, default=0)"
+        else:
+            ann, default = shape.type, _prim_default(shape.type)
     elif isinstance(shape, ir.EnumRef):
         ann, default = ir.ENUM_ANN[shape.size], "0"
     elif isinstance(shape, ir.ClassRef):
@@ -511,17 +758,56 @@ def _field_line(owner: str, attr: ir.Attribute) -> str:
     elif isinstance(shape, ir.BitfieldRef):
         ann, default = f"uint{shape.size}", "0"
     elif isinstance(shape, ir.ObjectList):
-        ann, default = f"list[{shape.element}]", "field(default_factory=list)"
+        if (owner, attr.name) in overrides.REGISTRY_LISTS:
+            ann, default = "list", "field(default_factory=list)"
+        else:
+            ann, default = f"list[{shape.element}]", "field(default_factory=list)"
+    elif isinstance(shape, ir.PrimitiveList):
+        if shape.element_uid is not None:
+            ann = f"list[{ir.ENUM_ANN[ir.PRIM_BITS[shape.element]]}]"
+        else:
+            ann = f"list[{shape.element}]"
+        default = "field(default_factory=list)"
+    elif isinstance(shape, ir.BytesPayload):
+        ann, default = "bytes", 'b""'
+    elif isinstance(shape, ir.OptionalRecord):
+        ann, default = f"{shape.target} | None", "None"
+    elif isinstance(shape, ir.CuratedField):
+        return f"    {attr.name}: {shape.annotation} = {shape.default}" + (
+            f"  # {shape.rider}" if shape.rider else ""
+        )
     elif isinstance(shape, ir.VariantGroup):
         _, default_member = _variant_members(shape, attr.name)
         ann, default = ir.ENUM_ANN[default_member.size], "0"
+    elif isinstance(shape, ir.PadToBoundary):
+        raise SpecError(
+            f"alignment pad {attr.name!r} on {owner!r} is packer-computed — "
+            "the class needs curated wire methods"
+        )
     else:
         raise SpecError(f"unsupported field {attr.name!r}")
     line = f"    {attr.name}: {ann} = {default}"
-    rider = overrides.FIELD_RIDERS.get((owner, attr.name)) or _uid_rider(attr)
+    rider = (
+        overrides.FIELD_RIDERS.get((owner, attr.name))
+        or _view_rider(owner, attr)
+        or _uid_rider(attr)
+    )
     if rider:
         line += f"  # {rider}"
     return line
+
+
+def _view_rider(owner: str, attr: ir.Attribute) -> str | None:
+    """BitfieldRef rider when a curated view attaches at parse."""
+    shape = attr.shape
+    if (owner, attr.name) not in overrides.VIEW_ATTACHES:
+        return None
+    if not isinstance(shape, ir.BitfieldRef):
+        raise SpecError(f"view attach on non-bitfield field {owner}.{attr.name}")
+    local = overrides.VIEW_ATTACHES[(owner, attr.name)]
+    if local.endswith("View"):
+        return f"[UID {shape.uid}] or the {local[:-4]} view"
+    return f"[UID {shape.uid}] or the view"
 
 
 def _uid_rider(attr: ir.Attribute) -> str | None:
@@ -539,10 +825,15 @@ def _uid_rider(attr: ir.Attribute) -> str | None:
     return None
 
 
-def _marshalled_expr(rec: ir.RecordClass) -> str:
+def _marshalled_expr(
+    rec: ir.RecordClass, super_base: str | None = None, wire: list | None = None
+) -> str:
     parts: list[str] = []
     has_ref = False
-    for attr in rec.attributes:
+    if super_base:
+        parts.append(f"super({rec.name}, self)._marshalledBodySize()")
+        has_ref = True
+    for attr in (wire if wire is not None else rec.attributes):
         shape = attr.shape
         if attr.hidden:
             # wire-only count byte: contributes to size, never to state
@@ -550,9 +841,23 @@ def _marshalled_expr(rec: ir.RecordClass) -> str:
         elif isinstance(shape, ir.ClassRef):
             has_ref = True
             parts.append(f"self.{attr.name}.marshalledSize()")
-        elif isinstance(shape, ir.ObjectList):
+        elif isinstance(shape, (ir.ObjectList, ir.PrimitiveList)):
             has_ref = True
-            parts.append(f"sum(item.marshalledSize() for item in self.{attr.name})")
+            if isinstance(shape, ir.ObjectList):
+                parts.append(
+                    f"sum(item.marshalledSize() for item in self.{attr.name})"
+                )
+            else:
+                width = ir.PRIM_BITS[shape.element] // 8
+                size_expr = (
+                    f"len(self.{attr.name})"
+                    if width == 1
+                    else f"{width} * len(self.{attr.name})"
+                )
+                parts.append(size_expr)
+        elif isinstance(shape, ir.BytesPayload):
+            has_ref = True
+            parts.append(f"len(self.{attr.name})")
         elif isinstance(shape, (ir.EnumRef, ir.VariantGroup)):
             size = (
                 shape.size
@@ -566,28 +871,49 @@ def _marshalled_expr(rec: ir.RecordClass) -> str:
             parts.append(str(shape.size // 8))
         elif isinstance(shape, ir.FixedBytes):
             parts.append(str(shape.length))
+        elif isinstance(shape, ir.PadToBoundary):
+            raise SpecError(
+                f"alignment pad {attr.name!r} on {rec.name!r}: size is "
+                "packer-computed — curated methods required"
+            )
     if not has_ref:
-        return f"return {sum(int(p) for p in parts)}"
-    return "return " + " + ".join(parts)
+        return str(sum(int(p) for p in parts))
+    return " + ".join(parts)
 
 
-def _serialize_line(attr: ir.Attribute) -> str:
+def _serialize_line(owner: str, attr: ir.Attribute) -> list[str]:
     shape = attr.shape
     if isinstance(shape, ir.ClassRef):
-        return f"        self.{attr.name}.serialize(outputStream)"
+        return [f"        self.{attr.name}.serialize(outputStream)"]
     if isinstance(shape, ir.Primitive):
         if attr.viewable:
             # curated parse may attach a bitfield view; int() converts back
-            return f"        outputStream.write_{shape.type}(int(self.{attr.name}))"
-        return f"        outputStream.write_{shape.type}(self.{attr.name})"
+            return [f"        outputStream.write_{shape.type}(int(self.{attr.name}))"]
+        return [f"        outputStream.write_{shape.type}(self.{attr.name})"]
     if isinstance(shape, ir.BitfieldRef):
         # raw integer on the wire; parsed views convert back via int()
-        return f"        outputStream.write_uint{shape.size}(int(self.{attr.name}))"
-    if isinstance(shape, ir.ObjectList):
-        return (
-            f"        for item in self.{attr.name}:\n"
-            f"            item.serialize(outputStream)"
-        )
+        return [f"        outputStream.write_uint{shape.size}(int(self.{attr.name}))"]
+    if isinstance(shape, (ir.ObjectList, ir.PrimitiveList)):
+        if isinstance(shape, ir.ObjectList):
+            if (owner, attr.name) in overrides.REGISTRY_LISTS:
+                return [
+                    f"        for item in self.{attr.name}:",
+                    f"            item.serialize(outputStream)",
+                ]
+            return [
+                f"        for item in self.{attr.name}:",
+                f"            item.serialize(outputStream)",
+            ]
+        io = shape.element
+        if shape.element_uid is not None:
+            return [
+                f"        for item in self.{attr.name}:",
+                f"            outputStream.write_{io}(item)",
+            ]
+        return [
+            f"        for item in self.{attr.name}:",
+            f"            outputStream.write_{io}(item)",
+        ]
     if isinstance(shape, (ir.EnumRef, ir.VariantGroup)):
         if isinstance(shape, ir.VariantGroup):
             _, default = _variant_members(shape, attr.name)
@@ -595,24 +921,43 @@ def _serialize_line(attr: ir.Attribute) -> str:
         else:
             size = shape.size
         io = ENUM_IO[size]
-        return f"        outputStream.write_{io}(self.{attr.name})"
+        return [f"        outputStream.write_{io}(self.{attr.name})"]
     if isinstance(shape, ir.FixedBytes):
         n = shape.length
-        return (
+        return [
             f"        outputStream.write_bytes("
             f'self.{attr.name}[:{n}].ljust({n}, b"\\x00"))'
+        ]
+    if isinstance(shape, ir.BytesPayload):
+        if shape.bit_count_field is None:
+            raise SpecError(
+                f"bytes payload {attr.name!r} on {owner!r}: serialize is "
+                "curated (expression-sized payload)"
+            )
+        return [f"        outputStream.write_bytes(self.{attr.name})"]
+    if isinstance(shape, ir.PadToBoundary):
+        raise SpecError(
+            f"alignment pad {attr.name!r} on {owner!r}: serialize is "
+            "packer-computed — curated methods required"
         )
     raise SpecError(f"cannot serialize field {attr.name!r}")
 
 
 def _parse_pieces(
-    rec: ir.RecordClass, records: dict[str, ir.RecordClass]
+    rec: ir.RecordClass,
+    super_base: str | None = None,
+    wire: list | None = None,
+    records: dict[str, ir.RecordClass] | None = None,
 ) -> tuple[list[str], list[str]]:
     """Returns (statement lines, positional cls() args) — args only for
     frozen records; mutable records use self-assignments instead."""
     stmts: list[str] = []
     args: list[str] = []
-    for attr in rec.attributes:
+    if super_base:
+        stmts.append(f"        super({rec.name}, self)._parseBody(inputStream)")
+    for attr in (wire if wire is not None else rec.attributes):
+        if isinstance(attr.shape, ir.PadToBoundary):
+            continue  # trailing alignment pad: parse block handles it
         shape = attr.shape
         if isinstance(shape, ir.Primitive):
             expr = f"inputStream.read_{shape.type}()"
@@ -626,8 +971,12 @@ def _parse_pieces(
             expr = f"rich_or_int({shape.uid}, inputStream.read_{io}())"
             _emit_value(rec, attr.name, expr, stmts, args)
         elif isinstance(shape, ir.ClassRef):
-            target = records[shape.target]
-            if target.frozen:
+            target = (
+                records[shape.target]
+                if records is not None
+                else None
+            )
+            if target is not None and target.frozen:
                 expr = f"{shape.target}.parse(inputStream)"
                 _emit_value(rec, attr.name, expr, stmts, args)
             elif rec.frozen:
@@ -643,17 +992,64 @@ def _parse_pieces(
             _emit_value(rec, attr.name, expr, stmts, args)
         elif isinstance(shape, ir.BitfieldRef):
             expr = f"inputStream.read_uint{shape.size}()"
+            view = overrides.VIEW_ATTACHES.get((rec.name, attr.name))
+            if view:
+                expr = f"{view}({expr})"
             _emit_value(rec, attr.name, expr, stmts, args)
         elif isinstance(shape, ir.ObjectList):
+            if (rec.name, attr.name) in overrides.REGISTRY_LISTS:
+                # uid-66 Standard Variable records: registry decode; the
+                # deferred import leads _parseBody (record/__init__ imports
+                # the family modules, so a module-level import would cycle)
+                stmts.append(
+                    "        # Never append to a pre-existing list (instance-reuse "
+                    "corruption,"
+                )
+                stmts.append("        # PR #49): the list is replaced wholesale.")
+                stmts.append(f"        self.{attr.name} = [")
+                stmts.append(
+                    "            parseStandardVariableRecord(inputStream)"
+                )
+                stmts.append(f"            for _ in range({shape.count_field})")
+                stmts.append("        ]")
+                continue
+            element_target = (
+                records.get(shape.element) if records is not None else None
+            )
+            # frozen elements have no mutating parse: construct per item
+            construct = element_target is not None and element_target.frozen
+            stmts.extend(
+                _list_parse(
+                    attr.name,
+                    shape.element,
+                    shape.count_field,
+                    construct=construct,
+                )
+            )
+        elif isinstance(shape, ir.PrimitiveList):
+            io = shape.element
+            if shape.element_uid is not None:
+                expr = f"rich_or_int({shape.element_uid}, inputStream.read_{io}())"
+            else:
+                expr = f"inputStream.read_{io}()"
             stmts.append(
                 "        # Never append to a pre-existing list (instance-reuse "
                 "corruption,"
             )
             stmts.append("        # PR #49): the list is replaced wholesale.")
             stmts.append(f"        self.{attr.name} = [")
-            stmts.append(f"            {shape.element}.parseFrom(inputStream)")
+            stmts.append(f"            {expr}")
             stmts.append(f"            for _ in range({shape.count_field})")
             stmts.append("        ]")
+        elif isinstance(shape, ir.BytesPayload):
+            if shape.bit_count_field is None:
+                raise SpecError(
+                    f"bytes payload {attr.name!r} on {rec.name!r}: parse is "
+                    "curated (expression-sized payload)"
+                )
+            divisor = " // 8" if shape.count_is_bits else ""
+            expr = f"inputStream.read_bytes({shape.bit_count_field}{divisor})"
+            _emit_value(rec, attr.name, expr, stmts, args)
         elif isinstance(shape, ir.VariantGroup):
             when_member, default = _variant_members(shape, attr.name)
             io = ENUM_IO[when_member.size]
@@ -674,14 +1070,27 @@ def _parse_pieces(
     return stmts, args
 
 
+def _list_parse(field: str, element: str, count: str, construct: bool = False) -> list[str]:
+    reader = f"{element}.parse(inputStream)" if construct else (
+        f"{element}.parseFrom(inputStream)"
+    )
+    return [
+        "        # Never append to a pre-existing list (instance-reuse corruption,",
+        "        # PR #49): the list is replaced wholesale.",
+        f"        self.{field} = [",
+        f"            {reader}",
+        f"            for _ in range({count})",
+        "        ]",
+    ]
+
+
 def _emit_value(
     rec: ir.RecordClass, name: str, expr: str, stmts: list[str], args: list[str]
 ) -> None:
     if rec.frozen:
-        if expr.startswith("rich_or_int"):
-            stmts.append(f"        {name} = {expr}")
-            args.append(name)
-        else:
-            args.append(expr)
+        # every field reads before the cls() call — inline expressions
+        # would evaluate at call time, reordering the wire reads
+        stmts.append(f"        {name} = {expr}")
+        args.append(name)
     else:
         stmts.append(f"        self.{name} = {expr}")

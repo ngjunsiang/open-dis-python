@@ -4,7 +4,8 @@
 Wire ground truth: submodules/open-dis-spec-xml/xml/DistributedEmissionsFamilyPdus.xml.
 Electromagnetic Emission, Designator, and Underwater Acoustic PDUs with
 their emitter-system / beam record trees. The beam and system "data
-length" fields count 32-bit words (§7.6.2) and are always derived.
+length" fields count 32-bit words (§7.6.2) and are always derived
+(``marshalledSize() // 4``; zero means the section is "large").
 
 Scope note: the IFF PDU (type 28) and SEE PDU (type 30) with their
 Annex-B layer structures are NOT implemented in this pass — their
@@ -24,11 +25,11 @@ from opendis.record.common import (
 )
 from opendis.record.pdu import Pdu
 from opendis.stream import DataInputStream, DataOutputStream
-from opendis.types import enum8, enum16, float32, int32, uint8, uint16
+from opendis.types import enum8, enum16, float32, uint8, uint16, int32
 
 __all__ = [
-    "AcousticEmitter",
     "APA",
+    "AcousticEmitter",
     "BeamData",
     "BeamStatus",
     "DesignatorPdu",
@@ -52,9 +53,12 @@ __all__ = [
 class EEFundamentalParameterData:
     """§6.2.22 EE Fundamental Parameter Data record
 
-    The five basic emitter parameters. Continuous wave emissions are
-    represented by 0.0 in both pulse repetition frequency and pulse
-    width."""
+    Contains electromagnetic emission regeneration parameters that are
+    variable throught a scenario.
+
+    Continuous wave emissions are represented by 0.0 in both pulse
+    repetition frequency and pulse width.
+    """
 
     frequency: float32 = 0.0  # Hz
     frequencyRange: float32 = 0.0  # Hz
@@ -82,9 +86,12 @@ class EEFundamentalParameterData:
 
 @dataclass(slots=True)
 class BeamData:
-    """§6.2.11 Beam Data record (angular information)"""
+    """§6.2.11 Beam Data record
 
-    beamAzimuthCenter: float32 = 0.0  # radians
+    Describes the scan volue of an emitter beam.
+    """
+
+    beamAzimuthCenter: float32 = 0.0
     beamAzimuthSweep: float32 = 0.0
     beamElevationCenter: float32 = 0.0
     beamElevationSweep: float32 = 0.0
@@ -112,20 +119,21 @@ class BeamData:
 class BeamStatus:
     """§6.2.12 Beam Status record
 
-    One byte: the [UID 318] beam state in bit 0, seven reserved bits
-    (kept so odd wire bytes round-trip byte-exact)."""
+    Information related to the status of a beam. This is contained in the
+    beam status field of the electromagnitec emission PDU. The first bit
+    determines whether the beam is active (0) or deactivated (1).
 
-    FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
-        "beamState": 318,
-    }
+    One byte: the [UID 318] beam state in bit 0, seven reserved bits (kept
+    so odd wire bytes round-trip byte-exact).
+    """
 
-    beamState: uint8 = 0  # [UID 318]; 0 = deactive, 1 = active
+    beamState: uint8 = 0  # [UID 318]
 
     def marshalledSize(self) -> int:
         return 1
 
     def serialize(self, outputStream: DataOutputStream) -> None:
-        outputStream.write_uint8(self.beamState)
+        outputStream.write_uint8(int(self.beamState))
 
     def parse(self, inputStream: DataInputStream) -> None:
         self.beamState = inputStream.read_uint8()
@@ -133,8 +141,7 @@ class BeamStatus:
 
 @dataclass(slots=True)
 class JammingTechnique:
-    """§6.2.49 Jamming Technique record (4×u8 kind/category/
-    subcategory/specific)."""
+    """Jamming technique. §6.2.49, uid 284."""
 
     kind: uint8 = 0
     category: uint8 = 0
@@ -157,10 +164,12 @@ class JammingTechnique:
         self.specific = inputStream.read_uint8()
 
 
-@dataclass(slots=True)
+@dataclass(frozen=True, slots=True)
 class TrackJamData:
-    """Track/Jam data (§6.2.90's per-target entry): the entity being
-    tracked/jammed plus its emitter and beam numbers."""
+    """§6.2.90 Track/Jam Data record
+
+    Track-Jam data.
+    """
 
     entityID: EntityIdentifier = field(default_factory=EntityIdentifier)
     emitterNumber: uint8 = 0
@@ -176,16 +185,18 @@ class TrackJamData:
 
     @classmethod
     def parse(cls, inputStream: DataInputStream) -> "TrackJamData":
-        return cls(
-            EntityIdentifier.parse(inputStream),
-            inputStream.read_uint8(),
-            inputStream.read_uint8(),
-        )
+        entityID = EntityIdentifier.parse(inputStream)
+        emitterNumber = inputStream.read_uint8()
+        beamNumber = inputStream.read_uint8()
+        return cls(entityID, emitterNumber, beamNumber)
 
 
 @dataclass(slots=True)
 class EmitterSystem:
-    """§6.2.23 Emitter System record: name, function, number."""
+    """§6.2.23 Emitter System record
+
+    This field shall specify information about a particular emitter system.
+    """
 
     FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
         "emitterName": 75,
@@ -212,12 +223,14 @@ class EmitterSystem:
 
 @dataclass(slots=True)
 class EmitterBeam:
-    """Emitter beam data section of the EE PDU (§7.6.2)
+    """Emitter beams focused emissions from an electromagnetic or active
+    acoustic transmitter. The beam is defined by the main lobe of the
+    antenna pattern.
 
-    One beam of an emitter system: identifiers, fundamental parameters,
-    angular data, function, and the track/jam list. ``beamDataLength``
+    Emitter beam data section of the EE PDU (§7.6.2). ``beamDataLength``
     counts 32-bit words of the whole beam record (including the length
-    field) and is derived; zero means the beam is "large" (§7.6.2)."""
+    field) and is derived; zero means the beam is "large" (§7.6.2).
+    """
 
     FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
         "beamFunction": 78,
@@ -236,18 +249,12 @@ class EmitterBeam:
     jammingTechnique: JammingTechnique = field(default_factory=JammingTechnique)
     trackJamData: list[TrackJamData] = field(default_factory=list)
 
-    padding: uint16 = field(init=False, default=0)
-
     @property
     def numberOfTargets(self) -> uint8:
+        """numberOfTargets"""
         return len(self.trackJamData)
 
-    @property
-    def beamDataLength(self) -> uint8:
-        """Beam data length in 32-bit words — derived."""
-        return self.marshalledSize() // 4
-
-    def marshalledSize(self) -> int:
+    def marshalledSize(self):
         return (
             1
             + 1
@@ -262,7 +269,7 @@ class EmitterBeam:
             + sum(tj.marshalledSize() for tj in self.trackJamData)
         )
 
-    def serialize(self, outputStream: DataOutputStream) -> None:
+    def serialize(self, outputStream: DataOutputStream):
         outputStream.write_uint8(self.beamDataLength)
         outputStream.write_uint8(self.beamNumber)
         outputStream.write_uint16(self.beamParameterIndex)
@@ -276,7 +283,7 @@ class EmitterBeam:
         for trackJam in self.trackJamData:
             trackJam.serialize(outputStream)
 
-    def parse(self, inputStream: DataInputStream) -> None:
+    def parse(self, inputStream: DataInputStream):
         inputStream.read_uint8()  # beamDataLength (derived on re-serialize)
         self.beamNumber = inputStream.read_uint8()
         self.beamParameterIndex = inputStream.read_uint16()
@@ -293,31 +300,44 @@ class EmitterBeam:
             TrackJamData.parse(inputStream) for _ in range(numberOfTargets)
         ]
 
+    @property
+    def beamDataLength(self) -> uint8:
+        """Beam data length in 32-bit words — derived."""
+        return self.marshalledSize() // 4
+
+    @classmethod
+    def parseFrom(cls, inputStream: DataInputStream) -> "EmitterBeam":
+        """Construct a new record from the stream (list-parse helper; the
+        mutating ``parse`` above satisfies the Record protocol)."""
+        item = cls()
+        item.parse(inputStream)
+        return item
+
 
 @dataclass(slots=True)
 class ElectronicEmitter:
-    """Per-emitter-system data section of the EE PDU (§7.6.2;
-    XML name ElectronicEmitter)
+    """A device that is able to discharge detectable electromagnetic energy.
+    Per-system data of the EE PDU (7.6.2).
 
-    One emitter system on the entity: system identity, location, and
-    beams. ``systemDataLength`` counts 32-bit words and is derived."""
+    Per-emitter-system data section of the EE PDU (§7.6.2).
+    ``systemDataLength`` counts 32-bit words and is derived.
+    """
 
     emitterSystem: EmitterSystem = field(default_factory=EmitterSystem)
     location: Vector3Float = field(default_factory=Vector3Float)
     beams: list[EmitterBeam] = field(default_factory=list)
-
+    # Padding ruling: explicit attribute, out of __init__ (zero by default,
+    # holds the wire value after parse so odd pads round-trip byte-exact).
     padding: uint16 = field(init=False, default=0)
 
     @property
     def numberOfBeams(self) -> uint8:
+        """the number of beams being described in the current PDU for the emitter
+        system being described.
+        """
         return len(self.beams)
 
-    @property
-    def systemDataLength(self) -> uint8:
-        """System data length in 32-bit words — derived."""
-        return self.marshalledSize() // 4
-
-    def marshalledSize(self) -> int:
+    def marshalledSize(self):
         return (
             1
             + 1
@@ -327,7 +347,7 @@ class ElectronicEmitter:
             + sum(beam.marshalledSize() for beam in self.beams)
         )
 
-    def serialize(self, outputStream: DataOutputStream) -> None:
+    def serialize(self, outputStream: DataOutputStream):
         outputStream.write_uint8(self.systemDataLength)
         outputStream.write_uint8(self.numberOfBeams)
         outputStream.write_uint16(self.padding)
@@ -336,7 +356,7 @@ class ElectronicEmitter:
         for beam in self.beams:
             beam.serialize(outputStream)
 
-    def parse(self, inputStream: DataInputStream) -> None:
+    def parse(self, inputStream: DataInputStream):
         inputStream.read_uint8()  # systemDataLength (derived on re-serialize)
         numberOfBeams = inputStream.read_uint8()
         self.padding = inputStream.read_uint16()
@@ -349,21 +369,41 @@ class ElectronicEmitter:
             beam.parse(inputStream)
             self.beams.append(beam)
 
+    @property
+    def systemDataLength(self) -> uint8:
+        """System data length in 32-bit words — derived."""
+        return self.marshalledSize() // 4
+
+    @classmethod
+    def parseFrom(cls, inputStream: DataInputStream) -> "ElectronicEmitter":
+        """Construct a new record from the stream (list-parse helper; the
+        mutating ``parse`` above satisfies the Record protocol)."""
+        item = cls()
+        item.parse(inputStream)
+        return item
+
 
 @dataclass(slots=True)
 class DistributedEmissionsRegenerationFamilyPdu(Pdu):
-    """§7.6 marker for the Distributed Emissions family."""
+    """§7.6 Distributed Emissions Regeneration family PDU
 
-    protocolFamily: ClassVar[int] = 6  # [UID 5]
+    Distributed Emission Regeneration protocol family. Abstract superclass
+    for distributed emissions PDU.
+    """
+
+    protocolFamily: ClassVar[int] = 6  # [UID 5] Distributed Emissions Regeneration
 
 
 @dataclass(slots=True)
 class ElectromagneticEmissionPdu(DistributedEmissionsRegenerationFamilyPdu):
     """§7.6.2 Electromagnetic Emission PDU
 
-    Communicates active electromagnetic emissions including radar and
-    radar-related electronic warfare. Base PDU size is 28 bytes plus
-    emission systems."""
+    Communicate active electromagnetic emissions, including radar and radar-
+    related electronic warfare (e.g., jamming). Exceptions include IFF
+    interrogations and replies, navigation aids, voice, beacon and data
+    radio communications, directed energy weapons, and laser ranging and
+    designation systems, which are handled by other PDUs. §5.7.3.
+    """
 
     pduType: ClassVar[int] = 23  # [UID 4]
 
@@ -375,11 +415,13 @@ class ElectromagneticEmissionPdu(DistributedEmissionsRegenerationFamilyPdu):
     eventID: EventIdentifier = field(default_factory=EventIdentifier)
     stateUpdateIndicator: enum8 = 0  # [UID 77]
     systems: list[ElectronicEmitter] = field(default_factory=list)
-
     paddingForEmissionsPdu: uint16 = field(init=False, default=0)
 
     @property
     def numberOfSystems(self) -> uint8:
+        """This field shall specify the number of emission systems being described
+        in the current PDU.
+        """
         return len(self.systems)
 
     def _marshalledBodySize(self) -> int:
@@ -389,7 +431,7 @@ class ElectromagneticEmissionPdu(DistributedEmissionsRegenerationFamilyPdu):
             + 1
             + 1
             + 2
-            + sum(system.marshalledSize() for system in self.systems)
+            + sum(item.marshalledSize() for item in self.systems)
         )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
@@ -398,8 +440,8 @@ class ElectromagneticEmissionPdu(DistributedEmissionsRegenerationFamilyPdu):
         outputStream.write_uint8(self.stateUpdateIndicator)
         outputStream.write_uint8(self.numberOfSystems)
         outputStream.write_uint16(self.paddingForEmissionsPdu)
-        for system in self.systems:
-            system.serialize(outputStream)
+        for item in self.systems:
+            item.serialize(outputStream)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         self.emittingEntityID = EntityIdentifier.parse(inputStream)
@@ -407,19 +449,19 @@ class ElectromagneticEmissionPdu(DistributedEmissionsRegenerationFamilyPdu):
         self.stateUpdateIndicator = rich_or_int(77, inputStream.read_uint8())
         numberOfSystems = inputStream.read_uint8()
         self.paddingForEmissionsPdu = inputStream.read_uint16()
-        self.systems = []
-        for _ in range(numberOfSystems):
-            system = ElectronicEmitter()
-            system.parse(inputStream)
-            self.systems.append(system)
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.systems = [
+            ElectronicEmitter.parseFrom(inputStream) for _ in range(numberOfSystems)
+        ]
 
 
 @dataclass(slots=True)
 class DesignatorPdu(DistributedEmissionsRegenerationFamilyPdu):
     """§7.6.3 Designator PDU
 
-    Handles designating operations (laser designation). Total PDU size
-    is 88 bytes."""
+    Handles designating operations. See §5.7.4.
+    """
 
     pduType: ClassVar[int] = 24  # [UID 4]
 
@@ -439,7 +481,6 @@ class DesignatorPdu(DistributedEmissionsRegenerationFamilyPdu):
     designatorSpotLocation: Vector3Double = field(default_factory=Vector3Double)
     deadReckoningAlgorithm: enum8 = 0  # [UID 44]
     entityLinearAcceleration: Vector3Float = field(default_factory=Vector3Float)
-
     padding1: uint8 = field(init=False, default=0)
     padding2: uint16 = field(init=False, default=0)
 
@@ -490,7 +531,11 @@ class DesignatorPdu(DistributedEmissionsRegenerationFamilyPdu):
 
 @dataclass(slots=True)
 class ShaftRPM:
-    """Shaft RPM record (§7.6.4): current, ordered, rate of change."""
+    """§7.6.4 Shaft RPM record
+
+    Current Shaft RPM, Ordered Shaft RPM for use by Underwater Acoustic (UA)
+    PDU.
+    """
 
     currentRPM: uint16 = 0
     orderedRPM: uint16 = 0
@@ -509,11 +554,24 @@ class ShaftRPM:
         self.orderedRPM = inputStream.read_uint16()
         self.RPMrateOfChange = inputStream.read_int32()
 
+    @classmethod
+    def parseFrom(cls, inputStream: DataInputStream) -> "ShaftRPM":
+        """Construct a new record from the stream (list-parse helper; the
+        mutating ``parse`` above satisfies the Record protocol)."""
+        item = cls()
+        item.parse(inputStream)
+        return item
+
 
 @dataclass(slots=True)
 class APA:
-    """APA record (§7.6.4): 14-bit additional passive activity parameter
-    index (plus 2 status bits) and a value, both held raw."""
+    """§7.6.4 APA record
+
+    Additional Passive Activity for use by Underwater Acoustic (UA) PDU.
+
+    14-bit additional passive activity parameter index (plus 2 status bits)
+    and a value, both held raw.
+    """
 
     parameterIndex: uint16 = 0
     value: uint16 = 0
@@ -529,10 +587,21 @@ class APA:
         self.parameterIndex = inputStream.read_uint16()
         self.value = inputStream.read_uint16()
 
+    @classmethod
+    def parseFrom(cls, inputStream: DataInputStream) -> "APA":
+        """Construct a new record from the stream (list-parse helper; the
+        mutating ``parse`` above satisfies the Record protocol)."""
+        item = cls()
+        item.parse(inputStream)
+        return item
+
 
 @dataclass(slots=True)
 class AcousticEmitter:
-    """§6.2.2 Acoustic Emitter System record: name, function, number."""
+    """§6.2.2 Acoustic Emitter System record
+
+    Information about a specific UA emitter.
+    """
 
     FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
         "acousticSystemName": 144,
@@ -559,8 +628,11 @@ class AcousticEmitter:
 
 @dataclass(slots=True)
 class UAFundamentalParameter:
-    """UA Fundamental Parameter Data record: active emission parameter
-    index, scan pattern, and the four beamwidth/center angles."""
+    """§6.2.91 UA Fundamental Parameter Data record
+
+    Regeneration parameters for active emission systems that are variable
+    throughout a scenario.
+    """
 
     FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
         "activeEmissionParameterIndex": 146,
@@ -596,59 +668,72 @@ class UAFundamentalParameter:
 
 @dataclass(slots=True)
 class UABeam:
-    """UA Beam record (§7.6.4): beam number and UA fundamental parameter
-    data. ``beamDataLength`` counts 32-bit words and is derived."""
+    """Information for one or more acoustic beams that the system has,
+    including: length of the beam data,  beam identification number for each
+    beam, and fundamental parametric data used to define the entity’s active
+    emissions.  This field defines the active  emission  parameter  index,
+    beam  scan  pattern,  orientation,  and beamwidth, which can vary
+    dynamically during system operation.
+
+    ``beamDataLength`` counts 32-bit words and is derived.
+    """
 
     beamNumber: uint8 = 0
     fundamentalParameterData: UAFundamentalParameter = field(
         default_factory=UAFundamentalParameter
     )
-
     padding: uint16 = field(init=False, default=0)
+
+    def marshalledSize(self):
+        return 1 + 1 + 2 + self.fundamentalParameterData.marshalledSize()
+
+    def serialize(self, outputStream: DataOutputStream):
+        outputStream.write_uint8(self.beamDataLength)
+        outputStream.write_uint8(self.beamNumber)
+        outputStream.write_uint16(self.padding)
+        self.fundamentalParameterData.serialize(outputStream)
+
+    def parse(self, inputStream: DataInputStream):
+        inputStream.read_uint8()  # beamDataLength (derived on re-serialize)
+        self.beamNumber = inputStream.read_uint8()
+        self.padding = inputStream.read_uint16()
+        self.fundamentalParameterData.parse(inputStream)
 
     @property
     def beamDataLength(self) -> uint8:
         """Beam data length in 32-bit words — derived."""
         return self.marshalledSize() // 4
 
-    def marshalledSize(self) -> int:
-        return 1 + 1 + 2 + self.fundamentalParameterData.marshalledSize()
-
-    def serialize(self, outputStream: DataOutputStream) -> None:
-        outputStream.write_uint8(self.beamDataLength)
-        outputStream.write_uint8(self.beamNumber)
-        outputStream.write_uint16(self.padding)
-        self.fundamentalParameterData.serialize(outputStream)
-
-    def parse(self, inputStream: DataInputStream) -> None:
-        inputStream.read_uint8()  # beamDataLength (derived on re-serialize)
-        self.beamNumber = inputStream.read_uint8()
-        self.padding = inputStream.read_uint16()
-        self.fundamentalParameterData.parse(inputStream)
+    @classmethod
+    def parseFrom(cls, inputStream: DataInputStream) -> "UABeam":
+        """Construct a new record from the stream (list-parse helper; the
+        mutating ``parse`` above satisfies the Record protocol)."""
+        item = cls()
+        item.parse(inputStream)
+        return item
 
 
 @dataclass(slots=True)
 class UAEmitter:
-    """UA Emitter System record (§7.6.4): acoustic emitter identity,
-    location, and beams. ``systemDataLength`` counts 32-bit words and is
-    derived."""
+    """Underwater Acoustic (UA) active emissions (intentional emissions) and
+    passive signature (unintentional emissions) information.
+
+    ``systemDataLength`` counts 32-bit words and is derived.
+    """
 
     acousticEmitter: AcousticEmitter = field(default_factory=AcousticEmitter)
     location: Vector3Float = field(default_factory=Vector3Float)
     beams: list[UABeam] = field(default_factory=list)
-
     padding: uint16 = field(init=False, default=0)
 
     @property
     def numberOfBeams(self) -> uint8:
+        """the number of beams being described in the current PDU for the emitter
+        system being described.
+        """
         return len(self.beams)
 
-    @property
-    def systemDataLength(self) -> uint8:
-        """System data length in 32-bit words — derived."""
-        return self.marshalledSize() // 4
-
-    def marshalledSize(self) -> int:
+    def marshalledSize(self):
         return (
             1
             + 1
@@ -658,7 +743,7 @@ class UAEmitter:
             + sum(beam.marshalledSize() for beam in self.beams)
         )
 
-    def serialize(self, outputStream: DataOutputStream) -> None:
+    def serialize(self, outputStream: DataOutputStream):
         outputStream.write_uint8(self.systemDataLength)
         outputStream.write_uint8(self.numberOfBeams)
         outputStream.write_uint16(self.padding)
@@ -667,7 +752,7 @@ class UAEmitter:
         for beam in self.beams:
             beam.serialize(outputStream)
 
-    def parse(self, inputStream: DataInputStream) -> None:
+    def parse(self, inputStream: DataInputStream):
         inputStream.read_uint8()  # systemDataLength (derived on re-serialize)
         numberOfBeams = inputStream.read_uint8()
         self.padding = inputStream.read_uint16()
@@ -680,13 +765,26 @@ class UAEmitter:
             beam.parse(inputStream)
             self.beams.append(beam)
 
+    @property
+    def systemDataLength(self) -> uint8:
+        """System data length in 32-bit words — derived."""
+        return self.marshalledSize() // 4
+
+    @classmethod
+    def parseFrom(cls, inputStream: DataInputStream) -> "UAEmitter":
+        """Construct a new record from the stream (list-parse helper; the
+        mutating ``parse`` above satisfies the Record protocol)."""
+        item = cls()
+        item.parse(inputStream)
+        return item
+
 
 @dataclass(slots=True)
 class UnderwaterAcousticPdu(DistributedEmissionsRegenerationFamilyPdu):
     """§7.6.4 Underwater Acoustic PDU
 
-    Information about underwater acoustic emissions. Base PDU size is
-    32 bytes plus shaft RPMs, APAs, and UA emitter systems."""
+    Information about underwater acoustic emmissions. See §5.7.5.
+    """
 
     pduType: ClassVar[int] = 29  # [UID 4]
 
@@ -703,19 +801,25 @@ class UnderwaterAcousticPdu(DistributedEmissionsRegenerationFamilyPdu):
     shaftRPMs: list[ShaftRPM] = field(default_factory=list)
     apaData: list[APA] = field(default_factory=list)
     emitterSystems: list[UAEmitter] = field(default_factory=list)
-
     pad: uint8 = field(init=False, default=0)
 
     @property
     def numberOfShafts(self) -> uint8:
+        """This field shall represent the number of shafts on a platform."""
         return len(self.shaftRPMs)
 
     @property
     def numberOfAPAs(self) -> uint8:
+        """This field shall indicate the number of APAs described in the current UA
+        PDU.
+        """
         return len(self.apaData)
 
     @property
     def numberOfUAEmitterSystems(self) -> uint8:
+        """This field shall specify the number of UA emitter systems being
+        described in the current UA PDU.
+        """
         return len(self.emitterSystems)
 
     def _marshalledBodySize(self) -> int:
@@ -729,9 +833,9 @@ class UnderwaterAcousticPdu(DistributedEmissionsRegenerationFamilyPdu):
             + 1
             + 1
             + 1
-            + sum(s.marshalledSize() for s in self.shaftRPMs)
-            + sum(a.marshalledSize() for a in self.apaData)
-            + sum(e.marshalledSize() for e in self.emitterSystems)
+            + sum(item.marshalledSize() for item in self.shaftRPMs)
+            + sum(item.marshalledSize() for item in self.apaData)
+            + sum(item.marshalledSize() for item in self.emitterSystems)
         )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
@@ -744,12 +848,12 @@ class UnderwaterAcousticPdu(DistributedEmissionsRegenerationFamilyPdu):
         outputStream.write_uint8(self.numberOfShafts)
         outputStream.write_uint8(self.numberOfAPAs)
         outputStream.write_uint8(self.numberOfUAEmitterSystems)
-        for shaftRPM in self.shaftRPMs:
-            shaftRPM.serialize(outputStream)
-        for apa in self.apaData:
-            apa.serialize(outputStream)
-        for emitterSystem in self.emitterSystems:
-            emitterSystem.serialize(outputStream)
+        for item in self.shaftRPMs:
+            item.serialize(outputStream)
+        for item in self.apaData:
+            item.serialize(outputStream)
+        for item in self.emitterSystems:
+            item.serialize(outputStream)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         self.emittingEntityID = EntityIdentifier.parse(inputStream)
@@ -761,18 +865,16 @@ class UnderwaterAcousticPdu(DistributedEmissionsRegenerationFamilyPdu):
         numberOfShafts = inputStream.read_uint8()
         numberOfAPAs = inputStream.read_uint8()
         numberOfUAEmitterSystems = inputStream.read_uint8()
-        self.shaftRPMs = []
-        for _ in range(numberOfShafts):
-            shaftRPM = ShaftRPM()
-            shaftRPM.parse(inputStream)
-            self.shaftRPMs.append(shaftRPM)
-        self.apaData = []
-        for _ in range(numberOfAPAs):
-            apa = APA()
-            apa.parse(inputStream)
-            self.apaData.append(apa)
-        self.emitterSystems = []
-        for _ in range(numberOfUAEmitterSystems):
-            emitterSystem = UAEmitter()
-            emitterSystem.parse(inputStream)
-            self.emitterSystems.append(emitterSystem)
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.shaftRPMs = [
+            ShaftRPM.parseFrom(inputStream) for _ in range(numberOfShafts)
+        ]
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.apaData = [APA.parseFrom(inputStream) for _ in range(numberOfAPAs)]
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.emitterSystems = [
+            UAEmitter.parseFrom(inputStream) for _ in range(numberOfUAEmitterSystems)
+        ]

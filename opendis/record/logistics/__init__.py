@@ -1,8 +1,8 @@
 """Logistics family (IEEE 1278.1-2012 §7.4) — target-state PDUs.
 
-Wire ground truth: submodules/open-dis-spec-xml/xml/LogisticsFamilyPdus.xml. Service Request,
-Resupply Offer/Received/Cancel, Repair Complete/Response, and the
-§6.2.86 Supply Quantity record.
+Wire ground truth: submodules/open-dis-spec-xml/xml/LogisticsFamilyPdus.xml.
+Service Request, Resupply Offer/Received/Cancel, Repair Complete/Response,
+and the §6.2.86 Supply Quantity record.
 """
 
 from dataclasses import dataclass, field
@@ -28,16 +28,24 @@ __all__ = [
 
 @dataclass(slots=True)
 class LogisticsFamilyPdu(Pdu):
-    """§7.4 marker for the Logistics family."""
+    """§7.4 Logistics family PDU
 
-    protocolFamily: ClassVar[int] = 3  # [UID 5]
+    Abstract superclass for logistics PDUs.
+
+    Thin family marker — per-class identity lives in the
+    ``pduType``/``protocolFamily`` ClassVars; family metadata for middleware
+    lives in ``PDU_FAMILIES`` (opendis.record.factory).
+    """
+
+    protocolFamily: ClassVar[int] = 3  # [UID 5] Logistics
 
 
 @dataclass(slots=True)
 class SupplyQuantity:
     """§6.2.86 Supply Quantity record
 
-    A supply type and the amount of that supply."""
+    A supply, and the amount of that supply.
+    """
 
     supplyType: EntityType = field(default_factory=EntityType)
     quantity: float32 = 0.0
@@ -55,19 +63,20 @@ class SupplyQuantity:
 
     @classmethod
     def parseFrom(cls, inputStream: DataInputStream) -> "SupplyQuantity":
-        """Construct a new record from the stream (list-parse helper)."""
-        supply = cls()
-        supply.parse(inputStream)
-        return supply
+        """Construct a new record from the stream (list-parse helper; the
+        mutating ``parse`` above satisfies the Record protocol)."""
+        item = cls()
+        item.parse(inputStream)
+        return item
 
 
 @dataclass(slots=True)
 class ServiceRequestPdu(LogisticsFamilyPdu):
     """§7.4.2 Service Request PDU
 
-    One entity requesting a service from another, with the supplies
-    needed for that service. Total base PDU size is 28 bytes plus
-    supply records."""
+    Communicate information associated with one entity requesting a service
+    from another.
+    """
 
     pduType: ClassVar[int] = 5  # [UID 4]
 
@@ -79,11 +88,13 @@ class ServiceRequestPdu(LogisticsFamilyPdu):
     servicingEntityID: EntityIdentifier = field(default_factory=EntityIdentifier)
     serviceTypeRequested: enum8 = 0  # [UID 63]
     supplies: list[SupplyQuantity] = field(default_factory=list)
-
+    # Padding ruling: explicit attribute, out of __init__ (zero by default,
+    # holds the wire value after parse so odd pads round-trip byte-exact).
     padding1: uint16 = field(init=False, default=0)
 
     @property
     def numberOfSupplyTypes(self) -> uint8:
+        """How many requested."""
         return len(self.supplies)
 
     def _marshalledBodySize(self) -> int:
@@ -93,7 +104,7 @@ class ServiceRequestPdu(LogisticsFamilyPdu):
             + 1
             + 1
             + 2
-            + sum(s.marshalledSize() for s in self.supplies)
+            + sum(item.marshalledSize() for item in self.supplies)
         )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
@@ -102,8 +113,8 @@ class ServiceRequestPdu(LogisticsFamilyPdu):
         outputStream.write_uint8(self.serviceTypeRequested)
         outputStream.write_uint8(self.numberOfSupplyTypes)
         outputStream.write_uint16(self.padding1)
-        for supply in self.supplies:
-            supply.serialize(outputStream)
+        for item in self.supplies:
+            item.serialize(outputStream)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         self.requestingEntityID = EntityIdentifier.parse(inputStream)
@@ -111,107 +122,125 @@ class ServiceRequestPdu(LogisticsFamilyPdu):
         self.serviceTypeRequested = rich_or_int(63, inputStream.read_uint8())
         numberOfSupplyTypes = inputStream.read_uint8()
         self.padding1 = inputStream.read_uint16()
-        self.supplies = [
-            SupplyQuantity.parseFrom(inputStream) for _ in range(numberOfSupplyTypes)
-        ]
-
-
-class _ResupplyMixin:
-    """Shared tail for Resupply Offer/Received: two entity IDs, a
-    derived supply-type count, three pad bytes, and supply records."""
-
-    @property
-    def numberOfSupplyTypes(self) -> uint8:
-        return len(self.supplies)
-
-    def _resupplyBodySize(self) -> int:
-        return (
-            self.receivingEntityID.marshalledSize()
-            + self.supplyingEntityID.marshalledSize()
-            + 1
-            + 1
-            + 2
-            + sum(s.marshalledSize() for s in self.supplies)
-        )
-
-    def _serializeResupplyBody(self, outputStream: DataOutputStream) -> None:
-        self.receivingEntityID.serialize(outputStream)
-        self.supplyingEntityID.serialize(outputStream)
-        outputStream.write_uint8(self.numberOfSupplyTypes)
-        outputStream.write_uint8(self.padding1)
-        outputStream.write_uint16(self.padding2)
-        for supply in self.supplies:
-            supply.serialize(outputStream)
-
-    def _parseResupplyBody(self, inputStream: DataInputStream) -> None:
-        self.receivingEntityID = EntityIdentifier.parse(inputStream)
-        self.supplyingEntityID = EntityIdentifier.parse(inputStream)
-        numberOfSupplyTypes = inputStream.read_uint8()
-        self.padding1 = inputStream.read_uint8()
-        self.padding2 = inputStream.read_uint16()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
         self.supplies = [
             SupplyQuantity.parseFrom(inputStream) for _ in range(numberOfSupplyTypes)
         ]
 
 
 @dataclass(slots=True)
-class ResupplyOfferPdu(_ResupplyMixin, LogisticsFamilyPdu):
+class ResupplyOfferPdu(LogisticsFamilyPdu):
     """§7.4.3 Resupply Offer PDU
 
-    Communicates the offer of supplies by a supplying entity to a
-    receiving entity. Total base PDU size is 28 bytes plus supply
-    records."""
+    Communicate the offer of supplies by a supplying entity to a receiving
+    entity.
+    """
 
     pduType: ClassVar[int] = 6  # [UID 4]
 
     receivingEntityID: EntityIdentifier = field(default_factory=EntityIdentifier)
     supplyingEntityID: EntityIdentifier = field(default_factory=EntityIdentifier)
     supplies: list[SupplyQuantity] = field(default_factory=list)
-
     padding1: uint8 = field(init=False, default=0)
     padding2: uint16 = field(init=False, default=0)
 
+    @property
+    def numberOfSupplyTypes(self) -> uint8:
+        """How many supplies types are being offered."""
+        return len(self.supplies)
+
     def _marshalledBodySize(self) -> int:
-        return self._resupplyBodySize()
+        return (
+            self.receivingEntityID.marshalledSize()
+            + self.supplyingEntityID.marshalledSize()
+            + 1
+            + 1
+            + 2
+            + sum(item.marshalledSize() for item in self.supplies)
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
-        self._serializeResupplyBody(outputStream)
+        self.receivingEntityID.serialize(outputStream)
+        self.supplyingEntityID.serialize(outputStream)
+        outputStream.write_uint8(self.numberOfSupplyTypes)
+        outputStream.write_uint8(self.padding1)
+        outputStream.write_uint16(self.padding2)
+        for item in self.supplies:
+            item.serialize(outputStream)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
-        self._parseResupplyBody(inputStream)
+        self.receivingEntityID = EntityIdentifier.parse(inputStream)
+        self.supplyingEntityID = EntityIdentifier.parse(inputStream)
+        numberOfSupplyTypes = inputStream.read_uint8()
+        self.padding1 = inputStream.read_uint8()
+        self.padding2 = inputStream.read_uint16()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.supplies = [
+            SupplyQuantity.parseFrom(inputStream) for _ in range(numberOfSupplyTypes)
+        ]
 
 
 @dataclass(slots=True)
-class ResupplyReceivedPdu(_ResupplyMixin, LogisticsFamilyPdu):
+class ResupplyReceivedPdu(LogisticsFamilyPdu):
     """§7.4.4 Resupply Received PDU
 
-    Acknowledges the receipt of supplies by the receiving entity. Total
-    base PDU size is 28 bytes plus supply records."""
+    Used to acknowledge the receipt of supplies by the receiving entity.
+    """
 
     pduType: ClassVar[int] = 7  # [UID 4]
 
     receivingEntityID: EntityIdentifier = field(default_factory=EntityIdentifier)
     supplyingEntityID: EntityIdentifier = field(default_factory=EntityIdentifier)
     supplies: list[SupplyQuantity] = field(default_factory=list)
-
     padding1: uint8 = field(init=False, default=0)
     padding2: uint16 = field(init=False, default=0)
 
+    @property
+    def numberOfSupplyTypes(self) -> uint8:
+        """How many supplies are taken by receiving entity."""
+        return len(self.supplies)
+
     def _marshalledBodySize(self) -> int:
-        return self._resupplyBodySize()
+        return (
+            self.receivingEntityID.marshalledSize()
+            + self.supplyingEntityID.marshalledSize()
+            + 1
+            + 1
+            + 2
+            + sum(item.marshalledSize() for item in self.supplies)
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
-        self._serializeResupplyBody(outputStream)
+        self.receivingEntityID.serialize(outputStream)
+        self.supplyingEntityID.serialize(outputStream)
+        outputStream.write_uint8(self.numberOfSupplyTypes)
+        outputStream.write_uint8(self.padding1)
+        outputStream.write_uint16(self.padding2)
+        for item in self.supplies:
+            item.serialize(outputStream)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
-        self._parseResupplyBody(inputStream)
+        self.receivingEntityID = EntityIdentifier.parse(inputStream)
+        self.supplyingEntityID = EntityIdentifier.parse(inputStream)
+        numberOfSupplyTypes = inputStream.read_uint8()
+        self.padding1 = inputStream.read_uint8()
+        self.padding2 = inputStream.read_uint16()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.supplies = [
+            SupplyQuantity.parseFrom(inputStream) for _ in range(numberOfSupplyTypes)
+        ]
 
 
 @dataclass(slots=True)
 class ResupplyCancelPdu(LogisticsFamilyPdu):
     """§7.4.5 Resupply Cancel PDU
 
-    Cancels a resupply service. Total PDU size is 24 bytes."""
+    Used to communicate the canceling of a resupply service provided through
+    logistics support.
+    """
 
     pduType: ClassVar[int] = 8  # [UID 4]
 
@@ -237,9 +266,9 @@ class ResupplyCancelPdu(LogisticsFamilyPdu):
 class RepairCompletePdu(LogisticsFamilyPdu):
     """§7.4.6 Repair Complete PDU
 
-    The repairing entity communicates the repair that has been performed
-    for the entity that requested repair service. Total PDU size is 28
-    bytes."""
+    Used by the repairing entity to communicate the repair that has been
+    performed for the entity that requested repair service.
+    """
 
     pduType: ClassVar[int] = 9  # [UID 4]
 
@@ -250,7 +279,6 @@ class RepairCompletePdu(LogisticsFamilyPdu):
     receivingEntityID: EntityIdentifier = field(default_factory=EntityIdentifier)
     repairingEntityID: EntityIdentifier = field(default_factory=EntityIdentifier)
     repair: enum16 = 0  # [UID 64]
-
     padding4: uint16 = field(init=False, default=0)
 
     def _marshalledBodySize(self) -> int:
@@ -278,19 +306,19 @@ class RepairCompletePdu(LogisticsFamilyPdu):
 class RepairResponsePdu(LogisticsFamilyPdu):
     """§7.4.7 Repair Response PDU
 
-    The receiving entity acknowledges receipt of a Repair Complete PDU.
-    Total PDU size is 28 bytes."""
+    used by the receiving entity to acknowledge the receipt of a Repair
+    Complete PDU.
+    """
 
     pduType: ClassVar[int] = 10  # [UID 4]
 
     FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
-        "repairResult": 64,
+        "repairResult": 65,
     }
 
     receivingEntityID: EntityIdentifier = field(default_factory=EntityIdentifier)
     repairingEntityID: EntityIdentifier = field(default_factory=EntityIdentifier)
-    repairResult: enum16 = 0  # [UID 64]
-
+    repairResult: enum8 = 0  # [UID 65]
     padding1: uint8 = field(init=False, default=0)
     padding2: uint16 = field(init=False, default=0)
 
@@ -298,7 +326,7 @@ class RepairResponsePdu(LogisticsFamilyPdu):
         return (
             self.receivingEntityID.marshalledSize()
             + self.repairingEntityID.marshalledSize()
-            + 2
+            + 1
             + 1
             + 2
         )
@@ -306,13 +334,13 @@ class RepairResponsePdu(LogisticsFamilyPdu):
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         self.receivingEntityID.serialize(outputStream)
         self.repairingEntityID.serialize(outputStream)
-        outputStream.write_uint16(self.repairResult)
+        outputStream.write_uint8(self.repairResult)
         outputStream.write_uint8(self.padding1)
         outputStream.write_uint16(self.padding2)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         self.receivingEntityID = EntityIdentifier.parse(inputStream)
         self.repairingEntityID = EntityIdentifier.parse(inputStream)
-        self.repairResult = rich_or_int(64, inputStream.read_uint16())
+        self.repairResult = rich_or_int(65, inputStream.read_uint8())
         self.padding1 = inputStream.read_uint8()
         self.padding2 = inputStream.read_uint16()

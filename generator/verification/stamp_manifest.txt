@@ -1,0 +1,16 @@
+# generator: _wireLength is parse evidence, not state; serialize takes
+# generator: a default-constructed header adopts the class identity
+# generator: aliasFor elements — one class plus a name assignment;
+# generator: context-dependent bitfield layouts — the EntityAppearance /
+# generator: domain's enum table is kind-dependent (UID 14 for
+# generator: frozen records get constructor-style parse (classmethod);
+# generator: keeping the raw header bytes (not just parsed fields) is
+# generator: layouts and bit positions are mechanical output of the
+# generator: payload carries the complete serialized record when the
+# generator: plain alias per the 2026-10-14 ruling — never re-declare as a
+# generator: presentIf-driven section presence — the conditional
+# generator: setter range validation is beyond mechanical layout emission
+# generator: single-record MP/AP dispatch is beyond mechanical
+# generator: the str-backed string property (NUL-trimmed, latin-1 to
+# generator: truncation warning is beyond mechanical generation
+# generator: typed uid-66 decoder wiring; unknown record types

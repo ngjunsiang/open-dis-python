@@ -1,8 +1,7 @@
-"""Information Operations family (IEEE 1278.1-2012 §5.13/§7.12)
-— target-state PDUs.
+"""Information Operations family (IEEE 1278.1-2012 §5.13) — target-state PDUs.
 
-Wire ground truth: submodules/open-dis-spec-xml/xml/InformationOperationsFamilyPdus.xml. IO
-Action and IO Report PDUs; the IO records (§6.2.48) use the uid-66
+Wire ground truth: submodules/open-dis-spec-xml/xml/InformationOperationsFamilyPdus.xml.
+IO Action and IO Report; the IO records (§6.2.48) use the uid-66
 Standard Variable record format, so they ride the registry — known
 record types decode, unknown ones stay raw bytes byte-exact.
 """
@@ -25,10 +24,18 @@ __all__ = [
 
 @dataclass(slots=True)
 class InformationOperationsFamilyPdu(Pdu):
-    """§5.13 base for IO PDUs: the PDU header plus the
-    originating simulation ID."""
+    """Information operations (IO) are the integrated employment of electronic
+    warfare (EW), computer network operations (CNO), psychological
+    operations (PSYOP), military deception (MILDEC), and operations security
+    (OPSEC), along with specific supporting capabilities, to influence,
+    disrupt, corrupt, or otherwise affect enemy information and decision
+    making while protecting friendly information operations.
 
-    protocolFamily: ClassVar[int] = 13  # [UID 5]
+    Not a thin marker: carries the originating simulation ID
+    (EntityIdentifier-shaped; §5.13).
+    """
+
+    protocolFamily: ClassVar[int] = 13  # [UID 5] Information Operations
 
     originatingSimID: EntityIdentifier = field(default_factory=EntityIdentifier)
 
@@ -46,8 +53,9 @@ class InformationOperationsFamilyPdu(Pdu):
 class InformationOperationsActionPdu(InformationOperationsFamilyPdu):
     """§5.13.3 IO Action PDU
 
-    Communicates an IO attack or its effects on one or more target
-    entities. Base PDU size is 56 bytes plus IO records."""
+    Used to communicate an IO attack or the effects of an IO attack on one
+    or more target entities.
+    """
 
     pduType: ClassVar[int] = 70  # [UID 4]
 
@@ -67,12 +75,14 @@ class InformationOperationsActionPdu(InformationOperationsFamilyPdu):
     ioAttackerID: EntityIdentifier = field(default_factory=EntityIdentifier)
     ioPrimaryTargetID: EntityIdentifier = field(default_factory=EntityIdentifier)
     ioRecords: list = field(default_factory=list)
-
+    # Padding ruling: explicit attribute, out of __init__ (zero by default,
+    # holds the wire value after parse so odd pads round-trip byte-exact).
     padding1: uint32 = field(init=False, default=0)
     padding2: uint16 = field(init=False, default=0)
 
     @property
     def numberOfIORecords(self) -> uint16:
+        """numberOfIORecords"""
         return len(self.ioRecords)
 
     def _marshalledBodySize(self) -> int:
@@ -89,7 +99,7 @@ class InformationOperationsActionPdu(InformationOperationsFamilyPdu):
             + self.ioPrimaryTargetID.marshalledSize()
             + 2
             + 2
-            + sum(r.marshalledSize() for r in self.ioRecords)
+            + sum(item.marshalledSize() for item in self.ioRecords)
         )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
@@ -105,13 +115,13 @@ class InformationOperationsActionPdu(InformationOperationsFamilyPdu):
         self.ioPrimaryTargetID.serialize(outputStream)
         outputStream.write_uint16(self.padding2)
         outputStream.write_uint16(self.numberOfIORecords)
-        for record in self.ioRecords:
-            record.serialize(outputStream)
+        for item in self.ioRecords:
+            item.serialize(outputStream)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
+        super(InformationOperationsActionPdu, self)._parseBody(inputStream)
         from opendis.record import parseStandardVariableRecord
 
-        super(InformationOperationsActionPdu, self)._parseBody(inputStream)
         self.receivingSimID = EntityIdentifier.parse(inputStream)
         self.requestID = inputStream.read_uint32()
         self.IOWarfareType = rich_or_int(285, inputStream.read_uint16())
@@ -123,6 +133,8 @@ class InformationOperationsActionPdu(InformationOperationsFamilyPdu):
         self.ioPrimaryTargetID = EntityIdentifier.parse(inputStream)
         self.padding2 = inputStream.read_uint16()
         numberOfIORecords = inputStream.read_uint16()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
         self.ioRecords = [
             parseStandardVariableRecord(inputStream) for _ in range(numberOfIORecords)
         ]
@@ -132,8 +144,9 @@ class InformationOperationsActionPdu(InformationOperationsFamilyPdu):
 class InformationOperationsReportPdu(InformationOperationsFamilyPdu):
     """§5.13.4 IO Report PDU
 
-    Communicates the effects of an IO attack on one or more target
-    entities. Base PDU size is 40 bytes plus IO records."""
+    Used to communicate the effects of an IO attack on one or more target
+    entities.
+    """
 
     pduType: ClassVar[int] = 71  # [UID 4]
 
@@ -147,13 +160,13 @@ class InformationOperationsReportPdu(InformationOperationsFamilyPdu):
     ioAttackerID: EntityIdentifier = field(default_factory=EntityIdentifier)
     ioPrimaryTargetID: EntityIdentifier = field(default_factory=EntityIdentifier)
     ioRecords: list = field(default_factory=list)
-
     padding1: uint8 = field(init=False, default=0)
     padding2: uint16 = field(init=False, default=0)
     padding3: uint16 = field(init=False, default=0)
 
     @property
     def numberOfIORecords(self) -> uint16:
+        """numberOfIORecords"""
         return len(self.ioRecords)
 
     def _marshalledBodySize(self) -> int:
@@ -167,7 +180,7 @@ class InformationOperationsReportPdu(InformationOperationsFamilyPdu):
             + 2
             + 2
             + 2
-            + sum(r.marshalledSize() for r in self.ioRecords)
+            + sum(item.marshalledSize() for item in self.ioRecords)
         )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
@@ -180,13 +193,13 @@ class InformationOperationsReportPdu(InformationOperationsFamilyPdu):
         outputStream.write_uint16(self.padding2)
         outputStream.write_uint16(self.padding3)
         outputStream.write_uint16(self.numberOfIORecords)
-        for record in self.ioRecords:
-            record.serialize(outputStream)
+        for item in self.ioRecords:
+            item.serialize(outputStream)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
+        super(InformationOperationsReportPdu, self)._parseBody(inputStream)
         from opendis.record import parseStandardVariableRecord
 
-        super(InformationOperationsReportPdu, self)._parseBody(inputStream)
         self.ioSimSource = rich_or_int(286, inputStream.read_uint16())
         self.ioReportType = rich_or_int(289, inputStream.read_uint8())
         self.padding1 = inputStream.read_uint8()
@@ -195,6 +208,8 @@ class InformationOperationsReportPdu(InformationOperationsFamilyPdu):
         self.padding2 = inputStream.read_uint16()
         self.padding3 = inputStream.read_uint16()
         numberOfIORecords = inputStream.read_uint16()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
         self.ioRecords = [
             parseStandardVariableRecord(inputStream) for _ in range(numberOfIORecords)
         ]

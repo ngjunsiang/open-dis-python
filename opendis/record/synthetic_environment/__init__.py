@@ -1,21 +1,18 @@
-"""Synthetic Environment family (IEEE 1278.1-2012 §7.10) — target-state
-PDUs.
+"""Synthetic Environment family (IEEE 1278.1-2012 §7.10) — target-state PDUs.
 
 Wire ground truth: submodules/open-dis-spec-xml/xml/SyntheticEnvironmentFamilyPdus.xml.
-Environmental Process, Point/Linear/Areal Object State, plus the
-§6.2.64 Object Type, §6.2.3? Object Identifier, Linear Segment
-Parameter (§6.2.61?), and the generic §6.2.23? Environment record.
+Environmental Process, Point/Linear/Areal Object State, plus the Object
+Type/Identifier records, Linear Segment Parameter, and the generic
+Environment record (opaque geometry, typed decoders deferred).
 
 Scope note: GriddedDataPdu (type 42) — grid-axis descriptors × grid
 data representation types 0–6 — is NOT implemented in this pass; its
 pduType stays unregistered, so datagrams degrade to the lossless
 ``UnrecognizedPdu`` fallback (see docs/design/sample-review.md).
 
-XML deltas applied deliberately (see docs/design/sample-review.md):
-- the bitfield-mapped appearance/modification fields (uids 229, 240,
-  242, 249) stay raw integers in this pass (views deferred, PduStatus
-  precedent); PointObjectStatePdu keeps the XML's
-  ``generObjectAppearance`` spelling (name variant, not a wire issue).
+Python-side deltas from the XML (sample-review rulings): the bitfield-
+mapped appearance/modification fields (uids 229, 240, 242, 249) stay raw
+integers in this pass (views deferred, PduStatus precedent).
 """
 
 from dataclasses import dataclass, field
@@ -31,7 +28,7 @@ from opendis.record.common import (
 )
 from opendis.record.pdu import Pdu
 from opendis.stream import DataInputStream, DataOutputStream
-from opendis.types import enum8, enum16, enum32, float32, uint8, uint16, uint32
+from opendis.types import enum8, enum32, float32, uint8, uint16, uint32
 
 __all__ = [
     "ArealObjectStatePdu",
@@ -46,11 +43,17 @@ __all__ = [
 ]
 
 
+def _padTo32(byteCount: int) -> int:
+    """Pad bytes needed to bring a datagram to a 32-bit boundary."""
+    return (4 - byteCount % 4) % 4
+
+
 @dataclass(frozen=True, slots=True)
 class ObjectIdentifier:
-    """§6.2.64's companion §6.2.65? Object Identifier record
+    """§6.2.63 Object Identifier record
 
-    Simulation address plus object number. Frozen identity type."""
+    The unique designation of an environmental object.
+    """
 
     simulationAddress: SimulationAddress = field(default_factory=SimulationAddress)
     objectNumber: uint16 = 0
@@ -64,16 +67,17 @@ class ObjectIdentifier:
 
     @classmethod
     def parse(cls, inputStream: DataInputStream) -> "ObjectIdentifier":
-        return cls(SimulationAddress.parse(inputStream), inputStream.read_uint16())
+        simulationAddress = SimulationAddress.parse(inputStream)
+        objectNumber = inputStream.read_uint16()
+        return cls(simulationAddress, objectNumber)
 
 
 @dataclass(frozen=True, slots=True)
 class ObjectType:
-    """§6.2.64 Object Type record (32 bits)
+    """§6.2.64 Object Type record
 
-    The type of a synthetic environment point/linear/areal object.
-    Comprehensive enumerations live in SISO-REF-010 [UID 226/227/228]
-    keyed by the carrying PDU."""
+    The unique designation of an environmental object.
+    """
 
     FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
         "domain": 8,
@@ -96,37 +100,39 @@ class ObjectType:
 
     @classmethod
     def parse(cls, inputStream: DataInputStream) -> "ObjectType":
-        return cls(
-            rich_or_int(8, inputStream.read_uint8()),
-            rich_or_int(225, inputStream.read_uint8()),
-            inputStream.read_uint8(),
-            inputStream.read_uint8(),
-        )
+        domain = rich_or_int(8, inputStream.read_uint8())
+        objectKind = rich_or_int(225, inputStream.read_uint8())
+        category = inputStream.read_uint8()
+        subCategory = inputStream.read_uint8()
+        return cls(domain, objectKind, category, subCategory)
 
 
 @dataclass(slots=True)
 class LinearSegmentParameter:
-    """Linear Segment Parameter record (§7.10.5): one segment of a
-    linear object — number, modification/appearance fields, location,
-    orientation, and size. 65 bytes."""
+    """§6.2.52 Linear Segment Parameter record
+
+    The specification of an individual segment of a linear segment synthetic
+    environment object in a Linear Object State PDU.
+    """
 
     segmentNumber: uint8 = 0
-    segmentModification: uint16 = 0  # [UID 241]
+    segmentModification: uint8 = 0  # [UID 241]
     generalSegmentAppearance: uint16 = 0  # [UID 229]
     specificSegmentAppearance: uint32 = 0
     segmentLocation: Vector3Double = field(default_factory=Vector3Double)
     segmentOrientation: EulerAngles = field(default_factory=EulerAngles)
-    segmentLength: float32 = 0.0  # meters
+    segmentLength: float32 = 0.0
     segmentWidth: float32 = 0.0
     segmentHeight: float32 = 0.0
     segmentDepth: float32 = 0.0
-
+    # Padding ruling: explicit attribute, out of __init__ (zero by default,
+    # holds the wire value after parse so odd pads round-trip byte-exact).
     padding: uint32 = field(init=False, default=0)
 
     def marshalledSize(self) -> int:
         return (
             1
-            + 2
+            + 1
             + 2
             + 4
             + self.segmentLocation.marshalledSize()
@@ -140,8 +146,8 @@ class LinearSegmentParameter:
 
     def serialize(self, outputStream: DataOutputStream) -> None:
         outputStream.write_uint8(self.segmentNumber)
-        outputStream.write_uint16(self.segmentModification)
-        outputStream.write_uint16(self.generalSegmentAppearance)
+        outputStream.write_uint8(int(self.segmentModification))
+        outputStream.write_uint16(int(self.generalSegmentAppearance))
         outputStream.write_uint32(self.specificSegmentAppearance)
         self.segmentLocation.serialize(outputStream)
         self.segmentOrientation.serialize(outputStream)
@@ -153,7 +159,7 @@ class LinearSegmentParameter:
 
     def parse(self, inputStream: DataInputStream) -> None:
         self.segmentNumber = inputStream.read_uint8()
-        self.segmentModification = inputStream.read_uint16()
+        self.segmentModification = inputStream.read_uint8()
         self.generalSegmentAppearance = inputStream.read_uint16()
         self.specificSegmentAppearance = inputStream.read_uint32()
         self.segmentLocation.parse(inputStream)
@@ -166,41 +172,36 @@ class LinearSegmentParameter:
 
     @classmethod
     def parseFrom(cls, inputStream: DataInputStream) -> "LinearSegmentParameter":
-        parameter = cls()
-        parameter.parse(inputStream)
-        return parameter
+        """Construct a new record from the stream (list-parse helper; the
+        mutating ``parse`` above satisfies the Record protocol)."""
+        item = cls()
+        item.parse(inputStream)
+        return item
 
 
 @dataclass(slots=True)
 class EnvironmentRecord:
-    """Generic Environment record (§6.2.23? family): type u32, record
-    length u16 IN BITS (including the 64-bit header), index u8, padding
-    u8, then geometry bytes, padded to a 64-bit boundary. The geometry
-    stays opaque — typed per-record decoders ride the registry later."""
+    """Information about a geometry, a state associated with a geometry, a
+    bounding volume, or an associated entity ID.  6.2.31, not fully defined.
+    'The current definitions can be found in DIS PCR 240'.
+
+    The geometry stays opaque — typed per-record decoders ride the registry
+    later (§6.2.31, DIS PCR 240).
+    """
 
     FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
         "environmentType": 250,
     }
 
-    environmentType: enum32 = 0  # [UID 250] Environmental record type
+    environmentType: enum32 = 0  # [UID 250]
     index: uint8 = 0
     geometry: bytes = b""
-
     padding1: uint8 = field(init=False, default=0)
 
-    def marshalledSize(self) -> int:
+    def marshalledSize(self):
         return 8 + len(self.geometry) + self._padTo64(len(self.geometry))
 
-    @staticmethod
-    def _padTo64(byteCount: int) -> int:
-        return (8 - byteCount % 8) % 8
-
-    @property
-    def length(self) -> uint16:
-        """Record length IN BITS — derived from the geometry bytes."""
-        return (8 + len(self.geometry)) * 8
-
-    def serialize(self, outputStream: DataOutputStream) -> None:
+    def serialize(self, outputStream: DataOutputStream):
         outputStream.write_uint32(self.environmentType)
         outputStream.write_uint16(self.length)
         outputStream.write_uint8(self.index)
@@ -210,7 +211,7 @@ class EnvironmentRecord:
         if padding:
             outputStream.write_bytes(b"\x00" * padding)
 
-    def parse(self, inputStream: DataInputStream) -> None:
+    def parse(self, inputStream: DataInputStream):
         self.environmentType = rich_or_int(250, inputStream.read_uint32())
         length = inputStream.read_uint16()  # bits, header included
         self.index = inputStream.read_uint8()
@@ -221,26 +222,38 @@ class EnvironmentRecord:
         if padding:
             inputStream.read_bytes(padding)
 
+    @staticmethod
+    def _padTo64(byteCount: int) -> int:
+        return (8 - byteCount % 8) % 8
+
+    @property
+    def length(self) -> uint16:
+        """Record length IN BITS — derived from the geometry bytes."""
+        return (8 + len(self.geometry)) * 8
+
     @classmethod
     def parseFrom(cls, inputStream: DataInputStream) -> "EnvironmentRecord":
-        record = cls()
-        record.parse(inputStream)
-        return record
+        """Construct a new record from the stream (list-parse helper; the
+        mutating ``parse`` above satisfies the Record protocol)."""
+        item = cls()
+        item.parse(inputStream)
+        return item
 
 
 @dataclass(slots=True)
 class SyntheticEnvironmentFamilyPdu(Pdu):
-    """§7.10 marker for the Synthetic Environment family."""
+    """§7.10: Abstract superclass for synthetic environment PDUs."""
 
-    protocolFamily: ClassVar[int] = 9  # [UID 5]
+    protocolFamily: ClassVar[int] = 9  # [UID 5] Synthetic Environment
 
 
 @dataclass(slots=True)
 class EnvironmentalProcessPdu(SyntheticEnvironmentFamilyPdu):
     """§7.10.2 Environmental Process PDU
 
-    Communicates information about environmental effects and processes.
-    Base PDU size is 32 bytes plus environment records."""
+    Used to communicate information about environmental effects and
+    processes.
+    """
 
     pduType: ClassVar[int] = 41  # [UID 4]
 
@@ -257,6 +270,7 @@ class EnvironmentalProcessPdu(SyntheticEnvironmentFamilyPdu):
 
     @property
     def numberOfEnvironmentRecords(self) -> uint16:
+        """number of environment records."""
         return len(self.environmentRecords)
 
     def _marshalledBodySize(self) -> int:
@@ -267,18 +281,18 @@ class EnvironmentalProcessPdu(SyntheticEnvironmentFamilyPdu):
             + 1
             + 2
             + 2
-            + sum(r.marshalledSize() for r in self.environmentRecords)
+            + sum(item.marshalledSize() for item in self.environmentRecords)
         )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         self.environementalProcessID.serialize(outputStream)
         self.environmentType.serialize(outputStream)
         outputStream.write_uint8(self.modelType)
-        outputStream.write_uint8(self.environmentStatus)
+        outputStream.write_uint8(int(self.environmentStatus))
         outputStream.write_uint16(self.numberOfEnvironmentRecords)
         outputStream.write_uint16(self.sequenceNumber)
-        for record in self.environmentRecords:
-            record.serialize(outputStream)
+        for item in self.environmentRecords:
+            item.serialize(outputStream)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         self.environementalProcessID = ObjectIdentifier.parse(inputStream)
@@ -287,6 +301,8 @@ class EnvironmentalProcessPdu(SyntheticEnvironmentFamilyPdu):
         self.environmentStatus = inputStream.read_uint8()
         numberOfEnvironmentRecords = inputStream.read_uint16()
         self.sequenceNumber = inputStream.read_uint16()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
         self.environmentRecords = [
             EnvironmentRecord.parseFrom(inputStream)
             for _ in range(numberOfEnvironmentRecords)
@@ -297,8 +313,10 @@ class EnvironmentalProcessPdu(SyntheticEnvironmentFamilyPdu):
 class PointObjectStatePdu(SyntheticEnvironmentFamilyPdu):
     """§7.10.4 Point Object State PDU
 
-    Addition/modification of a terrain-anchored single-point object.
-    Total PDU size is 91 bytes."""
+    Used to communicate detailed information about the addition/modification
+    of a synthetic environment object that is geometrically anchored to the
+    terrain with a single point.
+    """
 
     pduType: ClassVar[int] = 43  # [UID 4]
 
@@ -308,17 +326,16 @@ class PointObjectStatePdu(SyntheticEnvironmentFamilyPdu):
 
     objectID: EntityIdentifier = field(default_factory=EntityIdentifier)
     referencedObjectID: ObjectIdentifier = field(default_factory=ObjectIdentifier)
-    updateNumber: uint32 = 0
+    updateNumber: uint16 = 0
     forceID: enum8 = 0  # [UID 6]
-    modifications: uint16 = 0  # [UID 240] bitmap
+    modifications: uint8 = 0  # [UID 240]
     objectType: ObjectType = field(default_factory=ObjectType)
     objectLocation: Vector3Double = field(default_factory=Vector3Double)
     objectOrientation: EulerAngles = field(default_factory=EulerAngles)
     specificObjectAppearance: uint32 = 0
-    generObjectAppearance: uint16 = 0  # [UID 229] bitmap (XML spelling)
+    generalObjectAppearance: uint16 = 0  # [UID 229]
     requesterID: SimulationAddress = field(default_factory=SimulationAddress)
     receivingID: SimulationAddress = field(default_factory=SimulationAddress)
-
     padding1: uint16 = field(init=False, default=0)
     pad2: uint32 = field(init=False, default=0)
 
@@ -326,9 +343,9 @@ class PointObjectStatePdu(SyntheticEnvironmentFamilyPdu):
         return (
             self.objectID.marshalledSize()
             + self.referencedObjectID.marshalledSize()
-            + 4
-            + 1
             + 2
+            + 1
+            + 1
             + self.objectType.marshalledSize()
             + self.objectLocation.marshalledSize()
             + self.objectOrientation.marshalledSize()
@@ -343,14 +360,14 @@ class PointObjectStatePdu(SyntheticEnvironmentFamilyPdu):
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         self.objectID.serialize(outputStream)
         self.referencedObjectID.serialize(outputStream)
-        outputStream.write_uint32(self.updateNumber)
+        outputStream.write_uint16(self.updateNumber)
         outputStream.write_uint8(self.forceID)
-        outputStream.write_uint16(self.modifications)
+        outputStream.write_uint8(int(self.modifications))
         self.objectType.serialize(outputStream)
         self.objectLocation.serialize(outputStream)
         self.objectOrientation.serialize(outputStream)
         outputStream.write_uint32(self.specificObjectAppearance)
-        outputStream.write_uint16(self.generObjectAppearance)
+        outputStream.write_uint16(int(self.generalObjectAppearance))
         outputStream.write_uint16(self.padding1)
         self.requesterID.serialize(outputStream)
         self.receivingID.serialize(outputStream)
@@ -359,14 +376,14 @@ class PointObjectStatePdu(SyntheticEnvironmentFamilyPdu):
     def _parseBody(self, inputStream: DataInputStream) -> None:
         self.objectID = EntityIdentifier.parse(inputStream)
         self.referencedObjectID = ObjectIdentifier.parse(inputStream)
-        self.updateNumber = inputStream.read_uint32()
+        self.updateNumber = inputStream.read_uint16()
         self.forceID = rich_or_int(6, inputStream.read_uint8())
-        self.modifications = inputStream.read_uint16()
+        self.modifications = inputStream.read_uint8()
         self.objectType = ObjectType.parse(inputStream)
         self.objectLocation.parse(inputStream)
         self.objectOrientation.parse(inputStream)
         self.specificObjectAppearance = inputStream.read_uint32()
-        self.generObjectAppearance = inputStream.read_uint16()
+        self.generalObjectAppearance = inputStream.read_uint16()
         self.padding1 = inputStream.read_uint16()
         self.requesterID = SimulationAddress.parse(inputStream)
         self.receivingID = SimulationAddress.parse(inputStream)
@@ -377,8 +394,10 @@ class PointObjectStatePdu(SyntheticEnvironmentFamilyPdu):
 class LinearObjectStatePdu(SyntheticEnvironmentFamilyPdu):
     """§7.10.5 Linear Object State PDU
 
-    Addition/modification of a linear terrain-anchored object with size
-    and orientation. Base PDU size is 40 bytes plus 65-byte segments."""
+    Used to communicate detailed information about the addition/modification
+    of a synthetic environment object that is geometrically anchored to the
+    terrain with one point and has size and orientation.
+    """
 
     pduType: ClassVar[int] = 44  # [UID 4]
 
@@ -397,6 +416,7 @@ class LinearObjectStatePdu(SyntheticEnvironmentFamilyPdu):
 
     @property
     def numberOfLinearSegments(self) -> uint8:
+        """number of linear segment parameters."""
         return len(self.linearSegmentParameters)
 
     def _marshalledBodySize(self) -> int:
@@ -409,7 +429,7 @@ class LinearObjectStatePdu(SyntheticEnvironmentFamilyPdu):
             + self.requesterID.marshalledSize()
             + self.receivingID.marshalledSize()
             + self.objectType.marshalledSize()
-            + sum(p.marshalledSize() for p in self.linearSegmentParameters)
+            + sum(item.marshalledSize() for item in self.linearSegmentParameters)
         )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
@@ -421,8 +441,8 @@ class LinearObjectStatePdu(SyntheticEnvironmentFamilyPdu):
         self.requesterID.serialize(outputStream)
         self.receivingID.serialize(outputStream)
         self.objectType.serialize(outputStream)
-        for parameter in self.linearSegmentParameters:
-            parameter.serialize(outputStream)
+        for item in self.linearSegmentParameters:
+            item.serialize(outputStream)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         self.objectID = ObjectIdentifier.parse(inputStream)
@@ -433,6 +453,8 @@ class LinearObjectStatePdu(SyntheticEnvironmentFamilyPdu):
         self.requesterID = SimulationAddress.parse(inputStream)
         self.receivingID = SimulationAddress.parse(inputStream)
         self.objectType = ObjectType.parse(inputStream)
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
         self.linearSegmentParameters = [
             LinearSegmentParameter.parseFrom(inputStream)
             for _ in range(numberOfLinearSegments)
@@ -443,8 +465,10 @@ class LinearObjectStatePdu(SyntheticEnvironmentFamilyPdu):
 class ArealObjectStatePdu(SyntheticEnvironmentFamilyPdu):
     """§7.10.6 Areal Object State PDU
 
-    Addition/modification of an areal (three-or-more-point, closed)
-    object. Base PDU size is 49 bytes plus 24-byte locations."""
+    Used to communicate detailed information about the addition/modification
+    of a synthetic environment object that is geometrically anchored to the
+    terrain with a set of three or more points that come to a closure.
+    """
 
     pduType: ClassVar[int] = 45  # [UID 4]
 
@@ -456,7 +480,7 @@ class ArealObjectStatePdu(SyntheticEnvironmentFamilyPdu):
     referencedObjectID: ObjectIdentifier = field(default_factory=ObjectIdentifier)
     updateNumber: uint16 = 0
     forceID: enum8 = 0  # [UID 6]
-    modifications: uint16 = 0  # [UID 242] bitmap
+    modifications: uint8 = 0  # [UID 242]
     objectType: ObjectType = field(default_factory=ObjectType)
     specificObjectAppearance: uint32 = 0
     generalObjectAppearance: uint16 = 0
@@ -466,6 +490,7 @@ class ArealObjectStatePdu(SyntheticEnvironmentFamilyPdu):
 
     @property
     def numberOfPoints(self) -> uint16:
+        """Number of points."""
         return len(self.objectLocation)
 
     def _marshalledBodySize(self) -> int:
@@ -474,14 +499,14 @@ class ArealObjectStatePdu(SyntheticEnvironmentFamilyPdu):
             + self.referencedObjectID.marshalledSize()
             + 2
             + 1
-            + 2
+            + 1
             + self.objectType.marshalledSize()
             + 4
             + 2
             + 2
             + self.requesterID.marshalledSize()
             + self.receivingID.marshalledSize()
-            + sum(l.marshalledSize() for l in self.objectLocation)
+            + sum(item.marshalledSize() for item in self.objectLocation)
         )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
@@ -489,30 +514,30 @@ class ArealObjectStatePdu(SyntheticEnvironmentFamilyPdu):
         self.referencedObjectID.serialize(outputStream)
         outputStream.write_uint16(self.updateNumber)
         outputStream.write_uint8(self.forceID)
-        outputStream.write_uint16(self.modifications)
+        outputStream.write_uint8(int(self.modifications))
         self.objectType.serialize(outputStream)
         outputStream.write_uint32(self.specificObjectAppearance)
         outputStream.write_uint16(self.generalObjectAppearance)
         outputStream.write_uint16(self.numberOfPoints)
         self.requesterID.serialize(outputStream)
         self.receivingID.serialize(outputStream)
-        for location in self.objectLocation:
-            location.serialize(outputStream)
+        for item in self.objectLocation:
+            item.serialize(outputStream)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         self.objectID = ObjectIdentifier.parse(inputStream)
         self.referencedObjectID = ObjectIdentifier.parse(inputStream)
         self.updateNumber = inputStream.read_uint16()
         self.forceID = rich_or_int(6, inputStream.read_uint8())
-        self.modifications = inputStream.read_uint16()
+        self.modifications = inputStream.read_uint8()
         self.objectType = ObjectType.parse(inputStream)
         self.specificObjectAppearance = inputStream.read_uint32()
         self.generalObjectAppearance = inputStream.read_uint16()
         numberOfPoints = inputStream.read_uint16()
         self.requesterID = SimulationAddress.parse(inputStream)
         self.receivingID = SimulationAddress.parse(inputStream)
-        self.objectLocation = []
-        for _ in range(numberOfPoints):
-            location = Vector3Double()
-            location.parse(inputStream)
-            self.objectLocation.append(location)
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.objectLocation = [
+            Vector3Double.parseFrom(inputStream) for _ in range(numberOfPoints)
+        ]

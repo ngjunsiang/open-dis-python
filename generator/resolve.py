@@ -9,6 +9,7 @@ curated bindings (overrides.py) rebind XML names to canonical classes.
 from __future__ import annotations
 
 import dataclasses
+import re
 
 from . import ir, overrides
 from .xmlload import TYPE_TAGS, SpecError, collect_classes
@@ -51,13 +52,19 @@ class Resolver:
             rec = self._build(name)
             out[name] = rec
             for attr in rec.attributes:
+                # registry-decoded lists are untyped (plain ``list``): the
+                # XML's element class is a union member, not a dependency
+                if (
+                    isinstance(attr.shape, ir.ObjectList)
+                    and (name, attr.name) in self.ov.REGISTRY_LISTS
+                ):
+                    continue
                 target = self._classref_target(attr.shape)
                 if target and target not in out:
                     pending.append(target)
             if rec.parent and rec.parent in self.by_canonical and rec.parent not in out:
                 pending.append(rec.parent)
         return out
-
     def _classref_target(self, shape) -> str | None:
         if isinstance(shape, ir.ClassRef):
             return shape.target
@@ -76,10 +83,31 @@ class Resolver:
         el = self.xml_classes.get(self.by_canonical.get(name, name))
         if el is None:
             raise SpecError(f"unknown class {name!r} (not in spec, not bound)")
+        xml_owner = el.get("name")
         flat = self._flatten(el)
-        attributes = [self._attribute(a) for a in flat]
+        attributes = [
+            self._attribute(a, declarer) for a, declarer in flat
+        ]
+        dropped = set(self.ov.FIELD_DROPS.get(xml_owner, []))
+        attributes = [a for a in attributes if a.name not in dropped]
+        extras = self.ov.EXTRA_FIELDS.get(xml_owner, [])
+        # splice positionally: an extra may declare the field it precedes
+        # (hidden counts ride their list's wire position, not the tail)
+        for extra_name, shape, comment, *rest in extras:
+            hidden = rest[0] if rest else False
+            before = rest[1] if len(rest) > 1 else None
+            attr = ir.Attribute(
+                name=extra_name, comment=comment, shape=shape, hidden=hidden
+            )
+            if before is not None:
+                names = [a.name for a in attributes]
+                if before in names:
+                    attributes.insert(names.index(before), attr)
+                    continue
+            attributes.append(attr)
+        attributes = self._link_counts(name, xml_owner, attributes, extras)
         parent, is_pdu = self._lineage(el)
-        attributes = self._validate_counts(name, attributes)
+        attributes = self._mark_pads(attributes)
         return ir.RecordClass(
             name=name,
             comment=el.get("comment"),
@@ -89,6 +117,131 @@ class Resolver:
             is_pdu=is_pdu,
             xml=el,
         )
+
+    def _link_counts(
+        self,
+        owner: str,
+        xml_owner: str,
+        attributes: list[ir.Attribute],
+        extras: list | None = None,
+    ) -> list[ir.Attribute]:
+        """Rename count references with their fields, hide bit-count
+        fields of byte payloads, and validate the count contract: every
+        hidden attribute is a primitive count of exactly one sized field;
+        every sized field counts a hidden primitive. Fills count_for."""
+        by_name = {a.name: a for a in attributes}
+
+        def renamed_count(shape):
+            field = (
+                getattr(shape, "count_field", None)
+                or getattr(shape, "bit_count_field", None)
+            )
+            if field is None:
+                return shape
+            new = self._rename(xml_owner, field)
+            if new == field:
+                return shape
+            if isinstance(shape, ir.BytesPayload):
+                return dataclasses.replace(shape, bit_count_field=new)
+            return dataclasses.replace(shape, count_field=new)
+
+        attributes = [
+            a if not isinstance(a.shape, (ir.ObjectList, ir.PrimitiveList, ir.BytesPayload))
+            else dataclasses.replace(a, shape=renamed_count(a.shape))
+            for a in attributes
+        ]
+        by_name = {a.name: a for a in attributes}
+        # bit-count fields of payloads leave instance state (derived len*8)
+        hidden_forced = set()
+        for a in attributes:
+            if isinstance(a.shape, ir.BytesPayload):
+                if a.shape.bit_count_field is None:
+                    continue  # expression-sized: curated methods own it
+                count = by_name.get(a.shape.bit_count_field)
+                if count is None:
+                    raise SpecError(
+                        f"bytes payload {a.name!r} on {owner!r} names unknown "
+                        f"bit-count field {a.shape.bit_count_field!r}"
+                    )
+                hidden_forced.add(count.name)
+        lists: dict[str, str] = {}
+        sized: dict[str, ir.Shape] = {}
+        for a in attributes:
+            shape = a.shape
+            if isinstance(shape, ir.ObjectList):
+                lists[shape.count_field] = a.name
+                sized[a.name] = shape
+            elif isinstance(shape, ir.PrimitiveList):
+                lists[shape.count_field] = a.name
+                sized[a.name] = shape
+            elif isinstance(shape, ir.BytesPayload):
+                if shape.bit_count_field is not None:
+                    lists[shape.bit_count_field] = a.name
+                    sized[a.name] = shape
+        out = []
+        overridden = {
+            xml_name
+            for (cls, xml_name) in self.ov.FIELD_SHAPES
+            if cls == xml_owner
+        }
+        extra_names = {name for name, *_rest in (extras or [])}
+        count_override = self.ov.COUNT_FOR_OVERRIDES.get(xml_owner, {})
+        for a in attributes:
+            shape = a.shape
+            if a.name in hidden_forced and not isinstance(shape, ir.Primitive):
+                raise SpecError(
+                    f"bit-count field {a.name!r} on {owner!r} must be primitive"
+                )
+            if isinstance(shape, (ir.ObjectList, ir.PrimitiveList, ir.BytesPayload)):
+                if isinstance(shape, ir.BytesPayload) and shape.bit_count_field is None:
+                    out.append(a)
+                    continue
+                if a.name in extra_names:
+                    out.append(a)  # curated extra: hand-owned count semantics
+                    continue
+                count_name = (
+                    shape.bit_count_field
+                    if isinstance(shape, ir.BytesPayload)
+                    else shape.count_field
+                )
+                count = by_name.get(count_name)
+                if (
+                    count is None or not count.hidden
+                ) and count_name not in overridden and a.name not in overridden:
+                    if count is not None and count.name in hidden_forced:
+                        pass  # payload count: hidden below
+                    else:
+                        raise SpecError(
+                            f"sized field {a.name!r} on {owner!r} counts field "
+                            f"{count_name!r}, which is not declared hidden"
+                        )
+            out.append(a)
+        # rebuild with hidden/count_for/count_bits filled
+        out = []
+        for a in attributes:
+            if a.name in hidden_forced:
+                a = dataclasses.replace(a, hidden=True)
+            if a.hidden:
+                if not isinstance(a.shape, ir.Primitive):
+                    raise SpecError(
+                        f"hidden attribute {a.name!r} on {owner!r} must be "
+                        "a primitive count"
+                    )
+                if a.name not in lists:
+                    raise SpecError(
+                        f"hidden attribute {a.name!r} on {owner!r} is not "
+                        "referenced by any sized field"
+                    )
+                a = dataclasses.replace(
+                    a,
+                    count_for=count_override.get(a.name, lists[a.name]),
+                    count_bits=(
+                        isinstance(sized[lists[a.name]], ir.BytesPayload)
+                        and getattr(sized[lists[a.name]], "count_is_bits", True)
+                    ),
+                )
+            out.append(a)
+        return out
 
     def _lineage(self, el) -> tuple[str | None, bool]:
         """Canonical Python base name + whether the lineage reaches a
@@ -120,51 +273,33 @@ class Resolver:
     def _validate_counts(
         self, owner: str, attributes: list[ir.Attribute]
     ) -> list[ir.Attribute]:
-        """Every hidden attribute must be a primitive count of exactly one
-        objectlist; every objectlist count_field must name a hidden
-        primitive. Returns attributes with count_for links filled."""
-        lists = {
-            a.shape.count_field: a.name
-            for a in attributes
-            if isinstance(a.shape, ir.ObjectList)
-        }
-        hidden_names = {a.name for a in attributes if a.hidden}
-        for attr in attributes:
-            shape = attr.shape
-            if attr.hidden:
-                if not isinstance(shape, ir.Primitive):
-                    raise SpecError(
-                        f"hidden attribute {attr.name!r} on {owner!r} must be "
-                        "a primitive count"
-                    )
-                if attr.name not in lists:
-                    raise SpecError(
-                        f"hidden attribute {attr.name!r} on {owner!r} is not "
-                        "referenced by any objectlist countFieldName"
-                    )
-            elif (
-                isinstance(shape, ir.ObjectList)
-                and shape.count_field not in hidden_names
-            ):
-                raise SpecError(
-                    f"objectlist {attr.name!r} on {owner!r} counts hidden "
-                    f"field {shape.count_field!r}, which is not declared hidden"
-                )
-        return [
-            (
-                dataclasses.replace(attr, count_for=lists[attr.name])
-                if attr.hidden
-                else attr
+        """Deprecated shim — count linking lives in _link_counts now."""
+        raise AssertionError("replaced by _link_counts")
+
+    _PAD_NAME = re.compile(r"^(pad|padding)", re.I)
+
+    def _mark_pads(self, attributes: list[ir.Attribute]) -> list[ir.Attribute]:
+        """Named padding primitives (pad, pad1..4, padding1..2, …) are
+        wire-only state: emitted as ``field(init=False, default=0)``,
+        grouped after the init fields (2026-10-14 ruling)."""
+
+        def is_pad(a: ir.Attribute) -> bool:
+            return (
+                isinstance(a.shape, ir.Primitive)
+                and not a.hidden
+                and self._PAD_NAME.match(a.name) is not None
             )
-            for attr in attributes
-        ]
+
+        return [dataclasses.replace(a, pad=True) if is_pad(a) else a for a in attributes]
 
     def _flatten(self, el):
         """Attributes in declaration order via MRO, base-first, deduped.
 
         The walk stops at kernel PDU bases: their header fields are the
         hand-maintained ``PduHeader``/``Pdu`` composition (record/pdu.py),
-        not generated state.
+        not generated state. ClassRefs to curated expansion targets
+        (RadioCommsHeader) splice the target's fields in place — the
+        ruled flattening the exemplar applies.
         """
         chain = []
         cur = el
@@ -180,17 +315,58 @@ class Resolver:
             if cur is None:
                 raise SpecError(f"{el.get('name')!r} inherits unknown class {parent!r}")
         seen: set[str] = set()
-        flat = []
+        flat: list[tuple[object, str]] = []
         for cls in reversed(chain):
+            dropped = set(self.ov.FIELD_DROPS.get(cls.get("name"), []))
             for attr in cls.findall("attribute"):
-                if attr.get("name") in seen:
+                if attr.get("name") in seen or attr.get("name") in dropped:
                     continue
                 seen.add(attr.get("name"))
-                flat.append(attr)
-        return flat
+                flat.append((attr, cls.get("name")))
+        # curated expansions: classRef to a listed class becomes the target's
+        # own attributes spliced in place (ruling: RadioCommsHeader flattening)
+        expanded: list[tuple[object, str]] = []
+        expanding = False
+        for attr, declarer in flat:
+            refs = attr.findall("classRef")
+            if (
+                not expanding
+                and len(refs) == 1
+                and refs[0].get("name") in self.ov.EXPAND_CLASS_REFS
+            ):
+                target = self.xml_classes.get(refs[0].get("name"))
+                if target is None:
+                    raise SpecError(
+                        f"expansion target {refs[0].get('name')!r} not declared"
+                    )
+                expanded.extend(self._flatten(target))
+                expanding = True  # only the first header ref flattens
+                continue
+            expanded.append((attr, declarer))
+        return expanded
 
-    def _attribute(self, attr_el) -> ir.Attribute:
-        name = attr_el.get("name")
+    def _rename(self, owner: str, name: str) -> str:
+        return (
+            self.ov.FIELD_RENAMES.get((owner, name))
+            or self.ov.GLOBAL_FIELD_RENAMES.get(name)
+            or name
+        )
+
+    def _attribute(self, attr_el, owner: str) -> ir.Attribute:
+        name = self._rename(owner, attr_el.get("name"))
+        # fully-curated fields replace the XML shape before any group
+        # validation (LE flag pairs may carry when= on every member)
+        curated = self.ov.FIELD_OVERRIDES.get((owner, attr_el.get("name")))
+        if curated is not None:
+            annotation, default, rider = curated
+            return ir.Attribute(
+                name=name,
+                comment=attr_el.get("comment"),
+                shape=ir.CuratedField(
+                    annotation=annotation, default=default, rider=rider
+                ),
+                present_if=attr_el.get("presentIf"),
+            )
         kids = [c for c in attr_el if c.tag in TYPE_TAGS]
         by_tag: dict[str, list] = {}
         for kid in kids:
@@ -208,7 +384,15 @@ class Resolver:
                 ):
                     viewable = True  # curated parse may attach a bitfield view
                 shapes.append(self._shape(kid))
-        if len(shapes) == 1:
+        override = self.ov.FIELD_SHAPES.get((owner, attr_el.get("name")))
+        if override is not None:
+            if len(shapes) != 1:
+                raise SpecError(
+                    f"field shape override on non-simple attribute "
+                    f"{owner}.{name!r}"
+                )
+            shape = override
+        elif len(shapes) == 1:
             shape = shapes[0]
         elif len(shapes) == 0:
             raise SpecError(f"attribute {name!r} has no type children")
@@ -217,12 +401,19 @@ class Resolver:
                 f"attribute {name!r} mixes type tags "
                 f"{sorted(by_tag)} — not a legal variant group"
             )
+        hidden = attr_el.get("hidden") == "true"
+        count_bits = False
+        # a bit-counted payload pulls its length field out of instance state
+        if isinstance(shape, ir.BytesPayload):
+            hidden = False
+            count_bits = True
         return ir.Attribute(
             name=name,
             comment=attr_el.get("comment"),
             shape=shape,
             present_if=attr_el.get("presentIf"),
-            hidden=attr_el.get("hidden") == "true",
+            hidden=hidden,
+            count_bits=count_bits,
             viewable=viewable,
         )
 
@@ -271,8 +462,19 @@ class Resolver:
             )
         if tag == "objectlist":
             element = kid.find("classRef")
-            count_field = kid.get("countFieldName")
+            count_field = kid.get("countFieldName") or kid.get("countListFieldName")
             if element is None or not count_field:
+                # a list of enum/bitfield values (not records): minefield
+                # fusing [UID 192] / paint scheme [UID 202]
+                val = kid.find("sisoenum") or kid.find("sisobitfield")
+                if val is not None and count_field:
+                    bits = int(val.get("size"))
+                    uid = val.get("uid")
+                    return ir.PrimitiveList(
+                        element=f"uint{bits}",
+                        count_field=count_field,
+                        element_uid=int(uid) if uid else None,
+                    )
                 raise SpecError(
                     f"objectlist on {kid.attrib!r} needs one classRef element "
                     "and countFieldName"
@@ -298,9 +500,39 @@ class Resolver:
                         length=length,
                         could_be_string=kid.get("couldBeString") == "true",
                     )
+            if kid.get("bitCountFieldName") or kid.get("bitCountExpression"):
+                # byte payload whose wire length counts bits (a named
+                # count field, or an expression — curated methods own
+                # expression-sized payloads end to end)
+                prim = kid.find("primitive")
+                if prim is None or prim.get("type") != "uint8":
+                    raise SpecError(
+                        f"bit-counted primitivelist must be uint8 elements: "
+                        f"{kid.attrib!r}"
+                    )
+                return ir.BytesPayload(bit_count_field=kid.get("bitCountFieldName"))
+            count_field = kid.get("countFieldName")
+            if count_field:
+                prim = kid.find("primitive")
+                if prim is None:
+                    raise SpecError(
+                        f"counted primitivelist without element primitive: "
+                        f"{kid.attrib!r}"
+                    )
+                element = prim.get("type")
+                enum = kid.find("sisoenum")
+                uid = int(enum.get("uid")) if enum is not None and enum.get("uid") else None
+                return ir.PrimitiveList(
+                    element=element,
+                    element_uid=uid,
+                    count_field=count_field,
+                    count_expr=kid.get("countExpression"),
+                    count_list=kid.get("countListFieldName"),
+                )
             return ir.Unsupported(summary=f"primitivelist {kid.attrib!r}")
-        if tag == "objectlist":
-            return ir.Unsupported(summary=f"objectlist {kid.attrib!r}")
         if tag == "padtoboundary":
-            return ir.Unsupported(summary=f"padtoboundary {kid.attrib!r}")
+            length = kid.get("length")
+            if length is None:
+                raise SpecError(f"padtoboundary without length: {kid.attrib!r}")
+            return ir.PadToBoundary(length=int(length))
         raise SpecError(f"unhandled type tag {tag!r}")

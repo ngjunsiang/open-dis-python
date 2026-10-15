@@ -483,7 +483,7 @@ class TestDataPdu(unittest.TestCase):
         self.assertEqual(pdu2.variableDatumRecords[0].marshalledSize(), 16)
 
     def test_typed_uid66_decoder(self):
-        from opendis.record.warfare import DirectedEnergyDamage
+        from opendis.record.warfare.damage import DirectedEnergyDamage
         record = DirectedEnergyDamage()
         record.damageDiameter = 1.5
         buffer = io.BytesIO()
@@ -604,7 +604,7 @@ class TestWarfareFamily(unittest.TestCase):
         self.assertEqual(parsed.to_bytes(), raw)
 
     def test_de_fire_sv_record_list_round_trip(self):
-        from opendis.record.warfare import DirectedEnergyDamage
+        from opendis.record.warfare.damage import DirectedEnergyDamage
         pdu = DirectedEnergyFirePdu()
         record = DirectedEnergyDamage()
         record.damageDiameter = 2.5
@@ -680,7 +680,7 @@ class TestRadioFamily(unittest.TestCase):
         self.assertEqual(TransmitterPdu().marshalledSize(), 104)
 
     def test_transmitter_round_trip_with_havequick(self):
-        from opendis.record.radio import BasicHaveQuickMP
+        from opendis.record.radio.annexc import BasicHaveQuickMP
         pdu = TransmitterPdu()
         pdu.radioReferenceID = EntityIdentifier(SimulationAddress(5, 6), 7)
         pdu.radioNumber = 2
@@ -698,7 +698,7 @@ class TestRadioFamily(unittest.TestCase):
         self.assertEqual(parsed.to_bytes(), raw)
 
     def test_transmitter_antenna_pattern(self):
-        from opendis.record.radio import BeamAntennaPattern
+        from opendis.record.radio.annexc import BeamAntennaPattern
         pdu = TransmitterPdu()
         pdu.antennaPatternType = 1
         pdu.antennaPattern = BeamAntennaPattern()
@@ -1081,8 +1081,11 @@ class TestLogisticsFamily(unittest.TestCase):
 
         response = RepairResponsePdu()
         response.repairResult = 2
+        # 28 bytes (224 bits) per §7.4.7: repairResult is enum8 [UID 65]
+        # (REF-010 + legacy dis7.py corroborate; the hand exemplar's
+        # enum16/uid-64 was a transcription bug caught by generation)
         raw = response.to_bytes()
-        self.assertEqual(len(raw), 29)  # 232 bits per §7.4.7
+        self.assertEqual(len(raw), 28)
         parsed = createPdu(raw)
         self.assertEqual(parsed.repairResult, 2)
         self.assertEqual(parsed.to_bytes(), raw)
@@ -1135,8 +1138,10 @@ class TestEntityManagementFamily(unittest.TestCase):
     def test_aggregate_state_id_list_alignment(self):
         pdu = AggregateStatePdu()
         pdu.aggregateIDList.append(AggregateIdentifier(SimulationAddress(1, 1), 2))
-        # 116 + 6 = 122 -> 2 pad bytes to the 32-bit boundary
-        self.assertEqual(pdu.marshalledSize(), 116 + 6 + 2)
+        # base 136 (aggregate marking is §6.2.4's 1+31 = 32 bytes; the
+        # hand exemplar wrongly reused the 12-byte EntityMarking) + 6 = 142
+        # -> 2 pad bytes to the 32-bit boundary
+        self.assertEqual(pdu.marshalledSize(), 136 + 6 + 2)
         self.assertEqual(pdu.marshalledSize() % 4, 0)
         parsed = createPdu(pdu.to_bytes())
         self.assertEqual(parsed.numberOfDisAggregates, 1)
@@ -1178,7 +1183,9 @@ class TestEntityManagementFamily(unittest.TestCase):
         pdu.namedLocationID = NamedLocationIdentification(1, 2)
         pdu.partEntityType = EntityType(1, 1, 39, 4)
         raw = pdu.to_bytes()
-        self.assertEqual(len(raw), 50)
+        # 52 bytes: Relationship is §6.2.74's two 16-bit enumerations
+        # [UID 210/211]; the hand exemplar wrongly carried them as enum8
+        self.assertEqual(len(raw), 52)
         parsed = createPdu(raw)
         self.assertIsInstance(parsed, IsPartOfPdu)
         self.assertEqual(parsed.relationship.nature, 1)
@@ -1296,7 +1303,9 @@ class TestMinefieldFamily(unittest.TestCase):
         pdu.requestedPerimeterPoints.append(Vector2Float(1.0, 2.0))
         pdu.sensorTypes.append(5)
         raw = pdu.to_bytes()
-        self.assertEqual(len(raw), 40 + 8 + 2)
+        # 40 base + 8 (point) + 2 (sensor) + 2 pad (Table 188 P term: the
+        # datagram is 32-bit aligned; the hand exemplar omitted the pad)
+        self.assertEqual(len(raw), 40 + 8 + 2 + 2)
         parsed = createPdu(raw)
         self.assertEqual(parsed.dataFilter, 0x7FF)
         self.assertEqual(parsed.sensorTypes, [5])
@@ -1367,7 +1376,9 @@ class TestMinefieldFamily(unittest.TestCase):
         pdu.requestID = 3
         pdu.missingPduSequenceNumbers.extend((1, 2, 3))
         raw = pdu.to_bytes()
-        self.assertEqual(len(raw), 26 + 3)
+        # 26 base + 3 sequence numbers + 3 pad (Table 190 P term; the
+        # hand exemplar omitted the whole-datagram alignment pad)
+        self.assertEqual(len(raw), 26 + 3 + 3)
         parsed = createPdu(raw)
         self.assertEqual(parsed.numberOfMissingPdus, 3)
         self.assertEqual(parsed.to_bytes(), raw)
@@ -1387,7 +1398,9 @@ class TestSyntheticEnvironmentFamily(unittest.TestCase):
         pdu.objectType = ObjectType(1, 3, 2, 1)
         pdu.objectLocation = Vector3Double(100.0, 200.0, 300.0)
         raw = pdu.to_bytes()
-        self.assertEqual(len(raw), 91)
+        # 88 bytes = 12 header + 76 body (the hand exemplar's "91" was an
+        # arithmetic slip — the PDU is 32-bit aligned by construction)
+        self.assertEqual(len(raw), 88)
         parsed = createPdu(raw)
         self.assertIsInstance(parsed, PointObjectStatePdu)
         self.assertEqual(parsed.objectType, ObjectType(1, 3, 2, 1))
@@ -1403,7 +1416,9 @@ class TestSyntheticEnvironmentFamily(unittest.TestCase):
         segment.segmentWidth = 2.0
         pdu.linearSegmentParameters.append(segment)
         raw = pdu.to_bytes()
-        self.assertEqual(len(raw), 40 + 65)
+        # 40-byte base + 64-byte segment: segmentModification is §7.10.5's
+        # 8-bit bitmap (the hand exemplar wrongly carried it as uint16)
+        self.assertEqual(len(raw), 40 + 64)
         parsed = createPdu(raw)
         self.assertEqual(parsed.numberOfLinearSegments, 1)
         self.assertAlmostEqual(
@@ -1417,7 +1432,9 @@ class TestSyntheticEnvironmentFamily(unittest.TestCase):
                                    Vector3Double(1.0, 0.0, 0.0),
                                    Vector3Double(1.0, 1.0, 0.0)))
         raw = pdu.to_bytes()
-        self.assertEqual(len(raw), 49 + 3 * 24)
+        # 48-byte base (12 header + 36 body) + 3 x 24-byte locations; the
+        # hand-written "49" expectation was an arithmetic slip
+        self.assertEqual(len(raw), 48 + 3 * 24)
         parsed = createPdu(raw)
         self.assertEqual(parsed.numberOfPoints, 3)
         self.assertEqual(parsed.to_bytes(), raw)
