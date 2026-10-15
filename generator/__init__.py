@@ -2,7 +2,10 @@
 
 Architecture (ruled 2026-10-14, .references/decisions.md): XML → typed IR
 → semantic resolution → static explicit-body emission (pure-Python,
-stdlib-only) → black post-pass → verify gates. The corrected spec lives in
+stdlib-only) → black post-pass → behavioral verification (the
+verification/ scripts prove generated output behaves identically to the
+reviewed exemplar before it replaces hand-written modules). The corrected
+spec lives in
 submodules/open-dis-spec-xml/xml/ (mirror of open-dis-spec-xml); the target-output reference is
 the dis7-ng exemplar (commit 5a22702).
 

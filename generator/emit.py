@@ -429,9 +429,7 @@ def _emit_record(
     lines.append(f"    def {size_name}(self) -> int:")
     lines.append(f"        {_marshalled_expr(rec)}")
     lines.append("")
-    lines.append(
-        f"    def {ser_name}(self, outputStream: DataOutputStream) -> None:"
-    )
+    lines.append(f"    def {ser_name}(self, outputStream: DataOutputStream) -> None:")
     for attr in rec.attributes:
         lines.append(_serialize_line(attr))
     lines.append("")
@@ -441,7 +439,9 @@ def _emit_record(
             f'    def parse(cls, inputStream: DataInputStream) -> "{rec.name}":'
         )
     else:
-        lines.append(f"    def {parse_name}(self, inputStream: DataInputStream) -> None:")
+        lines.append(
+            f"    def {parse_name}(self, inputStream: DataInputStream) -> None:"
+        )
     stmts, args = _parse_pieces(rec, records)
     lines += stmts
     if rec.frozen:
@@ -552,9 +552,7 @@ def _marshalled_expr(rec: ir.RecordClass) -> str:
             parts.append(f"self.{attr.name}.marshalledSize()")
         elif isinstance(shape, ir.ObjectList):
             has_ref = True
-            parts.append(
-                f"sum(item.marshalledSize() for item in self.{attr.name})"
-            )
+            parts.append(f"sum(item.marshalledSize() for item in self.{attr.name})")
         elif isinstance(shape, (ir.EnumRef, ir.VariantGroup)):
             size = (
                 shape.size
@@ -653,9 +651,7 @@ def _parse_pieces(
             )
             stmts.append("        # PR #49): the list is replaced wholesale.")
             stmts.append(f"        self.{attr.name} = [")
-            stmts.append(
-                f"            {shape.element}.parseFrom(inputStream)"
-            )
+            stmts.append(f"            {shape.element}.parseFrom(inputStream)")
             stmts.append(f"            for _ in range({shape.count_field})")
             stmts.append("        ]")
         elif isinstance(shape, ir.VariantGroup):

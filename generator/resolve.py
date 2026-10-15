@@ -54,11 +54,7 @@ class Resolver:
                 target = self._classref_target(attr.shape)
                 if target and target not in out:
                     pending.append(target)
-            if (
-                rec.parent
-                and rec.parent in self.by_canonical
-                and rec.parent not in out
-            ):
+            if rec.parent and rec.parent in self.by_canonical and rec.parent not in out:
                 pending.append(rec.parent)
         return out
 
@@ -106,9 +102,7 @@ class Resolver:
             return base, True
         parent_el = self.xml_classes.get(self.by_canonical.get(canonical, canonical))
         if parent_el is None:
-            raise SpecError(
-                f"{el.get('name')!r} inherits unknown class {parent!r}"
-            )
+            raise SpecError(f"{el.get('name')!r} inherits unknown class {parent!r}")
         return canonical, self._is_pdu_lineage(parent_el)
 
     def _is_pdu_lineage(self, el) -> bool:
@@ -148,15 +142,20 @@ class Resolver:
                         f"hidden attribute {attr.name!r} on {owner!r} is not "
                         "referenced by any objectlist countFieldName"
                     )
-            elif isinstance(shape, ir.ObjectList) and shape.count_field not in hidden_names:
+            elif (
+                isinstance(shape, ir.ObjectList)
+                and shape.count_field not in hidden_names
+            ):
                 raise SpecError(
                     f"objectlist {attr.name!r} on {owner!r} counts hidden "
                     f"field {shape.count_field!r}, which is not declared hidden"
                 )
         return [
-            dataclasses.replace(attr, count_for=lists[attr.name])
-            if attr.hidden
-            else attr
+            (
+                dataclasses.replace(attr, count_for=lists[attr.name])
+                if attr.hidden
+                else attr
+            )
             for attr in attributes
         ]
 

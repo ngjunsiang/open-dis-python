@@ -1,7 +1,7 @@
-"""Behavioral parity gate: generated bitfield views vs the exemplar.
+"""Behavioral parity verification generated bitfield views vs the exemplar.
 
 Run from the repo root with the project venv:
-    .venv/bin/python generator/gates/parity_bitfields.py
+    .venv/bin/python generator/verification/parity_bitfields.py
 
 Asserts, per view class: identical _WIDTH and _FIELDS layout (names,
 shifts, widths, uids — the core parity claim), identical get/set
@@ -82,12 +82,12 @@ def main() -> int:
             failures.append(f"exemplar view {name!r} not generated")
 
     if failures:
-        print("PARITY GATE FAILED:")
+        print("PARITY VERIFICATION FAILED:")
         for f in failures:
             print(f"  - {f}")
         return 1
     print(
-        f"parity gate PASSED: {checked} view classes, layout-identical "
+        f"parity verification PASSED: {checked} view classes, layout-identical "
         "_FIELDS + seeded bit-pattern get/set + policy checks"
     )
     return 0

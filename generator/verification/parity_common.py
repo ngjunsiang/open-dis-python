@@ -1,13 +1,13 @@
-"""Behavioral parity gate: generated common records vs the exemplar.
+"""Behavioral parity verification generated common records vs the exemplar.
 
 Run from the repo root with the project venv:
-    .venv/bin/python generator/gates/parity_common.py
+    .venv/bin/python generator/verification/parity_common.py
 
 Regenerates into generated/ (staging), imports both modules, and asserts
 byte-level serialization equality, cross-parse round-trips, size parity,
 frozen-ness, parse-style, alias identity, and enum-registry degradation.
 Textual identity with the exemplar is NOT claimed — docstring canon and
-member ordering ride in overrides.py; this gate pins behavior.
+member ordering ride in overrides.py; this verification pins behavior.
 """
 
 from __future__ import annotations
@@ -141,12 +141,12 @@ def main() -> int:
     assert gen.EntityIdentifier.ALL_ENTITIES == 0xFFFF
 
     if failures:
-        print("PARITY GATE FAILED:")
+        print("PARITY VERIFICATION FAILED:")
         for f in failures:
             print(f"  - {f}")
         return 1
     print(
-        f"parity gate PASSED: {len(SAMPLES)} record classes, "
+        f"parity verification PASSED: {len(SAMPLES)} record classes, "
         "byte-exact serialization + cross-parse + sizes + policy checks"
     )
     return 0
