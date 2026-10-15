@@ -38,7 +38,7 @@ __all__ = [
 
 @dataclass(slots=True)
 class FixedDatum:
-    """Section 6.2.37 Fixed Datum record
+    """§6.2.37 Fixed Datum record
 
     The fixed datum type, and a 32-bit value for that fixed datum type.
     """
@@ -79,7 +79,7 @@ def _paddedDatumSize(byteCount: int) -> int:
 
 @dataclass(slots=True)
 class VariableDatum:
-    """Section 6.2.93 Variable Datum record
+    """§6.2.93 Variable Datum record
 
     The variable datum type, the datum length in bits, and the value for
     that variable datum type. ``variableData`` is the raw payload as
@@ -116,9 +116,9 @@ class VariableDatum:
         if padding:
             outputStream.write_bytes(b"\x00" * padding)
 
-    def parse(self,
-              inputStream: DataInputStream,
-              bytelength: int | None = None) -> None:
+    def parse(
+        self, inputStream: DataInputStream, bytelength: int | None = None
+    ) -> None:
         self.variableDatumID = rich_or_int(66, inputStream.read_uint32())
         variableDatumLength = inputStream.read_uint32()
         self.variableData = inputStream.read_bytes(variableDatumLength // 8)
@@ -146,6 +146,7 @@ class VariableDatum:
             getStandardVariableClass,
             isKnownStandardVariableRecord,
         )
+
         recordType = int(self.variableDatumID)
         if not isKnownStandardVariableRecord(recordType):
             return None
@@ -166,7 +167,7 @@ class VariableDatum:
 
 @dataclass(slots=True)
 class SimulationManagementFamilyPdu(Pdu):
-    """Section 5.6 marker; carries the §6.2.82 Simulation Management PDU
+    """§5.6 marker; carries the §6.2.82 Simulation Management PDU
     Header fields (originating and receiving entity IDs)."""
 
     protocolFamily: ClassVar[int] = 5  # [UID 5]
@@ -175,8 +176,10 @@ class SimulationManagementFamilyPdu(Pdu):
     receivingEntityID: EntityIdentifier = field(default_factory=EntityIdentifier)
 
     def _marshalledBodySize(self) -> int:
-        return (self.originatingEntityID.marshalledSize()
-                + self.receivingEntityID.marshalledSize())
+        return (
+            self.originatingEntityID.marshalledSize()
+            + self.receivingEntityID.marshalledSize()
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         self.originatingEntityID.serialize(outputStream)
@@ -189,7 +192,7 @@ class SimulationManagementFamilyPdu(Pdu):
 
 @dataclass(slots=True)
 class DataPdu(SimulationManagementFamilyPdu):
-    """Section 7.5.11 Data PDU
+    """§7.5.11 Data PDU
 
     Information issued in response to a Data Query PDU or Set Data PDU.
     The request ID is followed by four pad bytes (packer-computed) and the
@@ -215,11 +218,15 @@ class DataPdu(SimulationManagementFamilyPdu):
     # generator: two-arg super() — zero-arg super()'s __class__ cell points
     # at the pre-slots class when @dataclass(slots=True) recreates it
     def _marshalledBodySize(self) -> int:
-        return (super(DataPdu, self)._marshalledBodySize()
-                + 4 + 4  # requestID + padding1
-                + 4 + 4  # counts
-                + sum(fd.marshalledSize() for fd in self.fixedDatumRecords)
-                + sum(vd.marshalledSize() for vd in self.variableDatumRecords))
+        return (
+            super(DataPdu, self)._marshalledBodySize()
+            + 4
+            + 4  # requestID + padding1
+            + 4
+            + 4  # counts
+            + sum(fd.marshalledSize() for fd in self.fixedDatumRecords)
+            + sum(vd.marshalledSize() for vd in self.variableDatumRecords)
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(DataPdu, self)._serializeBody(outputStream)
@@ -239,8 +246,7 @@ class DataPdu(SimulationManagementFamilyPdu):
         numberOfFixedDatumRecords = inputStream.read_uint32()
         numberOfVariableDatumRecords = inputStream.read_uint32()
         self.fixedDatumRecords = [
-            self._parseFixedDatum(inputStream)
-            for _ in range(numberOfFixedDatumRecords)
+            self._parseFixedDatum(inputStream) for _ in range(numberOfFixedDatumRecords)
         ]
         self.variableDatumRecords = [
             self._parseVariableDatum(inputStream)
@@ -293,9 +299,12 @@ class _DatumListsMixin:
         return len(self.variableDatumRecords)
 
     def _datumTailSize(self) -> int:
-        return (4 + 4
-                + sum(fd.marshalledSize() for fd in self.fixedDatumRecords)
-                + sum(vd.marshalledSize() for vd in self.variableDatumRecords))
+        return (
+            4
+            + 4
+            + sum(fd.marshalledSize() for fd in self.fixedDatumRecords)
+            + sum(vd.marshalledSize() for vd in self.variableDatumRecords)
+        )
 
     def _serializeDatumTail(self, outputStream: DataOutputStream) -> None:
         outputStream.write_uint32(self.numberOfFixedDatumRecords)
@@ -309,8 +318,7 @@ class _DatumListsMixin:
         numberOfFixedDatumRecords = inputStream.read_uint32()
         numberOfVariableDatumRecords = inputStream.read_uint32()
         self.fixedDatumRecords = [
-            FixedDatum.parseFrom(inputStream)
-            for _ in range(numberOfFixedDatumRecords)
+            FixedDatum.parseFrom(inputStream) for _ in range(numberOfFixedDatumRecords)
         ]
         self.variableDatumRecords = [
             VariableDatum.parseFrom(inputStream)
@@ -320,7 +328,7 @@ class _DatumListsMixin:
 
 @dataclass(slots=True)
 class CreateEntityPdu(SimulationManagementFamilyPdu):
-    """Section 7.5.2 Create Entity PDU
+    """§7.5.2 Create Entity PDU
 
     Communicates the creation of a new entity. Total PDU size is 28
     bytes."""
@@ -330,7 +338,7 @@ class CreateEntityPdu(SimulationManagementFamilyPdu):
     requestID: uint32 = 0
 
     def _marshalledBodySize(self) -> int:
-        return (super(CreateEntityPdu, self)._marshalledBodySize() + 4)
+        return super(CreateEntityPdu, self)._marshalledBodySize() + 4
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(CreateEntityPdu, self)._serializeBody(outputStream)
@@ -343,7 +351,7 @@ class CreateEntityPdu(SimulationManagementFamilyPdu):
 
 @dataclass(slots=True)
 class RemoveEntityPdu(SimulationManagementFamilyPdu):
-    """Section 7.5.3 Remove Entity PDU
+    """§7.5.3 Remove Entity PDU
 
     Communicates the removal of an entity from an exercise. Total PDU
     size is 28 bytes."""
@@ -353,7 +361,7 @@ class RemoveEntityPdu(SimulationManagementFamilyPdu):
     requestID: uint32 = 0
 
     def _marshalledBodySize(self) -> int:
-        return (super(RemoveEntityPdu, self)._marshalledBodySize() + 4)
+        return super(RemoveEntityPdu, self)._marshalledBodySize() + 4
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(RemoveEntityPdu, self)._serializeBody(outputStream)
@@ -366,7 +374,7 @@ class RemoveEntityPdu(SimulationManagementFamilyPdu):
 
 @dataclass(slots=True)
 class StartResumePdu(SimulationManagementFamilyPdu):
-    """Section 7.5.4 Start/Resume PDU
+    """§7.5.4 Start/Resume PDU
 
     Communicates the start/resume of an entity or exercise. Total PDU
     size is 44 bytes."""
@@ -378,10 +386,12 @@ class StartResumePdu(SimulationManagementFamilyPdu):
     requestID: uint32 = 0
 
     def _marshalledBodySize(self) -> int:
-        return (super(StartResumePdu, self)._marshalledBodySize()
-                + self.realWorldTime.marshalledSize()
-                + self.simulationTime.marshalledSize()
-                + 4)
+        return (
+            super(StartResumePdu, self)._marshalledBodySize()
+            + self.realWorldTime.marshalledSize()
+            + self.simulationTime.marshalledSize()
+            + 4
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(StartResumePdu, self)._serializeBody(outputStream)
@@ -398,7 +408,7 @@ class StartResumePdu(SimulationManagementFamilyPdu):
 
 @dataclass(slots=True)
 class StopFreezePdu(SimulationManagementFamilyPdu):
-    """Section 7.5.5 Stop/Freeze PDU
+    """§7.5.5 Stop/Freeze PDU
 
     Communicates the stopping or freezing of an entity or exercise.
     ``frozenBehavior`` holds the raw uint8 until parsed, then the
@@ -418,9 +428,14 @@ class StopFreezePdu(SimulationManagementFamilyPdu):
     padding1: uint16 = field(init=False, default=0)
 
     def _marshalledBodySize(self) -> int:
-        return (super(StopFreezePdu, self)._marshalledBodySize()
-                + self.realWorldTime.marshalledSize()
-                + 1 + 1 + 2 + 4)
+        return (
+            super(StopFreezePdu, self)._marshalledBodySize()
+            + self.realWorldTime.marshalledSize()
+            + 1
+            + 1
+            + 2
+            + 4
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(StopFreezePdu, self)._serializeBody(outputStream)
@@ -434,15 +449,14 @@ class StopFreezePdu(SimulationManagementFamilyPdu):
         super(StopFreezePdu, self)._parseBody(inputStream)
         self.realWorldTime.parse(inputStream)
         self.reason = rich_or_int(67, inputStream.read_uint8())
-        self.frozenBehavior = StopFreezeFrozenBehavior(
-            inputStream.read_uint8())
+        self.frozenBehavior = StopFreezeFrozenBehavior(inputStream.read_uint8())
         self.padding1 = inputStream.read_uint16()
         self.requestID = inputStream.read_uint32()
 
 
 @dataclass(slots=True)
 class AcknowledgePdu(SimulationManagementFamilyPdu):
-    """Section 7.5.6 Acknowledge PDU
+    """§7.5.6 Acknowledge PDU
 
     Acknowledges receipt of a Start/Resume, Stop/Freeze, Create Entity,
     or Remove Entity PDU. Total PDU size is 32 bytes."""
@@ -459,8 +473,7 @@ class AcknowledgePdu(SimulationManagementFamilyPdu):
     requestID: uint32 = 0
 
     def _marshalledBodySize(self) -> int:
-        return (super(AcknowledgePdu, self)._marshalledBodySize()
-                + 2 + 2 + 4)
+        return super(AcknowledgePdu, self)._marshalledBodySize() + 2 + 2 + 4
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(AcknowledgePdu, self)._serializeBody(outputStream)
@@ -477,7 +490,7 @@ class AcknowledgePdu(SimulationManagementFamilyPdu):
 
 @dataclass(slots=True)
 class ActionRequestPdu(_DatumListsMixin, SimulationManagementFamilyPdu):
-    """Section 7.5.7 Action Request PDU
+    """§7.5.7 Action Request PDU
 
     A request from a simulation manager to a managed entity to perform a
     specified action, carrying a Datum Specification."""
@@ -494,8 +507,12 @@ class ActionRequestPdu(_DatumListsMixin, SimulationManagementFamilyPdu):
     variableDatumRecords: list[VariableDatum] = field(default_factory=list)
 
     def _marshalledBodySize(self) -> int:
-        return (super(ActionRequestPdu, self)._marshalledBodySize()
-                + 4 + 4 + self._datumTailSize())
+        return (
+            super(ActionRequestPdu, self)._marshalledBodySize()
+            + 4
+            + 4
+            + self._datumTailSize()
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(ActionRequestPdu, self)._serializeBody(outputStream)
@@ -512,7 +529,7 @@ class ActionRequestPdu(_DatumListsMixin, SimulationManagementFamilyPdu):
 
 @dataclass(slots=True)
 class ActionResponsePdu(_DatumListsMixin, SimulationManagementFamilyPdu):
-    """Section 7.5.8 Action Response PDU
+    """§7.5.8 Action Response PDU
 
     Acknowledges an Action Request PDU, carrying a Datum Specification."""
 
@@ -528,8 +545,12 @@ class ActionResponsePdu(_DatumListsMixin, SimulationManagementFamilyPdu):
     variableDatumRecords: list[VariableDatum] = field(default_factory=list)
 
     def _marshalledBodySize(self) -> int:
-        return (super(ActionResponsePdu, self)._marshalledBodySize()
-                + 4 + 4 + self._datumTailSize())
+        return (
+            super(ActionResponsePdu, self)._marshalledBodySize()
+            + 4
+            + 4
+            + self._datumTailSize()
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(ActionResponsePdu, self)._serializeBody(outputStream)
@@ -546,7 +567,7 @@ class ActionResponsePdu(_DatumListsMixin, SimulationManagementFamilyPdu):
 
 @dataclass(slots=True)
 class DataQueryPdu(SimulationManagementFamilyPdu):
-    """Section 7.5.9 Data Query PDU
+    """§7.5.9 Data Query PDU
 
     A request for data from an entity. The lists carry datum IDs (u32
     each, [UID 66]), not datum records — the query names the datums it
@@ -568,10 +589,15 @@ class DataQueryPdu(SimulationManagementFamilyPdu):
         return len(self.variableDatumIDs)
 
     def _marshalledBodySize(self) -> int:
-        return (super(DataQueryPdu, self)._marshalledBodySize()
-                + 4 + 4 + 4 + 4
-                + 4 * len(self.fixedDatumIDs)
-                + 4 * len(self.variableDatumIDs))
+        return (
+            super(DataQueryPdu, self)._marshalledBodySize()
+            + 4
+            + 4
+            + 4
+            + 4
+            + 4 * len(self.fixedDatumIDs)
+            + 4 * len(self.variableDatumIDs)
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(DataQueryPdu, self)._serializeBody(outputStream)
@@ -602,7 +628,7 @@ class DataQueryPdu(SimulationManagementFamilyPdu):
 
 @dataclass(slots=True)
 class SetDataPdu(_DatumListsMixin, SimulationManagementFamilyPdu):
-    """Section 7.5.10 Set Data PDU
+    """§7.5.10 Set Data PDU
 
     Initializes or changes internal state information, carrying a Datum
     Specification."""
@@ -616,8 +642,12 @@ class SetDataPdu(_DatumListsMixin, SimulationManagementFamilyPdu):
     padding1: uint32 = field(init=False, default=0)
 
     def _marshalledBodySize(self) -> int:
-        return (super(SetDataPdu, self)._marshalledBodySize()
-                + 4 + 4 + self._datumTailSize())
+        return (
+            super(SetDataPdu, self)._marshalledBodySize()
+            + 4
+            + 4
+            + self._datumTailSize()
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(SetDataPdu, self)._serializeBody(outputStream)
@@ -634,7 +664,7 @@ class SetDataPdu(_DatumListsMixin, SimulationManagementFamilyPdu):
 
 @dataclass(slots=True)
 class EventReportPdu(_DatumListsMixin, SimulationManagementFamilyPdu):
-    """Section 7.5.12 Event Report PDU
+    """§7.5.12 Event Report PDU
 
     A managed entity reports the occurrence of a significant event to
     the simulation manager, carrying a Datum Specification."""
@@ -652,8 +682,12 @@ class EventReportPdu(_DatumListsMixin, SimulationManagementFamilyPdu):
     padding1: uint32 = field(init=False, default=0)
 
     def _marshalledBodySize(self) -> int:
-        return (super(EventReportPdu, self)._marshalledBodySize()
-                + 4 + 4 + self._datumTailSize())
+        return (
+            super(EventReportPdu, self)._marshalledBodySize()
+            + 4
+            + 4
+            + self._datumTailSize()
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(EventReportPdu, self)._serializeBody(outputStream)
@@ -670,7 +704,7 @@ class EventReportPdu(_DatumListsMixin, SimulationManagementFamilyPdu):
 
 @dataclass(slots=True)
 class CommentPdu(_DatumListsMixin, SimulationManagementFamilyPdu):
-    """Section 7.5.13 Comment PDU
+    """§7.5.13 Comment PDU
 
     Used to enter arbitrary messages (character strings, for example)
     via variable datums. The fixed datum count is not used by this PDU
@@ -683,8 +717,7 @@ class CommentPdu(_DatumListsMixin, SimulationManagementFamilyPdu):
     variableDatumRecords: list[VariableDatum] = field(default_factory=list)
 
     def _marshalledBodySize(self) -> int:
-        return (super(CommentPdu, self)._marshalledBodySize()
-                + self._datumTailSize())
+        return super(CommentPdu, self)._marshalledBodySize() + self._datumTailSize()
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(CommentPdu, self)._serializeBody(outputStream)

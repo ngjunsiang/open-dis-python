@@ -54,9 +54,12 @@ class DeadReckoningParameters:
     entityAngularVelocity: Vector3Float = field(default_factory=Vector3Float)
 
     def marshalledSize(self) -> int:
-        return (1 + len(self.parameters)
-                + self.entityLinearAcceleration.marshalledSize()
-                + self.entityAngularVelocity.marshalledSize())
+        return (
+            1
+            + len(self.parameters)
+            + self.entityLinearAcceleration.marshalledSize()
+            + self.entityAngularVelocity.marshalledSize()
+        )
 
     def serialize(self, outputStream: DataOutputStream) -> None:
         outputStream.write_uint8(self.deadReckoningAlgorithm)
@@ -73,7 +76,7 @@ class DeadReckoningParameters:
 
 @dataclass(slots=True)
 class VariableParameter:
-    """Section 6.2.94 Variable Parameter record (general form, §6.2.94.1)
+    """§6.2.94 Variable Parameter record (general form, §6.2.94.1)
 
     Specification of additional information associated with an entity or
     detonation, not otherwise accounted for in a PDU. The 15
@@ -93,8 +96,7 @@ class VariableParameter:
 
     def serialize(self, outputStream: DataOutputStream) -> None:
         outputStream.write_uint8(self.recordType)
-        outputStream.write_bytes(
-            self.recordSpecificFields[:15].ljust(15, b"\x00"))
+        outputStream.write_bytes(self.recordSpecificFields[:15].ljust(15, b"\x00"))
 
     def parse(self, inputStream: DataInputStream) -> None:
         self.recordType = rich_or_int(56, inputStream.read_uint8())
@@ -111,7 +113,7 @@ class VariableParameter:
 
 @dataclass(slots=True)
 class EntityInformationFamilyPdu(Pdu):
-    """Section 5.3.3 marker for the Entity Information/Interaction family.
+    """§5.3.3 marker for the Entity Information/Interaction family.
 
     Implementation role moved to the registry; kept as a thin marker for
     compatibility while family metadata lives in PDU_FAMILIES.
@@ -125,18 +127,18 @@ class EntityInformationFamilyPdu(Pdu):
 # domain). Parse wraps the raw uint32 into the matching view; unknown
 # kinds keep the plain int. The marshaller writes int(field) either way.
 _APPEARANCE_VIEWS: dict[tuple[int, int], type] = {
-    (1, 1): LandPlatformAppearance,   # platform, land domain [UID 31]
-    (1, 2): AirPlatformAppearance,    # platform, air domain [UID 32]
+    (1, 1): LandPlatformAppearance,  # platform, land domain [UID 31]
+    (1, 2): AirPlatformAppearance,  # platform, air domain [UID 32]
 }
 _CAPABILITY_VIEWS: dict[tuple[int, int], type] = {
-    (1, 1): LandPlatformCapabilities,   # [UID 450]
-    (1, 2): AirPlatformCapabilities,    # [UID 451]
+    (1, 1): LandPlatformCapabilities,  # [UID 450]
+    (1, 2): AirPlatformCapabilities,  # [UID 451]
 }
 
 
 @dataclass(slots=True)
 class EntityStatePdu(EntityInformationFamilyPdu):
-    """Section 7.2.2 Entity State PDU
+    """§7.2.2 Entity State PDU
 
     Represents the position and state of one entity in the world.
     ``entityAppearance`` and ``capabilities`` hold the raw uint32 on the
@@ -160,7 +162,8 @@ class EntityStatePdu(EntityInformationFamilyPdu):
     entityOrientation: EulerAngles = field(default_factory=EulerAngles)
     entityAppearance: uint32 = 0  # [UID 31-43] or a bitfield view
     deadReckoningParameters: DeadReckoningParameters = field(
-        default_factory=DeadReckoningParameters)
+        default_factory=DeadReckoningParameters
+    )
     marking: EntityMarking = field(default_factory=EntityMarking)
     capabilities: uint32 = 0  # [UID 55] or a bitfield view
     variableParameters: list[VariableParameter] = field(default_factory=list)
@@ -171,18 +174,21 @@ class EntityStatePdu(EntityInformationFamilyPdu):
         return len(self.variableParameters)
 
     def _marshalledBodySize(self) -> int:
-        return (self.entityID.marshalledSize()
-                + 1 + 1
-                + self.entityType.marshalledSize()
-                + self.alternativeEntityType.marshalledSize()
-                + self.entityLinearVelocity.marshalledSize()
-                + self.entityLocation.marshalledSize()
-                + self.entityOrientation.marshalledSize()
-                + 4
-                + self.deadReckoningParameters.marshalledSize()
-                + self.marking.marshalledSize()
-                + 4
-                + sum(vp.marshalledSize() for vp in self.variableParameters))
+        return (
+            self.entityID.marshalledSize()
+            + 1
+            + 1
+            + self.entityType.marshalledSize()
+            + self.alternativeEntityType.marshalledSize()
+            + self.entityLinearVelocity.marshalledSize()
+            + self.entityLocation.marshalledSize()
+            + self.entityOrientation.marshalledSize()
+            + 4
+            + self.deadReckoningParameters.marshalledSize()
+            + self.marking.marshalledSize()
+            + 4
+            + sum(vp.marshalledSize() for vp in self.variableParameters)
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         self.entityID.serialize(outputStream)
@@ -230,8 +236,7 @@ class EntityStatePdu(EntityInformationFamilyPdu):
     # generator: hook point for typed VariableParameter decoding; the
     # slice keeps them opaque
     @staticmethod
-    def _parseVariableParameter(
-            inputStream: DataInputStream) -> VariableParameter:
+    def _parseVariableParameter(inputStream: DataInputStream) -> VariableParameter:
         vp = VariableParameter()
         vp.parse(inputStream)
         return vp

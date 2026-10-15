@@ -17,12 +17,11 @@ class DEFireFlags(BitfieldView):
     _WIDTH: ClassVar[int] = 16
     _FIELDS: ClassVar[tuple[tuple[str, int, int, int | None], ...]] = (
         ("weaponOn", 0, 1, None),
-        ("stateUpdateFlag", 1, 1, None),
+        ("stateUpdateFlag", 1, 1, 374),
     )
 
     @property
     def weaponOn(self) -> bool:
-        """State of the DE weapon (on/off)."""
         return self._getBit(0)
 
     @weaponOn.setter
@@ -31,7 +30,6 @@ class DEFireFlags(BitfieldView):
 
     @property
     def stateUpdateFlag(self) -> bool:
-        """DE weapon state change flag."""
         return self._getBit(1)
 
     @stateUpdateFlag.setter

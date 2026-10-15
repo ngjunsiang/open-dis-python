@@ -27,7 +27,7 @@ from .common import *
 from .radio import *
 from .warfare import *
 
-SV = TypeVar('SV', bound=base.StandardVariableRecord)
+SV = TypeVar("SV", bound=base.StandardVariableRecord)
 
 
 __variableRecordClasses: dict[int, type[base.StandardVariableRecord]] = {
@@ -37,16 +37,18 @@ __variableRecordClasses: dict[int, type[base.StandardVariableRecord]] = {
     4500: DirectedEnergyDamage,
 }
 
+
 def isKnownStandardVariableRecord(recordType: int) -> bool:
     """True when a typed decoder is registered for this record type [UID 66]."""
-    return (isinstance(recordType, int)
-            and recordType >= 0
-            and recordType in __variableRecordClasses)
+    return (
+        isinstance(recordType, int)
+        and recordType >= 0
+        and recordType in __variableRecordClasses
+    )
 
 
 def getStandardVariableClass(
-        recordType: int,
-        expectedType: type[SV] = base.StandardVariableRecord
+    recordType: int, expectedType: type[SV] = base.StandardVariableRecord
 ) -> type[SV]:
     """Return a StandardVariableRecord subclass for the given recordType."""
 
@@ -54,9 +56,10 @@ def getStandardVariableClass(
     # set for each new unrecognised record type.
     class UnknownStandardVariableRecord(base.StandardVariableRecord):
         """A placeholder class for unrecognised Standard Variable Records."""
+
         recordType: enum32
 
-        def __init__(self, data: bytes = b'') -> None:
+        def __init__(self, data: bytes = b"") -> None:
             self.data = data
 
         def marshalledSize(self) -> uint16:
@@ -68,9 +71,7 @@ def getStandardVariableClass(
             outputStream.write_uint16(self.recordLength)
             outputStream.write_bytes(self.data)
 
-        def parse(self,
-                inputStream: DataInputStream,
-                bytelength: int) -> None:
+        def parse(self, inputStream: DataInputStream, bytelength: int) -> None:
             super().parse(inputStream, bytelength)
             # Subtract 6 bytes for type and length
             self.data = inputStream.read_bytes(bytelength - 6)
@@ -80,10 +81,7 @@ def getStandardVariableClass(
             f"recordType must be a non-negative integer, got {recordType!r}"
         )
     UnknownStandardVariableRecord.recordType = recordType
-    vrClass = __variableRecordClasses.get(
-        recordType,
-        UnknownStandardVariableRecord
-    )
+    vrClass = __variableRecordClasses.get(recordType, UnknownStandardVariableRecord)
     if not issubclass(vrClass, expectedType):
         raise TypeError(
             f"Record Type {recordType}: Record class {vrClass.__name__} is not "
@@ -93,7 +91,8 @@ def getStandardVariableClass(
 
 
 def parseStandardVariableRecord(
-        inputStream: DataInputStream) -> base.StandardVariableRecord:
+    inputStream: DataInputStream,
+) -> base.StandardVariableRecord:
     """Parse one uid-66 Standard Variable record from the stream.
 
     Consumes the record header (recordType u32 + recordLength u16,

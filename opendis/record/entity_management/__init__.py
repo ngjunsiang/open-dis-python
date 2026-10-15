@@ -52,7 +52,7 @@ __all__ = [
 
 @dataclass(frozen=True, slots=True)
 class AggregateIdentifier:
-    """Section 6.2.5 Aggregate Identifier record
+    """§6.2.5 Aggregate Identifier record
 
     Unique identifier for an aggregate: simulation address plus
     aggregate number. Frozen identity type, same taxonomy as
@@ -70,13 +70,12 @@ class AggregateIdentifier:
 
     @classmethod
     def parse(cls, inputStream: DataInputStream) -> "AggregateIdentifier":
-        return cls(SimulationAddress.parse(inputStream),
-                   inputStream.read_uint16())
+        return cls(SimulationAddress.parse(inputStream), inputStream.read_uint16())
 
 
 @dataclass(frozen=True, slots=True)
 class AggregateType:
-    """Section 6.2.7 Aggregate Type record
+    """§6.2.7 Aggregate Type record
 
     The type of an aggregate — the aggregate-kind analogue of an
     EntityType."""
@@ -111,18 +110,20 @@ class AggregateType:
 
     @classmethod
     def parse(cls, inputStream: DataInputStream) -> "AggregateType":
-        return cls(rich_or_int(206, inputStream.read_uint8()),
-                   rich_or_int(8, inputStream.read_uint8()),
-                   rich_or_int(29, inputStream.read_uint16()),
-                   inputStream.read_uint8(),
-                   rich_or_int(208, inputStream.read_uint8()),
-                   rich_or_int(209, inputStream.read_uint8()),
-                   inputStream.read_uint8())
+        return cls(
+            rich_or_int(206, inputStream.read_uint8()),
+            rich_or_int(8, inputStream.read_uint8()),
+            rich_or_int(29, inputStream.read_uint16()),
+            inputStream.read_uint8(),
+            rich_or_int(208, inputStream.read_uint8()),
+            rich_or_int(209, inputStream.read_uint8()),
+            inputStream.read_uint8(),
+        )
 
 
 @dataclass(slots=True)
 class Relationship:
-    """Section 6.2.63 Relationship record
+    """§6.2.63 Relationship record
 
     The relationship of a part to its host: nature and position."""
 
@@ -148,7 +149,7 @@ class Relationship:
 
 @dataclass(slots=True)
 class NamedLocationIdentification:
-    """Section 6.2.62 Named Location Identification record
+    """§6.2.62 Named Location Identification record
 
     Station name (16-bit enumeration [UID 212]) and station number."""
 
@@ -173,7 +174,7 @@ class NamedLocationIdentification:
 
 @dataclass(slots=True)
 class EntityManagementFamilyPdu(Pdu):
-    """Section 7.8 marker for the Entity Management family."""
+    """§7.8 marker for the Entity Management family."""
 
     protocolFamily: ClassVar[int] = 7  # [UID 5]
 
@@ -185,7 +186,7 @@ def _padTo32(byteCount: int) -> int:
 
 @dataclass(slots=True)
 class AggregateStatePdu(EntityManagementFamilyPdu):
-    """Section 7.8.2 Aggregate State PDU
+    """§7.8.2 Aggregate State PDU
 
     Communicates the state and other pertinent information about an
     aggregated unit: geometry, silent-entity tables, constituent ID
@@ -201,8 +202,7 @@ class AggregateStatePdu(EntityManagementFamilyPdu):
         "formation": 205,
     }
 
-    aggregateID: AggregateIdentifier = field(
-        default_factory=AggregateIdentifier)
+    aggregateID: AggregateIdentifier = field(default_factory=AggregateIdentifier)
     forceID: enum8 = 0  # [UID 6]
     aggregateState: enum8 = 0  # [UID 204]
     aggregateType: AggregateType = field(default_factory=AggregateType)
@@ -239,27 +239,36 @@ class AggregateStatePdu(EntityManagementFamilyPdu):
         return len(self.variableDatumList)
 
     def _prefixSize(self) -> int:
-        return (self.aggregateID.marshalledSize()
-                + 1 + 1
-                + self.aggregateType.marshalledSize()
-                + 4
-                + self.aggregateMarking.marshalledSize()
-                + self.dimensions.marshalledSize()
-                + self.orientation.marshalledSize()
-                + self.centerOfMass.marshalledSize()
-                + self.velocity.marshalledSize()
-                + 2 + 2 + 2 + 2)
+        return (
+            self.aggregateID.marshalledSize()
+            + 1
+            + 1
+            + self.aggregateType.marshalledSize()
+            + 4
+            + self.aggregateMarking.marshalledSize()
+            + self.dimensions.marshalledSize()
+            + self.orientation.marshalledSize()
+            + self.centerOfMass.marshalledSize()
+            + self.velocity.marshalledSize()
+            + 2
+            + 2
+            + 2
+            + 2
+        )
 
     def _marshalledBodySize(self) -> int:
-        idLists = (sum(a.marshalledSize() for a in self.aggregateIDList)
-                   + sum(e.marshalledSize() for e in self.entityIDList))
-        size = (self._prefixSize() + idLists
-                + _padTo32(12 + self._prefixSize() + idLists)
-                + sum(t.marshalledSize()
-                      for t in self.silentAggregateSystemList)
-                + sum(t.marshalledSize() for t in self.silentEntitySystemList)
-                + 4
-                + sum(vd.marshalledSize() for vd in self.variableDatumList))
+        idLists = sum(a.marshalledSize() for a in self.aggregateIDList) + sum(
+            e.marshalledSize() for e in self.entityIDList
+        )
+        size = (
+            self._prefixSize()
+            + idLists
+            + _padTo32(12 + self._prefixSize() + idLists)
+            + sum(t.marshalledSize() for t in self.silentAggregateSystemList)
+            + sum(t.marshalledSize() for t in self.silentEntitySystemList)
+            + 4
+            + sum(vd.marshalledSize() for vd in self.variableDatumList)
+        )
         return size
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
@@ -281,8 +290,9 @@ class AggregateStatePdu(EntityManagementFamilyPdu):
             aggregate.serialize(outputStream)
         for entity in self.entityIDList:
             entity.serialize(outputStream)
-        idLists = (sum(a.marshalledSize() for a in self.aggregateIDList)
-                   + sum(e.marshalledSize() for e in self.entityIDList))
+        idLists = sum(a.marshalledSize() for a in self.aggregateIDList) + sum(
+            e.marshalledSize() for e in self.entityIDList
+        )
         padding = _padTo32(12 + self._prefixSize() + idLists)
         if padding:
             outputStream.write_bytes(b"\x00" * padding)
@@ -311,24 +321,20 @@ class AggregateStatePdu(EntityManagementFamilyPdu):
         numberOfSilentAggregateTypes = inputStream.read_uint16()
         numberOfSilentEntityTypes = inputStream.read_uint16()
         self.aggregateIDList = [
-            AggregateIdentifier.parse(inputStream)
-            for _ in range(numberOfDisAggregates)
+            AggregateIdentifier.parse(inputStream) for _ in range(numberOfDisAggregates)
         ]
         self.entityIDList = [
-            EntityIdentifier.parse(inputStream)
-            for _ in range(numberOfDisEntities)
+            EntityIdentifier.parse(inputStream) for _ in range(numberOfDisEntities)
         ]
         idLists = 6 * numberOfDisAggregates + 6 * numberOfDisEntities
         padding = _padTo32(12 + self._prefixSize() + idLists)
         if padding:
             inputStream.read_bytes(padding)
         self.silentAggregateSystemList = [
-            EntityType.parse(inputStream)
-            for _ in range(numberOfSilentAggregateTypes)
+            EntityType.parse(inputStream) for _ in range(numberOfSilentAggregateTypes)
         ]
         self.silentEntitySystemList = [
-            EntityType.parse(inputStream)
-            for _ in range(numberOfSilentEntityTypes)
+            EntityType.parse(inputStream) for _ in range(numberOfSilentEntityTypes)
         ]
         numberOfVariableDatumRecords = inputStream.read_uint32()
         self.variableDatumList = [
@@ -339,7 +345,7 @@ class AggregateStatePdu(EntityManagementFamilyPdu):
 
 @dataclass(slots=True)
 class IsGroupOfPdu(EntityManagementFamilyPdu):
-    """Section 7.8.3 IsGroupOf PDU
+    """§7.8.3 IsGroupOf PDU
 
     Communicates the individual states of a group of entities. The
     Grouped Entity Descriptions are category-dependent (§7.8.3);
@@ -354,8 +360,7 @@ class IsGroupOfPdu(EntityManagementFamilyPdu):
 
     groupEntityID: EntityIdentifier = field(default_factory=EntityIdentifier)
     groupedEntityCategory: enum8 = 0  # [UID 213]
-    groupedEntityDescriptions: list[EntityIdentifier] = field(
-        default_factory=list)
+    groupedEntityDescriptions: list[EntityIdentifier] = field(default_factory=list)
 
     pad: uint32 = field(init=False, default=0)
     latitude: float64 = 0.0
@@ -366,10 +371,15 @@ class IsGroupOfPdu(EntityManagementFamilyPdu):
         return len(self.groupedEntityDescriptions)
 
     def _marshalledBodySize(self) -> int:
-        return (self.groupEntityID.marshalledSize()
-                + 1 + 1 + 4 + 8 + 8
-                + sum(d.marshalledSize()
-                      for d in self.groupedEntityDescriptions))
+        return (
+            self.groupEntityID.marshalledSize()
+            + 1
+            + 1
+            + 4
+            + 8
+            + 8
+            + sum(d.marshalledSize() for d in self.groupedEntityDescriptions)
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         self.groupEntityID.serialize(outputStream)
@@ -383,21 +393,19 @@ class IsGroupOfPdu(EntityManagementFamilyPdu):
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         self.groupEntityID = EntityIdentifier.parse(inputStream)
-        self.groupedEntityCategory = rich_or_int(
-            213, inputStream.read_uint8())
+        self.groupedEntityCategory = rich_or_int(213, inputStream.read_uint8())
         numberOfGroupedEntities = inputStream.read_uint8()
         self.pad = inputStream.read_uint32()
         self.latitude = inputStream.read_float64()
         self.longitude = inputStream.read_float64()
         self.groupedEntityDescriptions = [
-            EntityIdentifier.parse(inputStream)
-            for _ in range(numberOfGroupedEntities)
+            EntityIdentifier.parse(inputStream) for _ in range(numberOfGroupedEntities)
         ]
 
 
 @dataclass(slots=True)
 class TransferOwnershipPdu(EntityManagementFamilyPdu):
-    """Section 7.9.4 Transfer Ownership PDU
+    """§7.9.4 Transfer Ownership PDU
 
     Initiates the dynamic allocation and control of simulation entities
     between two simulation applications, carrying record sets (§6.2.73).
@@ -423,12 +431,16 @@ class TransferOwnershipPdu(EntityManagementFamilyPdu):
         return len(self.recordSets)
 
     def _marshalledBodySize(self) -> int:
-        return (self.originatingEntityID.marshalledSize()
-                + self.receivingEntityID.marshalledSize()
-                + 4 + 1 + 1
-                + self.transferEntityID.marshalledSize()
-                + 4
-                + sum(rs.marshalledSize() for rs in self.recordSets))
+        return (
+            self.originatingEntityID.marshalledSize()
+            + self.receivingEntityID.marshalledSize()
+            + 4
+            + 1
+            + 1
+            + self.transferEntityID.marshalledSize()
+            + 4
+            + sum(rs.marshalledSize() for rs in self.recordSets)
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         self.originatingEntityID.serialize(outputStream)
@@ -445,8 +457,7 @@ class TransferOwnershipPdu(EntityManagementFamilyPdu):
         self.originatingEntityID = EntityIdentifier.parse(inputStream)
         self.receivingEntityID = EntityIdentifier.parse(inputStream)
         self.requestID = inputStream.read_uint32()
-        self.requiredReliabilityService = rich_or_int(
-            74, inputStream.read_uint8())
+        self.requiredReliabilityService = rich_or_int(74, inputStream.read_uint8())
         self.transferType = rich_or_int(224, inputStream.read_uint8())
         self.transferEntityID = EntityIdentifier.parse(inputStream)
         numberOfRecordSets = inputStream.read_uint32()
@@ -458,7 +469,7 @@ class TransferOwnershipPdu(EntityManagementFamilyPdu):
 
 @dataclass(slots=True)
 class IsPartOfPdu(EntityManagementFamilyPdu):
-    """Section 7.9.5 IsPartOf PDU
+    """§7.9.5 IsPartOf PDU
 
     Requests hierarchical linkage of separately hosted simulation
     entities (part-to-host). Total PDU size is 50 bytes."""
@@ -471,16 +482,19 @@ class IsPartOfPdu(EntityManagementFamilyPdu):
     relationship: Relationship = field(default_factory=Relationship)
     partLocation: Vector3Float = field(default_factory=Vector3Float)
     namedLocationID: NamedLocationIdentification = field(
-        default_factory=NamedLocationIdentification)
+        default_factory=NamedLocationIdentification
+    )
     partEntityType: EntityType = field(default_factory=EntityType)
 
     def _marshalledBodySize(self) -> int:
-        return (self.orginatingEntityID.marshalledSize()
-                + self.receivingEntityID.marshalledSize()
-                + self.relationship.marshalledSize()
-                + self.partLocation.marshalledSize()
-                + self.namedLocationID.marshalledSize()
-                + self.partEntityType.marshalledSize())
+        return (
+            self.orginatingEntityID.marshalledSize()
+            + self.receivingEntityID.marshalledSize()
+            + self.relationship.marshalledSize()
+            + self.partLocation.marshalledSize()
+            + self.namedLocationID.marshalledSize()
+            + self.partEntityType.marshalledSize()
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         self.orginatingEntityID.serialize(outputStream)

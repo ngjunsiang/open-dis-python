@@ -63,8 +63,10 @@ class SimulationManagementWithReliabilityFamilyPdu(Pdu):
     receivingEntityID: EntityIdentifier = field(default_factory=EntityIdentifier)
 
     def _marshalledBodySize(self) -> int:
-        return (self.originatingEntityID.marshalledSize()
-                + self.receivingEntityID.marshalledSize())
+        return (
+            self.originatingEntityID.marshalledSize()
+            + self.receivingEntityID.marshalledSize()
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         self.originatingEntityID.serialize(outputStream)
@@ -77,7 +79,7 @@ class SimulationManagementWithReliabilityFamilyPdu(Pdu):
 
 @dataclass(slots=True)
 class RecordSpecificationElement:
-    """Section 6.2.73 Record Set (one element of a Record Specification)
+    """§6.2.73 Record Set (one element of a Record Specification)
 
     A block of same-typed records: record ID, serial number, the length
     of ONE record in bits, how many records, then the concatenated
@@ -154,8 +156,9 @@ class CreateEntityReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
     pad2: uint16 = field(init=False, default=0)
 
     def _marshalledBodySize(self) -> int:
-        return (super(CreateEntityReliablePdu, self)._marshalledBodySize()
-                + 1 + 1 + 2 + 4)
+        return (
+            super(CreateEntityReliablePdu, self)._marshalledBodySize() + 1 + 1 + 2 + 4
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(CreateEntityReliablePdu, self)._serializeBody(outputStream)
@@ -166,8 +169,7 @@ class CreateEntityReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         super(CreateEntityReliablePdu, self)._parseBody(inputStream)
-        self.requiredReliabilityService = rich_or_int(
-            74, inputStream.read_uint8())
+        self.requiredReliabilityService = rich_or_int(74, inputStream.read_uint8())
         self.pad1 = inputStream.read_uint8()
         self.pad2 = inputStream.read_uint16()
         self.requestID = inputStream.read_uint32()
@@ -195,8 +197,9 @@ class RemoveEntityReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
     pad2: uint16 = field(init=False, default=0)
 
     def _marshalledBodySize(self) -> int:
-        return (super(RemoveEntityReliablePdu, self)._marshalledBodySize()
-                + 1 + 1 + 2 + 4)
+        return (
+            super(RemoveEntityReliablePdu, self)._marshalledBodySize() + 1 + 1 + 2 + 4
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(RemoveEntityReliablePdu, self)._serializeBody(outputStream)
@@ -207,8 +210,7 @@ class RemoveEntityReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         super(RemoveEntityReliablePdu, self)._parseBody(inputStream)
-        self.requiredReliabilityService = rich_or_int(
-            74, inputStream.read_uint8())
+        self.requiredReliabilityService = rich_or_int(74, inputStream.read_uint8())
         self.pad1 = inputStream.read_uint8()
         self.pad2 = inputStream.read_uint16()
         self.requestID = inputStream.read_uint32()
@@ -236,10 +238,15 @@ class StartResumeReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
     pad2: uint16 = field(init=False, default=0)
 
     def _marshalledBodySize(self) -> int:
-        return (super(StartResumeReliablePdu, self)._marshalledBodySize()
-                + self.realWorldTime.marshalledSize()
-                + self.simulationTime.marshalledSize()
-                + 1 + 1 + 2 + 4)
+        return (
+            super(StartResumeReliablePdu, self)._marshalledBodySize()
+            + self.realWorldTime.marshalledSize()
+            + self.simulationTime.marshalledSize()
+            + 1
+            + 1
+            + 2
+            + 4
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(StartResumeReliablePdu, self)._serializeBody(outputStream)
@@ -254,8 +261,7 @@ class StartResumeReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
         super(StartResumeReliablePdu, self)._parseBody(inputStream)
         self.realWorldTime.parse(inputStream)
         self.simulationTime.parse(inputStream)
-        self.requiredReliabilityService = rich_or_int(
-            74, inputStream.read_uint8())
+        self.requiredReliabilityService = rich_or_int(74, inputStream.read_uint8())
         self.pad1 = inputStream.read_uint8()
         self.pad2 = inputStream.read_uint16()
         self.requestID = inputStream.read_uint32()
@@ -285,9 +291,15 @@ class StopFreezeReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
     pad1: uint8 = field(init=False, default=0)
 
     def _marshalledBodySize(self) -> int:
-        return (super(StopFreezeReliablePdu, self)._marshalledBodySize()
-                + self.realWorldTime.marshalledSize()
-                + 1 + 1 + 1 + 1 + 4)
+        return (
+            super(StopFreezeReliablePdu, self)._marshalledBodySize()
+            + self.realWorldTime.marshalledSize()
+            + 1
+            + 1
+            + 1
+            + 1
+            + 4
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(StopFreezeReliablePdu, self)._serializeBody(outputStream)
@@ -302,10 +314,8 @@ class StopFreezeReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
         super(StopFreezeReliablePdu, self)._parseBody(inputStream)
         self.realWorldTime.parse(inputStream)
         self.reason = rich_or_int(67, inputStream.read_uint8())
-        self.frozenBehavior = StopFreezeFrozenBehavior(
-            inputStream.read_uint8())
-        self.requiredReliabilityService = rich_or_int(
-            74, inputStream.read_uint8())
+        self.frozenBehavior = StopFreezeFrozenBehavior(inputStream.read_uint8())
+        self.requiredReliabilityService = rich_or_int(74, inputStream.read_uint8())
         self.pad1 = inputStream.read_uint8()
         self.requestID = inputStream.read_uint32()
 
@@ -330,8 +340,7 @@ class AcknowledgeReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
     requestID: uint32 = 0
 
     def _marshalledBodySize(self) -> int:
-        return (super(AcknowledgeReliablePdu, self)._marshalledBodySize()
-                + 2 + 2 + 4)
+        return super(AcknowledgeReliablePdu, self)._marshalledBodySize() + 2 + 2 + 4
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(AcknowledgeReliablePdu, self)._serializeBody(outputStream)
@@ -350,8 +359,9 @@ AcknowledgeRPdu = AcknowledgeReliablePdu
 
 
 @dataclass(slots=True)
-class ActionRequestReliablePdu(_DatumListsMixin,
-                               SimulationManagementWithReliabilityFamilyPdu):
+class ActionRequestReliablePdu(
+    _DatumListsMixin, SimulationManagementWithReliabilityFamilyPdu
+):
     """§5.12.4.7 Action Request-R PDU. Total base PDU size is 44 bytes
     plus datums."""
 
@@ -372,8 +382,15 @@ class ActionRequestReliablePdu(_DatumListsMixin,
     pad2: uint16 = field(init=False, default=0)
 
     def _marshalledBodySize(self) -> int:
-        return (super(ActionRequestReliablePdu, self)._marshalledBodySize()
-                + 1 + 1 + 2 + 4 + 4 + self._datumTailSize())
+        return (
+            super(ActionRequestReliablePdu, self)._marshalledBodySize()
+            + 1
+            + 1
+            + 2
+            + 4
+            + 4
+            + self._datumTailSize()
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(ActionRequestReliablePdu, self)._serializeBody(outputStream)
@@ -386,8 +403,7 @@ class ActionRequestReliablePdu(_DatumListsMixin,
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         super(ActionRequestReliablePdu, self)._parseBody(inputStream)
-        self.requiredReliabilityService = rich_or_int(
-            74, inputStream.read_uint8())
+        self.requiredReliabilityService = rich_or_int(74, inputStream.read_uint8())
         self.pad1 = inputStream.read_uint8()
         self.pad2 = inputStream.read_uint16()
         self.requestID = inputStream.read_uint32()
@@ -399,8 +415,9 @@ ActionRequestRPdu = ActionRequestReliablePdu
 
 
 @dataclass(slots=True)
-class ActionResponseReliablePdu(_DatumListsMixin,
-                                SimulationManagementWithReliabilityFamilyPdu):
+class ActionResponseReliablePdu(
+    _DatumListsMixin, SimulationManagementWithReliabilityFamilyPdu
+):
     """§5.12.4.8 Action Response-R PDU. Total base PDU size is 40 bytes
     plus datums."""
 
@@ -416,8 +433,12 @@ class ActionResponseReliablePdu(_DatumListsMixin,
     variableDatumRecords: list[VariableDatum] = field(default_factory=list)
 
     def _marshalledBodySize(self) -> int:
-        return (super(ActionResponseReliablePdu, self)._marshalledBodySize()
-                + 4 + 4 + self._datumTailSize())
+        return (
+            super(ActionResponseReliablePdu, self)._marshalledBodySize()
+            + 4
+            + 4
+            + self._datumTailSize()
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(ActionResponseReliablePdu, self)._serializeBody(outputStream)
@@ -464,10 +485,18 @@ class DataQueryReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
         return len(self.variableDatumIDs)
 
     def _marshalledBodySize(self) -> int:
-        return (super(DataQueryReliablePdu, self)._marshalledBodySize()
-                + 1 + 1 + 2 + 4 + 4 + 4 + 4
-                + 4 * len(self.fixedDatumIDs)
-                + 4 * len(self.variableDatumIDs))
+        return (
+            super(DataQueryReliablePdu, self)._marshalledBodySize()
+            + 1
+            + 1
+            + 2
+            + 4
+            + 4
+            + 4
+            + 4
+            + 4 * len(self.fixedDatumIDs)
+            + 4 * len(self.variableDatumIDs)
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(DataQueryReliablePdu, self)._serializeBody(outputStream)
@@ -485,8 +514,7 @@ class DataQueryReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         super(DataQueryReliablePdu, self)._parseBody(inputStream)
-        self.requiredReliabilityService = rich_or_int(
-            74, inputStream.read_uint8())
+        self.requiredReliabilityService = rich_or_int(74, inputStream.read_uint8())
         self.pad1 = inputStream.read_uint8()
         self.pad2 = inputStream.read_uint16()
         self.requestID = inputStream.read_uint32()
@@ -507,8 +535,9 @@ DataQueryRPdu = DataQueryReliablePdu
 
 
 @dataclass(slots=True)
-class SetDataReliablePdu(_DatumListsMixin,
-                         SimulationManagementWithReliabilityFamilyPdu):
+class SetDataReliablePdu(
+    _DatumListsMixin, SimulationManagementWithReliabilityFamilyPdu
+):
     """§5.12.4.10 Set Data-R PDU. Total base PDU size is 40 bytes plus
     datums."""
 
@@ -527,8 +556,14 @@ class SetDataReliablePdu(_DatumListsMixin,
     pad2: uint16 = field(init=False, default=0)
 
     def _marshalledBodySize(self) -> int:
-        return (super(SetDataReliablePdu, self)._marshalledBodySize()
-                + 1 + 1 + 2 + 4 + self._datumTailSize())
+        return (
+            super(SetDataReliablePdu, self)._marshalledBodySize()
+            + 1
+            + 1
+            + 2
+            + 4
+            + self._datumTailSize()
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(SetDataReliablePdu, self)._serializeBody(outputStream)
@@ -540,8 +575,7 @@ class SetDataReliablePdu(_DatumListsMixin,
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         super(SetDataReliablePdu, self)._parseBody(inputStream)
-        self.requiredReliabilityService = rich_or_int(
-            74, inputStream.read_uint8())
+        self.requiredReliabilityService = rich_or_int(74, inputStream.read_uint8())
         self.pad1 = inputStream.read_uint8()
         self.pad2 = inputStream.read_uint16()
         self.requestID = inputStream.read_uint32()
@@ -552,8 +586,7 @@ SetDataRPdu = SetDataReliablePdu
 
 
 @dataclass(slots=True)
-class DataReliablePdu(_DatumListsMixin,
-                      SimulationManagementWithReliabilityFamilyPdu):
+class DataReliablePdu(_DatumListsMixin, SimulationManagementWithReliabilityFamilyPdu):
     """§5.12.4.11 Data-R PDU — response to Data Query-R / Set Data-R.
     Total base PDU size is 40 bytes plus datums."""
 
@@ -572,8 +605,14 @@ class DataReliablePdu(_DatumListsMixin,
     pad2: uint16 = field(init=False, default=0)
 
     def _marshalledBodySize(self) -> int:
-        return (super(DataReliablePdu, self)._marshalledBodySize()
-                + 4 + 1 + 1 + 2 + self._datumTailSize())
+        return (
+            super(DataReliablePdu, self)._marshalledBodySize()
+            + 4
+            + 1
+            + 1
+            + 2
+            + self._datumTailSize()
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(DataReliablePdu, self)._serializeBody(outputStream)
@@ -586,8 +625,7 @@ class DataReliablePdu(_DatumListsMixin,
     def _parseBody(self, inputStream: DataInputStream) -> None:
         super(DataReliablePdu, self)._parseBody(inputStream)
         self.requestID = inputStream.read_uint32()
-        self.requiredReliabilityService = rich_or_int(
-            74, inputStream.read_uint8())
+        self.requiredReliabilityService = rich_or_int(74, inputStream.read_uint8())
         self.pad1 = inputStream.read_uint8()
         self.pad2 = inputStream.read_uint16()
         self._parseDatumTail(inputStream)
@@ -597,8 +635,9 @@ DataRPdu = DataReliablePdu
 
 
 @dataclass(slots=True)
-class EventReportReliablePdu(_DatumListsMixin,
-                             SimulationManagementWithReliabilityFamilyPdu):
+class EventReportReliablePdu(
+    _DatumListsMixin, SimulationManagementWithReliabilityFamilyPdu
+):
     """§5.12.4.12 Event Report-R PDU. Total base PDU size is 40 bytes
     plus datums."""
 
@@ -615,8 +654,12 @@ class EventReportReliablePdu(_DatumListsMixin,
     pad1: uint32 = field(init=False, default=0)
 
     def _marshalledBodySize(self) -> int:
-        return (super(EventReportReliablePdu, self)._marshalledBodySize()
-                + 4 + 4 + self._datumTailSize())
+        return (
+            super(EventReportReliablePdu, self)._marshalledBodySize()
+            + 4
+            + 4
+            + self._datumTailSize()
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(EventReportReliablePdu, self)._serializeBody(outputStream)
@@ -635,8 +678,9 @@ EventReportRPdu = EventReportReliablePdu
 
 
 @dataclass(slots=True)
-class CommentReliablePdu(_DatumListsMixin,
-                         SimulationManagementWithReliabilityFamilyPdu):
+class CommentReliablePdu(
+    _DatumListsMixin, SimulationManagementWithReliabilityFamilyPdu
+):
     """§5.12.4.13 Comment-R PDU. The fixed datum count is not used by
     this PDU (shall be zero); the list is kept so malformed-but-parseable
     datagrams still round-trip byte-exact. Total base PDU size is 32
@@ -648,8 +692,10 @@ class CommentReliablePdu(_DatumListsMixin,
     variableDatumRecords: list[VariableDatum] = field(default_factory=list)
 
     def _marshalledBodySize(self) -> int:
-        return (super(CommentReliablePdu, self)._marshalledBodySize()
-                + self._datumTailSize())
+        return (
+            super(CommentReliablePdu, self)._marshalledBodySize()
+            + self._datumTailSize()
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(CommentReliablePdu, self)._serializeBody(outputStream)
@@ -679,8 +725,7 @@ class RecordReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
     requestID: uint32 = 0
     requiredReliabilityService: enum8 = 0  # [UID 74]
     eventType: enum16 = 0  # [UID 333] Record-R event type
-    recordSets: list[RecordSpecificationElement] = field(
-        default_factory=list)
+    recordSets: list[RecordSpecificationElement] = field(default_factory=list)
 
     pad1: uint8 = field(init=False, default=0)
 
@@ -689,9 +734,15 @@ class RecordReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
         return len(self.recordSets)
 
     def _marshalledBodySize(self) -> int:
-        return (super(RecordReliablePdu, self)._marshalledBodySize()
-                + 4 + 1 + 1 + 2 + 4
-                + sum(rs.marshalledSize() for rs in self.recordSets))
+        return (
+            super(RecordReliablePdu, self)._marshalledBodySize()
+            + 4
+            + 1
+            + 1
+            + 2
+            + 4
+            + sum(rs.marshalledSize() for rs in self.recordSets)
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(RecordReliablePdu, self)._serializeBody(outputStream)
@@ -706,8 +757,7 @@ class RecordReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
     def _parseBody(self, inputStream: DataInputStream) -> None:
         super(RecordReliablePdu, self)._parseBody(inputStream)
         self.requestID = inputStream.read_uint32()
-        self.requiredReliabilityService = rich_or_int(
-            74, inputStream.read_uint8())
+        self.requiredReliabilityService = rich_or_int(74, inputStream.read_uint8())
         self.pad1 = inputStream.read_uint8()
         self.eventType = rich_or_int(333, inputStream.read_uint16())
         numberOfRecordSets = inputStream.read_uint32()
@@ -733,8 +783,7 @@ class SetRecordReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
 
     requestID: uint32 = 0
     requiredReliabilityService: enum8 = 0  # [UID 74]
-    recordSets: list[RecordSpecificationElement] = field(
-        default_factory=list)
+    recordSets: list[RecordSpecificationElement] = field(default_factory=list)
 
     pad1: uint8 = field(init=False, default=0)
     pad2: uint16 = field(init=False, default=0)
@@ -745,9 +794,16 @@ class SetRecordReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
         return len(self.recordSets)
 
     def _marshalledBodySize(self) -> int:
-        return (super(SetRecordReliablePdu, self)._marshalledBodySize()
-                + 4 + 1 + 1 + 2 + 4 + 4
-                + sum(rs.marshalledSize() for rs in self.recordSets))
+        return (
+            super(SetRecordReliablePdu, self)._marshalledBodySize()
+            + 4
+            + 1
+            + 1
+            + 2
+            + 4
+            + 4
+            + sum(rs.marshalledSize() for rs in self.recordSets)
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(SetRecordReliablePdu, self)._serializeBody(outputStream)
@@ -763,8 +819,7 @@ class SetRecordReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
     def _parseBody(self, inputStream: DataInputStream) -> None:
         super(SetRecordReliablePdu, self)._parseBody(inputStream)
         self.requestID = inputStream.read_uint32()
-        self.requiredReliabilityService = rich_or_int(
-            74, inputStream.read_uint8())
+        self.requiredReliabilityService = rich_or_int(74, inputStream.read_uint8())
         self.pad1 = inputStream.read_uint8()
         self.pad2 = inputStream.read_uint16()
         self.pad3 = inputStream.read_uint32()
@@ -804,9 +859,16 @@ class RecordQueryReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
         return len(self.recordIDs)
 
     def _marshalledBodySize(self) -> int:
-        return (super(RecordQueryReliablePdu, self)._marshalledBodySize()
-                + 4 + 1 + 1 + 2 + 4 + 4
-                + 4 * len(self.recordIDs))
+        return (
+            super(RecordQueryReliablePdu, self)._marshalledBodySize()
+            + 4
+            + 1
+            + 1
+            + 2
+            + 4
+            + 4
+            + 4 * len(self.recordIDs)
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(RecordQueryReliablePdu, self)._serializeBody(outputStream)
@@ -822,15 +884,13 @@ class RecordQueryReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
     def _parseBody(self, inputStream: DataInputStream) -> None:
         super(RecordQueryReliablePdu, self)._parseBody(inputStream)
         self.requestID = inputStream.read_uint32()
-        self.requiredReliabilityService = rich_or_int(
-            74, inputStream.read_uint8())
+        self.requiredReliabilityService = rich_or_int(74, inputStream.read_uint8())
         self.pad1 = inputStream.read_uint8()
         self.eventType = rich_or_int(334, inputStream.read_uint16())
         self.time = inputStream.read_uint32()
         numberOfRecords = inputStream.read_uint32()
         self.recordIDs = [
-            rich_or_int(66, inputStream.read_uint32())
-            for _ in range(numberOfRecords)
+            rich_or_int(66, inputStream.read_uint32()) for _ in range(numberOfRecords)
         ]
 
 

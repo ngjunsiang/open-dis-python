@@ -23,6 +23,7 @@ from opendis.types import (
     enum16,
     float32,
     float64,
+    uint8,
     uint16,
     uint32,
 )
@@ -53,7 +54,7 @@ MUNITION_DOMAIN_UID = 14
 
 @dataclass(frozen=True, slots=True)
 class SimulationAddress:
-    """6.2.80 Simulation Address record
+    """§6.2.80 Simulation Address record
 
     Simulation designation associated with all object identifiers except
     those contained in Live Entity PDUs.
@@ -85,7 +86,7 @@ class SimulationAddress:
 
 @dataclass(frozen=True, slots=True)
 class EntityIdentifier:
-    """Section 6.2.28 Entity Identifier record
+    """§6.2.28 Entity Identifier record
 
     Unique designation of each entity in an event or exercise that is not
     contained in a Live Entity PDU. This is the standard 6-byte shape of
@@ -109,13 +110,12 @@ class EntityIdentifier:
 
     @classmethod
     def parse(cls, inputStream: DataInputStream) -> "EntityIdentifier":
-        return cls(SimulationAddress.parse(inputStream),
-                   inputStream.read_uint16())
+        return cls(SimulationAddress.parse(inputStream), inputStream.read_uint16())
 
 
 @dataclass(frozen=True, slots=True)
 class EventIdentifier:
-    """6.2.33 Event Identifier record
+    """§6.2.33 Event Identifier record
 
     Identifies an event in the world. Use this format for every PDU EXCEPT
     the LiveEntityPdu. Ruled event-identifier taxonomy: this 6-byte shape,
@@ -136,13 +136,12 @@ class EventIdentifier:
 
     @classmethod
     def parse(cls, inputStream: DataInputStream) -> "EventIdentifier":
-        return cls(SimulationAddress.parse(inputStream),
-                   inputStream.read_uint16())
+        return cls(SimulationAddress.parse(inputStream), inputStream.read_uint16())
 
 
 @dataclass(frozen=True, slots=True)
 class EntityType:
-    """Section 6.2.30 Entity Type record
+    """§6.2.30 Entity Type record
 
     Identifies the type of Entity. The domain field is dual-tabled: its
     SISO enumeration is [UID 8] for every entity kind except munitions
@@ -154,10 +153,10 @@ class EntityType:
     entityKind: enum8 = 0  # [UID 7]
     domain: enum8 = 0  # [UID 8] / [UID 14] for munitions
     country: enum16 = 0  # [UID 29]
-    category: enum8 = 0
-    subcategory: enum8 = 0
-    specific: enum8 = 0
-    extra: enum8 = 0
+    category: uint8 = 0
+    subCategory: uint8 = 0
+    specific: uint8 = 0
+    extra: uint8 = 0
 
     FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
         "entityKind": 7,
@@ -173,7 +172,7 @@ class EntityType:
         outputStream.write_uint8(self.domain)
         outputStream.write_uint16(self.country)
         outputStream.write_uint8(self.category)
-        outputStream.write_uint8(self.subcategory)
+        outputStream.write_uint8(self.subCategory)
         outputStream.write_uint8(self.specific)
         outputStream.write_uint8(self.extra)
 
@@ -183,20 +182,23 @@ class EntityType:
         domainRaw = inputStream.read_uint8()
         # generator: domain's enum table is kind-dependent (UID 14 for
         # munitions, UID 8 otherwise) — the XML's own TODO #9
-        domainUid = (MUNITION_DOMAIN_UID if int(entityKind) == 2
-                     else PLATFORM_DOMAIN_UID)
+        domainUid = MUNITION_DOMAIN_UID if int(entityKind) == 2 else PLATFORM_DOMAIN_UID
         domain = rich_or_int(domainUid, domainRaw)
         country = rich_or_int(29, inputStream.read_uint16())
-        return cls(entityKind, domain, country,
-                   inputStream.read_uint8(),
-                   inputStream.read_uint8(),
-                   inputStream.read_uint8(),
-                   inputStream.read_uint8())
+        return cls(
+            entityKind,
+            domain,
+            country,
+            inputStream.read_uint8(),
+            inputStream.read_uint8(),
+            inputStream.read_uint8(),
+            inputStream.read_uint8(),
+        )
 
 
 @dataclass(slots=True)
 class EulerAngles:
-    """6.2.32 Euler Angles record
+    """§6.2.32 Euler Angles record
 
     Three floating point values representing an orientation, psi, theta,
     and phi, aka the euler angles, in radians.
@@ -224,7 +226,7 @@ class EulerAngles:
 
 @dataclass(slots=True)
 class Vector3Float:
-    """6.2.96 Vector record
+    """§6.2.96 Vector record
 
     Vector values for entity coordinates, linear acceleration, and linear
     velocity shall be represented using a Vector record. This record shall
@@ -293,7 +295,7 @@ WorldCoordinates = Vector3Double
 
 @dataclass(slots=True)
 class ClockTime:
-    """6.2.14 Clock Time record
+    """§6.2.14 Clock Time record
 
     Time measurements that surpass one hour. Hour is hours since
     0000 h 1 January 1970 UTC; timePastHour is a Timestamp record
@@ -318,7 +320,7 @@ class ClockTime:
 
 @dataclass(slots=True)
 class MunitionDescriptor:
-    """6.2.19.2 Munition Descriptor record
+    """§6.2.19.2 Munition Descriptor record
 
     Describes the firing or detonation of a munition: the munition type
     plus warhead, fuse, quantity, and rate. The Expendable Descriptor
@@ -357,7 +359,7 @@ class MunitionDescriptor:
 
 @dataclass(slots=True)
 class EntityMarking:
-    """6.2.29 Entity Marking record
+    """§6.2.29 Entity Marking record
 
     A character set followed by 11 characters of text data. The wire state
     is the raw 11 bytes; ``string`` is a NUL-trimmed view that pads on
@@ -387,8 +389,7 @@ class EntityMarking:
     def string(self, value: str) -> None:
         data = value.encode("latin-1")
         if len(data) > 11:
-            _logger.warning(
-                "EntityMarking string %r truncated to 11 bytes", value)
+            _logger.warning("EntityMarking string %r truncated to 11 bytes", value)
         self.characters = data[:11].ljust(11, b"\x00")
 
     def marshalledSize(self) -> int:

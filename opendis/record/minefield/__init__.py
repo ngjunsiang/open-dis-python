@@ -40,7 +40,7 @@ __all__ = [
 
 @dataclass(frozen=True, slots=True)
 class MinefieldIdentifier:
-    """Section 6.2.56 Minefield Identifier record
+    """§6.2.56 Minefield Identifier record
 
     Simulation address plus minefield number. Frozen identity type."""
 
@@ -56,8 +56,7 @@ class MinefieldIdentifier:
 
     @classmethod
     def parse(cls, inputStream: DataInputStream) -> "MinefieldIdentifier":
-        return cls(SimulationAddress.parse(inputStream),
-                   inputStream.read_uint16())
+        return cls(SimulationAddress.parse(inputStream), inputStream.read_uint16())
 
 
 @dataclass(slots=True)
@@ -117,14 +116,14 @@ def _padTo32(byteCount: int) -> int:
 
 @dataclass(slots=True)
 class MinefieldFamilyPdu(Pdu):
-    """Section 7.9 marker for the Minefield family."""
+    """§7.9 marker for the Minefield family."""
 
     protocolFamily: ClassVar[int] = 8  # [UID 5]
 
 
 @dataclass(slots=True)
 class MinefieldStatePdu(MinefieldFamilyPdu):
-    """Section 7.9.2 Minefield State PDU
+    """§7.9.2 Minefield State PDU
 
     Presence, perimeter, protocol mode, and mine types of a minefield.
     Base PDU size is 72 bytes plus perimeter points and mine types."""
@@ -135,8 +134,7 @@ class MinefieldStatePdu(MinefieldFamilyPdu):
         "forceID": 6,
     }
 
-    minefieldID: MinefieldIdentifier = field(
-        default_factory=MinefieldIdentifier)
+    minefieldID: MinefieldIdentifier = field(default_factory=MinefieldIdentifier)
     minefieldSequence: uint16 = 0
     forceID: enum8 = 0  # [UID 6]
     minefieldType: EntityType = field(default_factory=EntityType)
@@ -156,15 +154,20 @@ class MinefieldStatePdu(MinefieldFamilyPdu):
         return len(self.mineType)
 
     def _marshalledBodySize(self) -> int:
-        return (self.minefieldID.marshalledSize()
-                + 2 + 1 + 1
-                + self.minefieldType.marshalledSize()
-                + 2
-                + self.minefieldLocation.marshalledSize()
-                + self.minefieldOrientation.marshalledSize()
-                + 2 + 2
-                + sum(p.marshalledSize() for p in self.perimeterPoints)
-                + sum(t.marshalledSize() for t in self.mineType))
+        return (
+            self.minefieldID.marshalledSize()
+            + 2
+            + 1
+            + 1
+            + self.minefieldType.marshalledSize()
+            + 2
+            + self.minefieldLocation.marshalledSize()
+            + self.minefieldOrientation.marshalledSize()
+            + 2
+            + 2
+            + sum(p.marshalledSize() for p in self.perimeterPoints)
+            + sum(t.marshalledSize() for t in self.mineType)
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         self.minefieldID.serialize(outputStream)
@@ -191,22 +194,19 @@ class MinefieldStatePdu(MinefieldFamilyPdu):
         numberOfMineTypes = inputStream.read_uint16()
         self.minefieldLocation.parse(inputStream)
         self.minefieldOrientation.parse(inputStream)
-        self.appearance = MinefieldStateAppearance(
-            inputStream.read_uint16())
+        self.appearance = MinefieldStateAppearance(inputStream.read_uint16())
         self.protocolMode = inputStream.read_uint16()
         self.perimeterPoints = [
-            Vector2Float.parseFrom(inputStream)
-            for _ in range(numberOfPerimeterPoints)
+            Vector2Float.parseFrom(inputStream) for _ in range(numberOfPerimeterPoints)
         ]
         self.mineType = [
-            EntityType.parse(inputStream)
-            for _ in range(numberOfMineTypes)
+            EntityType.parse(inputStream) for _ in range(numberOfMineTypes)
         ]
 
 
 @dataclass(slots=True)
 class MinefieldQueryPdu(MinefieldFamilyPdu):
-    """Section 7.9.3 Minefield Query PDU (QRP mode)
+    """§7.9.3 Minefield Query PDU (QRP mode)
 
     Requests information on individual mines in a region. The 32-bit
     dataFilter (§6.2.16 Table 38) selects which per-mine fields the
@@ -215,8 +215,7 @@ class MinefieldQueryPdu(MinefieldFamilyPdu):
 
     pduType: ClassVar[int] = 38  # [UID 4]
 
-    minefieldID: MinefieldIdentifier = field(
-        default_factory=MinefieldIdentifier)
+    minefieldID: MinefieldIdentifier = field(default_factory=MinefieldIdentifier)
     requestingEntityID: EntityIdentifier = field(default_factory=EntityIdentifier)
     requestID: uint8 = 0
     dataFilter: uint32 = 0
@@ -235,13 +234,18 @@ class MinefieldQueryPdu(MinefieldFamilyPdu):
         return len(self.sensorTypes)
 
     def _marshalledBodySize(self) -> int:
-        return (self.minefieldID.marshalledSize()
-                + self.requestingEntityID.marshalledSize()
-                + 1 + 1 + 1 + 1 + 4
-                + self.requestedMineType.marshalledSize()
-                + sum(p.marshalledSize()
-                      for p in self.requestedPerimeterPoints)
-                + 2 * len(self.sensorTypes))
+        return (
+            self.minefieldID.marshalledSize()
+            + self.requestingEntityID.marshalledSize()
+            + 1
+            + 1
+            + 1
+            + 1
+            + 4
+            + self.requestedMineType.marshalledSize()
+            + sum(p.marshalledSize() for p in self.requestedPerimeterPoints)
+            + 2 * len(self.sensorTypes)
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         self.minefieldID.serialize(outputStream)
@@ -267,8 +271,7 @@ class MinefieldQueryPdu(MinefieldFamilyPdu):
         self.dataFilter = inputStream.read_uint32()
         self.requestedMineType = EntityType.parse(inputStream)
         self.requestedPerimeterPoints = [
-            Vector2Float.parseFrom(inputStream)
-            for _ in range(numberOfPerimeterPoints)
+            Vector2Float.parseFrom(inputStream) for _ in range(numberOfPerimeterPoints)
         ]
         self.sensorTypes = [
             inputStream.read_uint16() for _ in range(numberOfSensorTypes)
@@ -277,7 +280,7 @@ class MinefieldQueryPdu(MinefieldFamilyPdu):
 
 @dataclass(slots=True)
 class MinefieldDataPdu(MinefieldFamilyPdu):
-    """Section 7.9.4 Minefield Data PDU (QRP mode)
+    """§7.9.4 Minefield Data PDU (QRP mode)
 
     Per-mine data in FIELD-major order (Table 189): each conditional
     per-mine list is one contiguous run, present when its dataFilter
@@ -297,8 +300,7 @@ class MinefieldDataPdu(MinefieldFamilyPdu):
 
     pduType: ClassVar[int] = 39  # [UID 4]
 
-    minefieldID: MinefieldIdentifier = field(
-        default_factory=MinefieldIdentifier)
+    minefieldID: MinefieldIdentifier = field(default_factory=MinefieldIdentifier)
     requestingEntityID: EntityIdentifier = field(default_factory=EntityIdentifier)
     minefieldSequenceNumber: uint16 = 0
     requestID: uint8 = 0
@@ -314,8 +316,7 @@ class MinefieldDataPdu(MinefieldFamilyPdu):
     mineOrientation: list[EulerAngles] = field(default_factory=list)
     thermalContrast: list[float32] = field(default_factory=list)
     reflectance: list[float32] = field(default_factory=list)
-    mineEmplacementTime: list[MineEmplacementTime] = field(
-        default_factory=list)
+    mineEmplacementTime: list[MineEmplacementTime] = field(default_factory=list)
     mineEntityNumber: list[uint16] = field(default_factory=list)
     fusing: list[uint16] = field(default_factory=list)  # [UID 192]
     scalarDetectionCoefficient: list[uint8] = field(default_factory=list)
@@ -352,21 +353,36 @@ class MinefieldDataPdu(MinefieldFamilyPdu):
 
     @property
     def groundPresent(self) -> bool:
-        return (self._filter(self.GROUND) or self._filter(self.WATER)
-                or self._filter(self.SNOW))
+        return (
+            self._filter(self.GROUND)
+            or self._filter(self.WATER)
+            or self._filter(self.SNOW)
+        )
 
     @property
     def orientationPresent(self) -> bool:
-        return (self._filter(self.GROUND) or self._filter(self.WATER)
-                or self._filter(self.SNOW) or self._filter(self.ORIENTATION))
+        return (
+            self._filter(self.GROUND)
+            or self._filter(self.WATER)
+            or self._filter(self.SNOW)
+            or self._filter(self.ORIENTATION)
+        )
 
     def _prefixSize(self) -> int:
-        return (self.minefieldID.marshalledSize()
-                + self.requestingEntityID.marshalledSize()
-                + 2 + 1 + 1 + 1 + 1 + 1 + 1  # counts + padding
-                + 4
-                + self.mineType.marshalledSize()
-                + 2 * len(self.sensorTypes))
+        return (
+            self.minefieldID.marshalledSize()
+            + self.requestingEntityID.marshalledSize()
+            + 2
+            + 1
+            + 1
+            + 1
+            + 1
+            + 1
+            + 1  # counts + padding
+            + 4
+            + self.mineType.marshalledSize()
+            + 2 * len(self.sensorTypes)
+        )
 
     def _wireVertexCount(self) -> int:
         return sum(self.numberOfVertices)
@@ -554,8 +570,7 @@ class MinefieldDataPdu(MinefieldFamilyPdu):
         consumed += 2 * numberOfMinesInThisPdu
         if self._filter(self.FUSING):
             self.fusing = [
-                inputStream.read_uint16()
-                for _ in range(numberOfMinesInThisPdu)
+                inputStream.read_uint16() for _ in range(numberOfMinesInThisPdu)
             ]
             consumed += 2 * numberOfMinesInThisPdu
         if self._filter(self.SCALAR):
@@ -577,9 +592,7 @@ class MinefieldDataPdu(MinefieldFamilyPdu):
             consumed += numberOfMinesInThisPdu
             pad()  # padTo32_3
             wireTotal = sum(self.numberOfTripDetonationWires)
-            self.numberOfVertices = [
-                inputStream.read_uint8() for _ in range(wireTotal)
-            ]
+            self.numberOfVertices = [inputStream.read_uint8() for _ in range(wireTotal)]
             consumed += wireTotal
             pad()  # padTo32_4
             self.vertices = []
@@ -591,15 +604,14 @@ class MinefieldDataPdu(MinefieldFamilyPdu):
 
 @dataclass(slots=True)
 class MinefieldResponseNACKPdu(MinefieldFamilyPdu):
-    """Section 7.9.5 Minefield Response NACK PDU (QRP mode)
+    """§7.9.5 Minefield Response NACK PDU (QRP mode)
 
     Requests retransmission of Minefield Data PDUs not received. Base
     PDU size is 26 bytes plus missing sequence numbers."""
 
     pduType: ClassVar[int] = 40  # [UID 4]
 
-    minefieldID: MinefieldIdentifier = field(
-        default_factory=MinefieldIdentifier)
+    minefieldID: MinefieldIdentifier = field(default_factory=MinefieldIdentifier)
     requestingEntityID: EntityIdentifier = field(default_factory=EntityIdentifier)
     requestID: uint8 = 0
     missingPduSequenceNumbers: list[uint8] = field(default_factory=list)
@@ -609,10 +621,13 @@ class MinefieldResponseNACKPdu(MinefieldFamilyPdu):
         return len(self.missingPduSequenceNumbers)
 
     def _marshalledBodySize(self) -> int:
-        return (self.minefieldID.marshalledSize()
-                + self.requestingEntityID.marshalledSize()
-                + 1 + 1
-                + len(self.missingPduSequenceNumbers))
+        return (
+            self.minefieldID.marshalledSize()
+            + self.requestingEntityID.marshalledSize()
+            + 1
+            + 1
+            + len(self.missingPduSequenceNumbers)
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         self.minefieldID.serialize(outputStream)

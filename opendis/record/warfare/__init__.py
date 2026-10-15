@@ -32,32 +32,34 @@ from opendis.record.radio import BeamAntennaPattern
 
 
 class DamageDescriptionRecord(base.StandardVariableRecord):
-    """6.2.15 Damage Description record
-    
+    """§6.2.15 Damage Description record
+
     Damage Description records shall use the Standard Variable record format of
-    the Standard Variable Specification record (see 6.2.83). 
+    the Standard Variable Specification record (see 6.2.83).
     New Damage Description records may be defined at some future date as needed.
     """
 
 
 class DirectedEnergyDamage(DamageDescriptionRecord):
-    """6.2.15.2 Directed Energy Damage Description record
-    
+    """§6.2.15.2 Directed Energy Damage Description record
+
     Damage sustained by an entity due to directed energy. Location of the
     damage based on a relative x, y, z location from the center of the entity.
     """
+
     recordType: enum32 = 4500  # [UID 66] Variable Record Type
 
     def __init__(
-            self,
-            damageLocation: Vector3Float | None = None,
-            damageDiameter: float32 = 0.0,  # in metres
-            temperature: float32 = -273.15,  # in degrees Celsius
-            componentIdentification: enum8 = 0,  # [UID 314]
-            componentDamageStatus: enum8 = 0,  # [UID 315]
-            componentVisualDamageStatus: struct8 = 0,  # [UID 317]
-            componentVisualSmokeColor: enum8 = 0,  # [UID 316]
-            fireEventID: EventIdentifier | None = None):
+        self,
+        damageLocation: Vector3Float | None = None,
+        damageDiameter: float32 = 0.0,  # in metres
+        temperature: float32 = -273.15,  # in degrees Celsius
+        componentIdentification: enum8 = 0,  # [UID 314]
+        componentDamageStatus: enum8 = 0,  # [UID 315]
+        componentVisualDamageStatus: struct8 = 0,  # [UID 317]
+        componentVisualSmokeColor: enum8 = 0,  # [UID 316]
+        fireEventID: EventIdentifier | None = None,
+    ):
         self.padding: uint16 = 0
         self.damageLocation = damageLocation or Vector3Float()
         self.damageDiameter = damageDiameter
@@ -68,7 +70,7 @@ class DirectedEnergyDamage(DamageDescriptionRecord):
         self.componentVisualSmokeColor = componentVisualSmokeColor
         self.fireEventID = fireEventID or EventIdentifier()
         self.padding2: uint16 = 0
-    
+
     def marshalledSize(self) -> int:
         return 40
 
@@ -87,9 +89,7 @@ class DirectedEnergyDamage(DamageDescriptionRecord):
         self.fireEventID.serialize(outputStream)
         outputStream.write_uint16(self.padding2)
 
-    def parse(self,
-              inputStream: DataInputStream,
-              bytelength: int) -> None:
+    def parse(self, inputStream: DataInputStream, bytelength: int) -> None:
         # Validate bytelength argument by calling base method
         super().parse(inputStream, bytelength)
         self.padding = inputStream.read_unsigned_short()
@@ -105,20 +105,27 @@ class DirectedEnergyDamage(DamageDescriptionRecord):
 
 
 class DirectedEnergyAreaAimpoint(DamageDescriptionRecord):
-    """6.2.20.2 DE Area Aimpoint record
+    """§6.2.20.2 DE Area Aimpoint record
 
     Targeting information when the target of the directed energy weapon is an
     area. The area may or may not be associated with one or more target
     entities.
     """
+
     recordType: enum32 = 4001  # [UID 66]
 
-    def __init__(self,
-                 beamAntennaPatterns: list["BeamAntennaPattern"] | None = None,
-                 directedEnergyTargetEnergyDepositions: list["DirectedEnergyTargetEnergyDeposition"] | None = None):
+    def __init__(
+        self,
+        beamAntennaPatterns: list["BeamAntennaPattern"] | None = None,
+        directedEnergyTargetEnergyDepositions: (
+            list["DirectedEnergyTargetEnergyDeposition"] | None
+        ) = None,
+    ):
         self.padding: uint16 = 0
         self.beamAntennaPatterns: list["BeamAntennaPattern"] = beamAntennaPatterns or []
-        self.directedEnergyTargetEnergyDepositions: list["DirectedEnergyTargetEnergyDeposition"] = directedEnergyTargetEnergyDepositions or []
+        self.directedEnergyTargetEnergyDepositions: list[
+            "DirectedEnergyTargetEnergyDeposition"
+        ] = (directedEnergyTargetEnergyDepositions or [])
 
     @property
     def beamAntennaPatternCount(self) -> uint16:
@@ -135,25 +142,21 @@ class DirectedEnergyAreaAimpoint(DamageDescriptionRecord):
         for record in self.directedEnergyTargetEnergyDepositions:
             size += record.marshalledSize()
         return size
-    
+
     def serialize(self, outputStream: DataOutputStream) -> None:
         super().serialize(outputStream)
         outputStream.write_uint32(self.recordType)
         outputStream.write_uint16(self.recordLength)
         outputStream.write_uint16(self.padding)
         outputStream.write_uint16(self.beamAntennaPatternCount)
-        outputStream.write_uint16(
-            self.directedEnergyTargetEnergyDepositionCount
-        )
+        outputStream.write_uint16(self.directedEnergyTargetEnergyDepositionCount)
         for record in self.beamAntennaPatterns:
             record.serialize(outputStream)
 
         for record in self.directedEnergyTargetEnergyDepositions:
             record.serialize(outputStream)
 
-    def parse(self,
-              inputStream: DataInputStream,
-              bytelength: int) -> None:
+    def parse(self, inputStream: DataInputStream, bytelength: int) -> None:
         # Validate bytelength argument by calling base method
         super().parse(inputStream, bytelength)
         self.padding = inputStream.read_uint16()
@@ -170,26 +173,29 @@ class DirectedEnergyAreaAimpoint(DamageDescriptionRecord):
 
 
 class DirectedEnergyPrecisionAimpoint(DamageDescriptionRecord):
-    """6.2.20.3 DE Precision Aimpoint record
+    """§6.2.20.3 DE Precision Aimpoint record
 
     Targeting information when the target of the directed energy weapon is not
     an area but a specific target entity. Use of this record assumes that the DE
     weapon would not fire unless a target is known and is currently tracked.
     """
+
     recordType: enum32 = 4000
 
-    def __init__(self,
-                 targetSpotLocation: WorldCoordinates | None = None,
-                 targetSpotEntityLocation: Vector3Float | None = None,
-                 targetSpotVelocity: Vector3Float | None = None,  # in m/s
-                 targetSpotAcceleration: Vector3Float | None = None,  # in m/s^2
-                 targetEntityID: EntityIdentifier | None = None,
-                 targetComponentID: enum8 = 0,  # [UID 314]
-                 beamSpotType: enum8 = 0,  # [UID 311]
-                 beamSpotCrossSectionSemiMajorAxis: float32 = 0.0,  # in meters
-                 beamSpotCrossSectionSemiMinorAxis: float32 = 0.0,  # in meters
-                 beamSpotCrossSectionOrientationAngle: float32 = 0.0,  # in radians
-                 peakIrradiance: float32 = 0.0):  # in W/m^2
+    def __init__(
+        self,
+        targetSpotLocation: WorldCoordinates | None = None,
+        targetSpotEntityLocation: Vector3Float | None = None,
+        targetSpotVelocity: Vector3Float | None = None,  # in m/s
+        targetSpotAcceleration: Vector3Float | None = None,  # in m/s^2
+        targetEntityID: EntityIdentifier | None = None,
+        targetComponentID: enum8 = 0,  # [UID 314]
+        beamSpotType: enum8 = 0,  # [UID 311]
+        beamSpotCrossSectionSemiMajorAxis: float32 = 0.0,  # in meters
+        beamSpotCrossSectionSemiMinorAxis: float32 = 0.0,  # in meters
+        beamSpotCrossSectionOrientationAngle: float32 = 0.0,  # in radians
+        peakIrradiance: float32 = 0.0,
+    ):  # in W/m^2
         self.padding: uint16 = 0
         self.targetSpotLocation = targetSpotLocation or WorldCoordinates()
         self.targetSpotEntityLocation = targetSpotEntityLocation or Vector3Float()
@@ -225,9 +231,7 @@ class DirectedEnergyPrecisionAimpoint(DamageDescriptionRecord):
         outputStream.write_float32(self.peakIrradiance)
         outputStream.write_uint32(self.padding2)
 
-    def parse(self,
-              inputStream: DataInputStream,
-              bytelength: int) -> None:
+    def parse(self, inputStream: DataInputStream, bytelength: int) -> None:
         """recordType and recordLength are assumed to have been read before
         this method is called.
         """
@@ -249,7 +253,7 @@ class DirectedEnergyPrecisionAimpoint(DamageDescriptionRecord):
 
 
 class DirectedEnergyTargetEnergyDeposition(base.Record):
-    """6.2.20.4 DE Target Energy Deposition record
+    """§6.2.20.4 DE Target Energy Deposition record
 
     Directed energy deposition properties for a target entity shall be
     communicated using the DE Target Energy Deposition record. This record is
@@ -257,9 +261,11 @@ class DirectedEnergyTargetEnergyDeposition(base.Record):
     record type.
     """
 
-    def __init__(self,
-                 targetEntityID: EntityIdentifier | None = None,
-                 peakIrradiance: float32 = 0.0):  # in W/m^2
+    def __init__(
+        self,
+        targetEntityID: EntityIdentifier | None = None,
+        peakIrradiance: float32 = 0.0,
+    ):  # in W/m^2
         self.targetEntityID = targetEntityID or EntityIdentifier()
         self.padding: uint16 = 0
         self.peakIrradiance = peakIrradiance
@@ -304,7 +310,7 @@ from opendis.record.pdu import Pdu  # noqa: E402
 
 @dataclass(slots=True)
 class WarfareFamilyPdu(Pdu):
-    """Section 7.3 marker for the Warfare family (Fire, Detonation,
+    """§7.3 marker for the Warfare family (Fire, Detonation,
     Directed Energy Fire, Entity Damage Status)."""
 
     protocolFamily: ClassVar[int] = 2  # [UID 5]
@@ -312,7 +318,7 @@ class WarfareFamilyPdu(Pdu):
 
 @dataclass(slots=True)
 class FirePdu(WarfareFamilyPdu):
-    """Section 7.3.2 Fire PDU
+    """§7.3.2 Fire PDU
 
     Communicates the firing of a weapon or expendable. Total PDU size is
     96 bytes (768 bits) — size-locked by the parity oracle.
@@ -322,26 +328,28 @@ class FirePdu(WarfareFamilyPdu):
 
     firingEntityID: EntityIdentifier = field(default_factory=EntityIdentifier)
     targetEntityID: EntityIdentifier = field(default_factory=EntityIdentifier)
-    munitionExpendibleID: EntityIdentifier = field(
-        default_factory=EntityIdentifier)
+    munitionExpendibleID: EntityIdentifier = field(default_factory=EntityIdentifier)
     eventID: EventIdentifier = field(default_factory=EventIdentifier)
     fireMissionIndex: uint32 = 0
     locationInWorldCoordinates: WorldCoordinates = field(
-        default_factory=WorldCoordinates)
+        default_factory=WorldCoordinates
+    )
     descriptor: MunitionDescriptor = field(default_factory=MunitionDescriptor)
     velocity: Vector3Float = field(default_factory=Vector3Float)
     range: float32 = 0.0
 
     def _marshalledBodySize(self) -> int:
-        return (self.firingEntityID.marshalledSize()
-                + self.targetEntityID.marshalledSize()
-                + self.munitionExpendibleID.marshalledSize()
-                + self.eventID.marshalledSize()
-                + 4
-                + self.locationInWorldCoordinates.marshalledSize()
-                + self.descriptor.marshalledSize()
-                + self.velocity.marshalledSize()
-                + 4)
+        return (
+            self.firingEntityID.marshalledSize()
+            + self.targetEntityID.marshalledSize()
+            + self.munitionExpendibleID.marshalledSize()
+            + self.eventID.marshalledSize()
+            + 4
+            + self.locationInWorldCoordinates.marshalledSize()
+            + self.descriptor.marshalledSize()
+            + self.velocity.marshalledSize()
+            + 4
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         self.firingEntityID.serialize(outputStream)
@@ -368,7 +376,7 @@ class FirePdu(WarfareFamilyPdu):
 
 @dataclass(slots=True)
 class DetonationPdu(WarfareFamilyPdu):
-    """Section 7.3.3 Detonation PDU
+    """§7.3.3 Detonation PDU
 
     Communicates the detonation or impact of munitions, the burst or
     initial bloom of chaff, and the ignition of a flare. Total PDU size is
@@ -385,15 +393,14 @@ class DetonationPdu(WarfareFamilyPdu):
 
     sourceEntityID: EntityIdentifier = field(default_factory=EntityIdentifier)
     targetEntityID: EntityIdentifier = field(default_factory=EntityIdentifier)
-    explodingEntityID: EntityIdentifier = field(
-        default_factory=EntityIdentifier)
+    explodingEntityID: EntityIdentifier = field(default_factory=EntityIdentifier)
     eventID: EventIdentifier = field(default_factory=EventIdentifier)
     velocity: Vector3Float = field(default_factory=Vector3Float)
     locationInWorldCoordinates: WorldCoordinates = field(
-        default_factory=WorldCoordinates)
+        default_factory=WorldCoordinates
+    )
     descriptor: MunitionDescriptor = field(default_factory=MunitionDescriptor)
-    locationOfEntityCoordinates: Vector3Float = field(
-        default_factory=Vector3Float)
+    locationOfEntityCoordinates: Vector3Float = field(default_factory=Vector3Float)
     detonationResult: enum8 = 0  # [UID 62]
     variableParameters: list[VariableParameter] = field(default_factory=list)
 
@@ -407,16 +414,20 @@ class DetonationPdu(WarfareFamilyPdu):
         return len(self.variableParameters)
 
     def _marshalledBodySize(self) -> int:
-        return (self.sourceEntityID.marshalledSize()
-                + self.targetEntityID.marshalledSize()
-                + self.explodingEntityID.marshalledSize()
-                + self.eventID.marshalledSize()
-                + self.velocity.marshalledSize()
-                + self.locationInWorldCoordinates.marshalledSize()
-                + self.descriptor.marshalledSize()
-                + self.locationOfEntityCoordinates.marshalledSize()
-                + 1 + 1 + 2  # detonationResult + count + pad
-                + sum(vp.marshalledSize() for vp in self.variableParameters))
+        return (
+            self.sourceEntityID.marshalledSize()
+            + self.targetEntityID.marshalledSize()
+            + self.explodingEntityID.marshalledSize()
+            + self.eventID.marshalledSize()
+            + self.velocity.marshalledSize()
+            + self.locationInWorldCoordinates.marshalledSize()
+            + self.descriptor.marshalledSize()
+            + self.locationOfEntityCoordinates.marshalledSize()
+            + 1
+            + 1
+            + 2  # detonationResult + count + pad
+            + sum(vp.marshalledSize() for vp in self.variableParameters)
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         self.sourceEntityID.serialize(outputStream)
@@ -454,7 +465,7 @@ class DetonationPdu(WarfareFamilyPdu):
 
 @dataclass(slots=True)
 class DirectedEnergyFirePdu(WarfareFamilyPdu):
-    """Section 7.3.4 Directed Energy Fire PDU
+    """§7.3.4 Directed Energy Fire PDU
 
     Communicates the firing of a directed energy weapon. 88 bytes plus the
     DE records (each a uid-66 Standard Variable record, decoded via the
@@ -493,21 +504,26 @@ class DirectedEnergyFirePdu(WarfareFamilyPdu):
         return len(self.dERecords)
 
     def _marshalledBodySize(self) -> int:
-        return (self.firingEntityID.marshalledSize()
-                + self.eventID.marshalledSize()
-                + self.munitionType.marshalledSize()
-                + self.shotStartTime.marshalledSize()
-                + 4
-                + self.apertureEmitterLocation.marshalledSize()
-                + 4 + 4
-                + 4  # pad1
-                + 4 + 4
-                + 2  # flags
-                + 1 + 1  # pulseShape + pad2
-                + 4  # pad3
-                + 2  # pad4
-                + 2  # numberOfDERecords
-                + sum(record.marshalledSize() for record in self.dERecords))
+        return (
+            self.firingEntityID.marshalledSize()
+            + self.eventID.marshalledSize()
+            + self.munitionType.marshalledSize()
+            + self.shotStartTime.marshalledSize()
+            + 4
+            + self.apertureEmitterLocation.marshalledSize()
+            + 4
+            + 4
+            + 4  # pad1
+            + 4
+            + 4
+            + 2  # flags
+            + 1
+            + 1  # pulseShape + pad2
+            + 4  # pad3
+            + 2  # pad4
+            + 2  # numberOfDERecords
+            + sum(record.marshalledSize() for record in self.dERecords)
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         self.firingEntityID.serialize(outputStream)
@@ -532,6 +548,7 @@ class DirectedEnergyFirePdu(WarfareFamilyPdu):
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         from opendis.record import parseStandardVariableRecord
+
         self.firingEntityID = EntityIdentifier.parse(inputStream)
         self.eventID = EventIdentifier.parse(inputStream)
         self.munitionType = EntityType.parse(inputStream)
@@ -550,14 +567,13 @@ class DirectedEnergyFirePdu(WarfareFamilyPdu):
         self.pad4 = inputStream.read_uint16()
         numberOfDERecords = inputStream.read_uint16()
         self.dERecords = [
-            parseStandardVariableRecord(inputStream)
-            for _ in range(numberOfDERecords)
+            parseStandardVariableRecord(inputStream) for _ in range(numberOfDERecords)
         ]
 
 
 @dataclass(slots=True)
 class EntityDamageStatusPdu(WarfareFamilyPdu):
-    """Section 7.3.5 Entity Damage Status PDU
+    """§7.3.5 Entity Damage Status PDU
 
     Communicates detailed damage information sustained by an entity
     regardless of the source of the damage. The damage-description list
@@ -579,11 +595,13 @@ class EntityDamageStatusPdu(WarfareFamilyPdu):
         return len(self.damageDescriptionRecords)
 
     def _marshalledBodySize(self) -> int:
-        return (self.damagedEntityID.marshalledSize()
-                + 2 + 2  # padding1 + padding2
-                + 2  # numberOfDamageDescription
-                + sum(record.marshalledSize()
-                      for record in self.damageDescriptionRecords))
+        return (
+            self.damagedEntityID.marshalledSize()
+            + 2
+            + 2  # padding1 + padding2
+            + 2  # numberOfDamageDescription
+            + sum(record.marshalledSize() for record in self.damageDescriptionRecords)
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         self.damagedEntityID.serialize(outputStream)
@@ -595,6 +613,7 @@ class EntityDamageStatusPdu(WarfareFamilyPdu):
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         from opendis.record import parseStandardVariableRecord
+
         self.damagedEntityID = EntityIdentifier.parse(inputStream)
         self.padding1 = inputStream.read_uint16()
         self.padding2 = inputStream.read_uint16()

@@ -27,7 +27,7 @@ _logger = logging.getLogger(__name__)
 
 @dataclass(slots=True)
 class PduHeader:
-    """Section 6.2.66 PDU Header record
+    """§6.2.66 PDU Header record
 
     The header is 12 contiguous bytes packed by one precompiled
     ``struct.Struct`` call instead of eight sequential stream reads. The
@@ -60,15 +60,23 @@ class PduHeader:
 
     def serialize(self, outputStream: DataOutputStream, length: int) -> None:
         outputStream.write_bytes(
-            self._STRUCT.pack(self.protocolVersion, self.exerciseID,
-                              self.pduType, self.protocolFamily,
-                              self.timestamp.raw, length, self.pduStatus,
-                              self.padding))
+            self._STRUCT.pack(
+                self.protocolVersion,
+                self.exerciseID,
+                self.pduType,
+                self.protocolFamily,
+                self.timestamp.raw,
+                length,
+                self.pduStatus,
+                self.padding,
+            )
+        )
 
     @classmethod
     def parse(cls, inputStream: DataInputStream) -> "PduHeader":
-        ver, ex, typ, fam, ts, length, status, pad = \
-            cls._STRUCT.unpack(inputStream.read_bytes(12))
+        ver, ex, typ, fam, ts, length, status, pad = cls._STRUCT.unpack(
+            inputStream.read_bytes(12)
+        )
         header = cls(ver, ex, typ, fam, Timestamp(ts), status)
         header._wireLength = length
         header.padding = pad
@@ -146,14 +154,18 @@ class Pdu:
         if self.header.pduType != self.pduType:
             _logger.warning(
                 "%s parsed a datagram whose pduType is %s",
-                type(self).__name__, self.header.pduType)
+                type(self).__name__,
+                self.header.pduType,
+            )
         self._parseBody(inputStream)
         # Evidence-only check, after the body is populated.
         if self.header._wireLength != self.marshalledSize():
             _logger.debug(
                 "%s wire length %s != computed %s",
                 type(self).__name__,
-                self.header._wireLength, self.marshalledSize())
+                self.header._wireLength,
+                self.marshalledSize(),
+            )
 
     def to_bytes(self) -> bytes:
         """Serialize the PDU to bytes."""
@@ -165,6 +177,7 @@ class Pdu:
     def from_bytes(cls, data: bytes) -> "Pdu":
         """Parse a datagram into the right PDU class via the factory."""
         from opendis.record.factory import createPdu
+
         return createPdu(data)
 
     # -- concrete classes implement these three -------------------------
@@ -199,8 +212,7 @@ class UnrecognizedPdu(Pdu):
         self.header = PduHeader()
         if len(rawHeader) >= 12:
             try:
-                self.header = PduHeader.parse(
-                    DataInputStream(io.BytesIO(rawHeader)))
+                self.header = PduHeader.parse(DataInputStream(io.BytesIO(rawHeader)))
             except struct.error:
                 pass  # keep the zero header; the raw bytes are the truth
 
@@ -221,8 +233,10 @@ class UnrecognizedPdu(Pdu):
         raise NotImplementedError("UnrecognizedPdu is built by the factory")
 
     def __repr__(self) -> str:
-        return (f"UnrecognizedPdu(pduType={self.header.pduType}, "
-                f"protocolVersion={self.header.protocolVersion}, "
-                f"exerciseID={self.header.exerciseID}, "
-                f"length={len(self.rawHeader) + len(self.rawPayload)}, "
-                f"rawPayload={self.rawPayload!r})")
+        return (
+            f"UnrecognizedPdu(pduType={self.header.pduType}, "
+            f"protocolVersion={self.header.protocolVersion}, "
+            f"exerciseID={self.header.exerciseID}, "
+            f"length={len(self.rawHeader) + len(self.rawPayload)}, "
+            f"rawPayload={self.rawPayload!r})"
+        )

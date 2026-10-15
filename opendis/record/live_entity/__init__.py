@@ -60,7 +60,7 @@ __all__ = [
 
 @dataclass(frozen=True, slots=True)
 class LiveSimulationAddress:
-    """Section 6.2.54 Live Simulation Address record (site u8 +
+    """§6.2.54 Live Simulation Address record (site u8 +
     application u8)."""
 
     liveSiteNumber: uint8 = 0
@@ -80,11 +80,12 @@ class LiveSimulationAddress:
 
 @dataclass(frozen=True, slots=True)
 class LiveEntityIdentifier:
-    """Section 6.2.53 Live Entity Identifier record — the 4-byte live
+    """§6.2.53 Live Entity Identifier record — the 4-byte live
     shape of the ruled identifier taxonomy."""
 
     liveSimulationAddress: LiveSimulationAddress = field(
-        default_factory=LiveSimulationAddress)
+        default_factory=LiveSimulationAddress
+    )
     entityNumber: uint16 = 0
 
     def marshalledSize(self) -> int:
@@ -96,8 +97,7 @@ class LiveEntityIdentifier:
 
     @classmethod
     def parse(cls, inputStream: DataInputStream) -> "LiveEntityIdentifier":
-        return cls(LiveSimulationAddress.parse(inputStream),
-                   inputStream.read_uint16())
+        return cls(LiveSimulationAddress.parse(inputStream), inputStream.read_uint16())
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,8 +137,11 @@ class EventIdentifierLiveEntity:
 
     @classmethod
     def parse(cls, inputStream: DataInputStream) -> "EventIdentifierLiveEntity":
-        return cls(inputStream.read_uint8(), inputStream.read_uint8(),
-                   inputStream.read_uint16())
+        return cls(
+            inputStream.read_uint8(),
+            inputStream.read_uint8(),
+            inputStream.read_uint16(),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -200,8 +203,12 @@ class LEMunitionDescriptor:
             outputStream.write_uint16(self.rate)
 
     @classmethod
-    def parse(cls, inputStream: DataInputStream, includeWarheadFuse: bool,
-              includeQuantityRate: bool) -> "LEMunitionDescriptor":
+    def parse(
+        cls,
+        inputStream: DataInputStream,
+        includeWarheadFuse: bool,
+        includeQuantityRate: bool,
+    ) -> "LEMunitionDescriptor":
         descriptor = cls()
         descriptor.munitionType = EntityType.parse(inputStream)
         if includeWarheadFuse:
@@ -380,13 +387,18 @@ class LiveDeadReckoningParameters:
 
     deadReckoningAlgorithm: enum8 = 0  # [UID 44]
     entityLinearAcceleration: LEVector3FixedByte = field(
-        default_factory=LEVector3FixedByte)
+        default_factory=LEVector3FixedByte
+    )
     entityAngularVelocity: LEVector3FixedByte = field(
-        default_factory=LEVector3FixedByte)
+        default_factory=LEVector3FixedByte
+    )
 
     def marshalledSize(self) -> int:
-        return (1 + self.entityLinearAcceleration.marshalledSize()
-                + self.entityAngularVelocity.marshalledSize())
+        return (
+            1
+            + self.entityLinearAcceleration.marshalledSize()
+            + self.entityAngularVelocity.marshalledSize()
+        )
 
     def serialize(self, outputStream: DataOutputStream) -> None:
         outputStream.write_uint8(self.deadReckoningAlgorithm)
@@ -394,8 +406,7 @@ class LiveDeadReckoningParameters:
         self.entityAngularVelocity.serialize(outputStream)
 
     def parse(self, inputStream: DataInputStream) -> None:
-        self.deadReckoningAlgorithm = rich_or_int(
-            44, inputStream.read_uint8())
+        self.deadReckoningAlgorithm = rich_or_int(44, inputStream.read_uint8())
         self.entityLinearAcceleration.parse(inputStream)
         self.entityAngularVelocity.parse(inputStream)
 
@@ -425,7 +436,7 @@ class LiveEntityRelativeEntityCoordinates:
 
 @dataclass(slots=True)
 class LiveEntityFamilyPdu(Pdu):
-    """Section 9.3.2 base for LE PDUs: the standard 12-byte header with
+    """§9.3.2 base for LE PDUs: the standard 12-byte header with
     the PDU Status byte carrying the subprotocol number [UID 417]."""
 
     protocolFamily: ClassVar[int] = 11  # [UID 5]
@@ -443,7 +454,7 @@ class LiveEntityFamilyPdu(Pdu):
 
 @dataclass(slots=True)
 class TimeSpacePositionInformationPdu(LiveEntityFamilyPdu):
-    """Section 9.4.2 Time Space Position Information PDU
+    """§9.4.2 Time Space Position Information PDU
 
     The LE's state vector. NOTE: the standard's TSPIFlag-conditional
     fields are not modeled in the XML; this implementation serializes
@@ -452,21 +463,26 @@ class TimeSpacePositionInformationPdu(LiveEntityFamilyPdu):
 
     pduType: ClassVar[int] = 46  # [UID 4]
 
-    liveEntityId: LiveEntityIdentifier = field(
-        default_factory=LiveEntityIdentifier)
+    liveEntityId: LiveEntityIdentifier = field(default_factory=LiveEntityIdentifier)
     TSPIFlag: uint8 = 0
     entityLocation: LiveEntityRelativeWorldCoordinates = field(
-        default_factory=LiveEntityRelativeWorldCoordinates)
+        default_factory=LiveEntityRelativeWorldCoordinates
+    )
     entityLinearVelocity: LiveEntityLinearVelocity = field(
-        default_factory=LiveEntityLinearVelocity)
+        default_factory=LiveEntityLinearVelocity
+    )
     entityOrientation: LiveEntityOrientation = field(
-        default_factory=LiveEntityOrientation)
+        default_factory=LiveEntityOrientation
+    )
     positionError: LiveEntityPositionError = field(
-        default_factory=LiveEntityPositionError)
+        default_factory=LiveEntityPositionError
+    )
     orientationError: LiveEntityOrientationError = field(
-        default_factory=LiveEntityOrientationError)
+        default_factory=LiveEntityOrientationError
+    )
     deadReckoningParameters: LiveDeadReckoningParameters = field(
-        default_factory=LiveDeadReckoningParameters)
+        default_factory=LiveDeadReckoningParameters
+    )
     measuredSpeed: uint16 = 0  # 16-bit fixed binary
     systemSpecificData: bytes = b""
 
@@ -475,15 +491,19 @@ class TimeSpacePositionInformationPdu(LiveEntityFamilyPdu):
         return len(self.systemSpecificData)
 
     def _marshalledBodySize(self) -> int:
-        return (self.liveEntityId.marshalledSize()
-                + 1
-                + self.entityLocation.marshalledSize()
-                + self.entityLinearVelocity.marshalledSize()
-                + self.entityOrientation.marshalledSize()
-                + self.positionError.marshalledSize()
-                + self.orientationError.marshalledSize()
-                + self.deadReckoningParameters.marshalledSize()
-                + 2 + 1 + len(self.systemSpecificData))
+        return (
+            self.liveEntityId.marshalledSize()
+            + 1
+            + self.entityLocation.marshalledSize()
+            + self.entityLinearVelocity.marshalledSize()
+            + self.entityOrientation.marshalledSize()
+            + self.positionError.marshalledSize()
+            + self.orientationError.marshalledSize()
+            + self.deadReckoningParameters.marshalledSize()
+            + 2
+            + 1
+            + len(self.systemSpecificData)
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         self.liveEntityId.serialize(outputStream)
@@ -509,8 +529,7 @@ class TimeSpacePositionInformationPdu(LiveEntityFamilyPdu):
         self.deadReckoningParameters.parse(inputStream)
         self.measuredSpeed = inputStream.read_uint16()
         systemSpecificDataLength = inputStream.read_uint8()
-        self.systemSpecificData = inputStream.read_bytes(
-            systemSpecificDataLength)
+        self.systemSpecificData = inputStream.read_bytes(systemSpecificDataLength)
 
 
 TSPIPdu = TimeSpacePositionInformationPdu
@@ -518,7 +537,7 @@ TSPIPdu = TimeSpacePositionInformationPdu
 
 @dataclass(slots=True)
 class AppearancePdu(LiveEntityFamilyPdu):
-    """Section 9.4.3 Appearance PDU
+    """§9.4.3 Appearance PDU
 
     Flag-conditional appearance data: Appearance Flag-1 (Table 221)
     gates every optional field; bit 7 also brings in Appearance Flag-2
@@ -527,8 +546,7 @@ class AppearancePdu(LiveEntityFamilyPdu):
 
     pduType: ClassVar[int] = 47  # [UID 4]
 
-    liveEntityId: LiveEntityIdentifier = field(
-        default_factory=LiveEntityIdentifier)
+    liveEntityId: LiveEntityIdentifier = field(default_factory=LiveEntityIdentifier)
     appearanceFlag1: uint16 = 0
     appearanceFlag2: uint8 | None = None
     forceId: enum8 | None = None  # [UID 6]
@@ -551,9 +569,13 @@ class AppearancePdu(LiveEntityFamilyPdu):
                 size += record.marshalledSize()
         if self.entityMarking is not None:
             size += self.entityMarking.marshalledSize()
-        for value in (self.capabilities, self.appearanceVisual,
-                      self.appearanceIR, self.appearanceEM,
-                      self.appearanceAudio):
+        for value in (
+            self.capabilities,
+            self.appearanceVisual,
+            self.appearanceIR,
+            self.appearanceEM,
+            self.appearanceAudio,
+        ):
             if value is not None:
                 size += 4
         return size
@@ -613,15 +635,14 @@ class AppearancePdu(LiveEntityFamilyPdu):
 
 @dataclass(slots=True)
 class ArticulatedPartsPdu(LiveEntityFamilyPdu):
-    """Section 9.4.4 Articulated Parts PDU
+    """§9.4.4 Articulated Parts PDU
 
     Communicates an entity's articulated and attached parts as
     §6.2.94 Variable Parameter records. Base PDU size is 17 bytes."""
 
     pduType: ClassVar[int] = 48  # [UID 4]
 
-    liveEntityId: LiveEntityIdentifier = field(
-        default_factory=LiveEntityIdentifier)
+    liveEntityId: LiveEntityIdentifier = field(default_factory=LiveEntityIdentifier)
     variableParameters: list[VariableParameter] = field(default_factory=list)
 
     @property
@@ -629,9 +650,11 @@ class ArticulatedPartsPdu(LiveEntityFamilyPdu):
         return len(self.variableParameters)
 
     def _marshalledBodySize(self) -> int:
-        return (self.liveEntityId.marshalledSize()
-                + 1
-                + sum(vp.marshalledSize() for vp in self.variableParameters))
+        return (
+            self.liveEntityId.marshalledSize()
+            + 1
+            + sum(vp.marshalledSize() for vp in self.variableParameters)
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         self.liveEntityId.serialize(outputStream)
@@ -650,7 +673,7 @@ class ArticulatedPartsPdu(LiveEntityFamilyPdu):
 
 @dataclass(slots=True)
 class LiveEntityFirePdu(LiveEntityFamilyPdu):
-    """Section 9.4.5 LE Fire PDU
+    """§9.4.5 LE Fire PDU
 
     Fire Flag (Table 225) gates: target entity (bit 0), munition id
     elided/full (bits 2/1), event id elided/full (bit 3 — always
@@ -661,24 +684,32 @@ class LiveEntityFirePdu(LiveEntityFamilyPdu):
     pduType: ClassVar[int] = 49  # [UID 4]
 
     firingLiveEntityId: LiveEntityIdentifier = field(
-        default_factory=LiveEntityIdentifier)
+        default_factory=LiveEntityIdentifier
+    )
     fireFlag: uint8 = 0
     targetLiveEntityId: LiveEntityIdentifier | None = None
-    munitionLiveEntityId: LiveEntityIdentifierElided | LiveEntityIdentifier | None = None
+    munitionLiveEntityId: LiveEntityIdentifierElided | LiveEntityIdentifier | None = (
+        None
+    )
     eventId: EventIdentifierLiveEntityElided | EventIdentifierLiveEntity = field(
-        default_factory=EventIdentifierLiveEntityElided)
+        default_factory=EventIdentifierLiveEntityElided
+    )
     location: LiveEntityRelativeWorldCoordinates | None = None
     munitionDescriptor: LEMunitionDescriptor = field(
-        default_factory=LEMunitionDescriptor)
-    velocity: LiveEntityLinearVelocity = field(
-        default_factory=LiveEntityLinearVelocity)
+        default_factory=LEMunitionDescriptor
+    )
+    velocity: LiveEntityLinearVelocity = field(default_factory=LiveEntityLinearVelocity)
     range: uint16 = 0
 
     def _marshalledBodySize(self) -> int:
-        size = (self.firingLiveEntityId.marshalledSize() + 1
-                + self.eventId.marshalledSize()
-                + self.munitionDescriptor.marshalledSize()
-                + self.velocity.marshalledSize() + 2)
+        size = (
+            self.firingLiveEntityId.marshalledSize()
+            + 1
+            + self.eventId.marshalledSize()
+            + self.munitionDescriptor.marshalledSize()
+            + self.velocity.marshalledSize()
+            + 2
+        )
         if self.targetLiveEntityId is not None:
             size += self.targetLiveEntityId.marshalledSize()
         if self.munitionLiveEntityId is not None:
@@ -709,11 +740,11 @@ class LiveEntityFirePdu(LiveEntityFamilyPdu):
             self.targetLiveEntityId = LiveEntityIdentifier.parse(inputStream)
         if fireFlag & (1 << 2):
             if fireFlag & (1 << 1):
-                self.munitionLiveEntityId = LiveEntityIdentifier.parse(
-                    inputStream)
+                self.munitionLiveEntityId = LiveEntityIdentifier.parse(inputStream)
             else:
-                self.munitionLiveEntityId = \
-                    LiveEntityIdentifierElided.parse(inputStream)
+                self.munitionLiveEntityId = LiveEntityIdentifierElided.parse(
+                    inputStream
+                )
         if fireFlag & (1 << 3):
             self.eventId = EventIdentifierLiveEntity.parse(inputStream)
         else:
@@ -724,7 +755,8 @@ class LiveEntityFirePdu(LiveEntityFamilyPdu):
         self.munitionDescriptor = LEMunitionDescriptor.parse(
             inputStream,
             includeWarheadFuse=bool(fireFlag & (1 << 4)),
-            includeQuantityRate=bool(fireFlag & (1 << 5)))
+            includeQuantityRate=bool(fireFlag & (1 << 5)),
+        )
         self.velocity.parse(inputStream)
         self.range = inputStream.read_uint16()
 
@@ -734,7 +766,7 @@ LEFirePdu = LiveEntityFirePdu
 
 @dataclass(slots=True)
 class LiveEntityDetonationPdu(LiveEntityFamilyPdu):
-    """Section 9.4.6 LE Detonation PDU
+    """§9.4.6 LE Detonation PDU
 
     Detonation Flag-1 (Table 227) gates flag-2 presence (bit 7), target
     (bit 0), munition id (bit 2, elided/full by bit 1), event id (bits
@@ -750,25 +782,32 @@ class LiveEntityDetonationPdu(LiveEntityFamilyPdu):
     }
 
     firingLiveEntityId: LiveEntityIdentifier = field(
-        default_factory=LiveEntityIdentifier)
+        default_factory=LiveEntityIdentifier
+    )
     detonationFlag1: uint8 = 0
     detonationFlag2: uint8 | None = None
     targetLiveEntityId: LiveEntityIdentifier | None = None
-    munitionLiveEntityId: LiveEntityIdentifierElided | LiveEntityIdentifier | None = None
+    munitionLiveEntityId: LiveEntityIdentifierElided | LiveEntityIdentifier | None = (
+        None
+    )
     eventId: EventIdentifierLiveEntityElided | EventIdentifierLiveEntity | None = None
     worldLocation: LiveEntityRelativeWorldCoordinates | None = None
-    velocity: LiveEntityLinearVelocity = field(
-        default_factory=LiveEntityLinearVelocity)
+    velocity: LiveEntityLinearVelocity = field(default_factory=LiveEntityLinearVelocity)
     munitionOrientation: LiveEntityOrientation16 | None = None
     munitionDescriptor: LEMunitionDescriptor = field(
-        default_factory=LEMunitionDescriptor)
+        default_factory=LEMunitionDescriptor
+    )
     entityLocation: LiveEntityRelativeEntityCoordinates | None = None
     detonationResult: enum8 = 0  # [UID 62]
 
     def _marshalledBodySize(self) -> int:
-        size = (self.firingLiveEntityId.marshalledSize() + 1
-                + self.velocity.marshalledSize()
-                + self.munitionDescriptor.marshalledSize() + 1)
+        size = (
+            self.firingLiveEntityId.marshalledSize()
+            + 1
+            + self.velocity.marshalledSize()
+            + self.munitionDescriptor.marshalledSize()
+            + 1
+        )
         if self.detonationFlag2 is not None:
             size += 1
         if self.targetLiveEntityId is not None:
@@ -819,17 +858,16 @@ class LiveEntityDetonationPdu(LiveEntityFamilyPdu):
             self.targetLiveEntityId = LiveEntityIdentifier.parse(inputStream)
         if detonationFlag1 & (1 << 2):
             if detonationFlag1 & (1 << 1):
-                self.munitionLiveEntityId = LiveEntityIdentifier.parse(
-                    inputStream)
+                self.munitionLiveEntityId = LiveEntityIdentifier.parse(inputStream)
             else:
-                self.munitionLiveEntityId = \
-                    LiveEntityIdentifierElided.parse(inputStream)
+                self.munitionLiveEntityId = LiveEntityIdentifierElided.parse(
+                    inputStream
+                )
         if flag2 and detonationFlag2 & (1 << 1):
             if detonationFlag1 & (1 << 3):
                 self.eventId = EventIdentifierLiveEntity.parse(inputStream)
             else:
-                self.eventId = \
-                    EventIdentifierLiveEntityElided.parse(inputStream)
+                self.eventId = EventIdentifierLiveEntityElided.parse(inputStream)
         if not detonationFlag1 & (1 << 6):
             self.worldLocation = LiveEntityRelativeWorldCoordinates()
             self.worldLocation.parse(inputStream)
@@ -840,7 +878,8 @@ class LiveEntityDetonationPdu(LiveEntityFamilyPdu):
         self.munitionDescriptor = LEMunitionDescriptor.parse(
             inputStream,
             includeWarheadFuse=bool(detonationFlag1 & (1 << 4)),
-            includeQuantityRate=bool(detonationFlag1 & (1 << 5)))
+            includeQuantityRate=bool(detonationFlag1 & (1 << 5)),
+        )
         if detonationFlag1 & (1 << 6):
             self.entityLocation = LiveEntityRelativeEntityCoordinates()
             self.entityLocation.parse(inputStream)

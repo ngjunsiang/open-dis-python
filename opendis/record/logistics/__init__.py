@@ -28,14 +28,14 @@ __all__ = [
 
 @dataclass(slots=True)
 class LogisticsFamilyPdu(Pdu):
-    """Section 7.4 marker for the Logistics family."""
+    """§7.4 marker for the Logistics family."""
 
     protocolFamily: ClassVar[int] = 3  # [UID 5]
 
 
 @dataclass(slots=True)
 class SupplyQuantity:
-    """Section 6.2.86 Supply Quantity record
+    """§6.2.86 Supply Quantity record
 
     A supply type and the amount of that supply."""
 
@@ -63,7 +63,7 @@ class SupplyQuantity:
 
 @dataclass(slots=True)
 class ServiceRequestPdu(LogisticsFamilyPdu):
-    """Section 7.4.2 Service Request PDU
+    """§7.4.2 Service Request PDU
 
     One entity requesting a service from another, with the supplies
     needed for that service. Total base PDU size is 28 bytes plus
@@ -87,10 +87,14 @@ class ServiceRequestPdu(LogisticsFamilyPdu):
         return len(self.supplies)
 
     def _marshalledBodySize(self) -> int:
-        return (self.requestingEntityID.marshalledSize()
-                + self.servicingEntityID.marshalledSize()
-                + 1 + 1 + 2
-                + sum(s.marshalledSize() for s in self.supplies))
+        return (
+            self.requestingEntityID.marshalledSize()
+            + self.servicingEntityID.marshalledSize()
+            + 1
+            + 1
+            + 2
+            + sum(s.marshalledSize() for s in self.supplies)
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         self.requestingEntityID.serialize(outputStream)
@@ -108,8 +112,7 @@ class ServiceRequestPdu(LogisticsFamilyPdu):
         numberOfSupplyTypes = inputStream.read_uint8()
         self.padding1 = inputStream.read_uint16()
         self.supplies = [
-            SupplyQuantity.parseFrom(inputStream)
-            for _ in range(numberOfSupplyTypes)
+            SupplyQuantity.parseFrom(inputStream) for _ in range(numberOfSupplyTypes)
         ]
 
 
@@ -122,10 +125,14 @@ class _ResupplyMixin:
         return len(self.supplies)
 
     def _resupplyBodySize(self) -> int:
-        return (self.receivingEntityID.marshalledSize()
-                + self.supplyingEntityID.marshalledSize()
-                + 1 + 1 + 2
-                + sum(s.marshalledSize() for s in self.supplies))
+        return (
+            self.receivingEntityID.marshalledSize()
+            + self.supplyingEntityID.marshalledSize()
+            + 1
+            + 1
+            + 2
+            + sum(s.marshalledSize() for s in self.supplies)
+        )
 
     def _serializeResupplyBody(self, outputStream: DataOutputStream) -> None:
         self.receivingEntityID.serialize(outputStream)
@@ -143,14 +150,13 @@ class _ResupplyMixin:
         self.padding1 = inputStream.read_uint8()
         self.padding2 = inputStream.read_uint16()
         self.supplies = [
-            SupplyQuantity.parseFrom(inputStream)
-            for _ in range(numberOfSupplyTypes)
+            SupplyQuantity.parseFrom(inputStream) for _ in range(numberOfSupplyTypes)
         ]
 
 
 @dataclass(slots=True)
 class ResupplyOfferPdu(_ResupplyMixin, LogisticsFamilyPdu):
-    """Section 7.4.3 Resupply Offer PDU
+    """§7.4.3 Resupply Offer PDU
 
     Communicates the offer of supplies by a supplying entity to a
     receiving entity. Total base PDU size is 28 bytes plus supply
@@ -177,7 +183,7 @@ class ResupplyOfferPdu(_ResupplyMixin, LogisticsFamilyPdu):
 
 @dataclass(slots=True)
 class ResupplyReceivedPdu(_ResupplyMixin, LogisticsFamilyPdu):
-    """Section 7.4.4 Resupply Received PDU
+    """§7.4.4 Resupply Received PDU
 
     Acknowledges the receipt of supplies by the receiving entity. Total
     base PDU size is 28 bytes plus supply records."""
@@ -203,7 +209,7 @@ class ResupplyReceivedPdu(_ResupplyMixin, LogisticsFamilyPdu):
 
 @dataclass(slots=True)
 class ResupplyCancelPdu(LogisticsFamilyPdu):
-    """Section 7.4.5 Resupply Cancel PDU
+    """§7.4.5 Resupply Cancel PDU
 
     Cancels a resupply service. Total PDU size is 24 bytes."""
 
@@ -213,8 +219,10 @@ class ResupplyCancelPdu(LogisticsFamilyPdu):
     supplyingEntityID: EntityIdentifier = field(default_factory=EntityIdentifier)
 
     def _marshalledBodySize(self) -> int:
-        return (self.receivingEntityID.marshalledSize()
-                + self.supplyingEntityID.marshalledSize())
+        return (
+            self.receivingEntityID.marshalledSize()
+            + self.supplyingEntityID.marshalledSize()
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         self.receivingEntityID.serialize(outputStream)
@@ -227,7 +235,7 @@ class ResupplyCancelPdu(LogisticsFamilyPdu):
 
 @dataclass(slots=True)
 class RepairCompletePdu(LogisticsFamilyPdu):
-    """Section 7.4.6 Repair Complete PDU
+    """§7.4.6 Repair Complete PDU
 
     The repairing entity communicates the repair that has been performed
     for the entity that requested repair service. Total PDU size is 28
@@ -246,9 +254,12 @@ class RepairCompletePdu(LogisticsFamilyPdu):
     padding4: uint16 = field(init=False, default=0)
 
     def _marshalledBodySize(self) -> int:
-        return (self.receivingEntityID.marshalledSize()
-                + self.repairingEntityID.marshalledSize()
-                + 2 + 2)
+        return (
+            self.receivingEntityID.marshalledSize()
+            + self.repairingEntityID.marshalledSize()
+            + 2
+            + 2
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         self.receivingEntityID.serialize(outputStream)
@@ -265,7 +276,7 @@ class RepairCompletePdu(LogisticsFamilyPdu):
 
 @dataclass(slots=True)
 class RepairResponsePdu(LogisticsFamilyPdu):
-    """Section 7.4.7 Repair Response PDU
+    """§7.4.7 Repair Response PDU
 
     The receiving entity acknowledges receipt of a Repair Complete PDU.
     Total PDU size is 28 bytes."""
@@ -284,9 +295,13 @@ class RepairResponsePdu(LogisticsFamilyPdu):
     padding2: uint16 = field(init=False, default=0)
 
     def _marshalledBodySize(self) -> int:
-        return (self.receivingEntityID.marshalledSize()
-                + self.repairingEntityID.marshalledSize()
-                + 2 + 1 + 2)
+        return (
+            self.receivingEntityID.marshalledSize()
+            + self.repairingEntityID.marshalledSize()
+            + 2
+            + 1
+            + 2
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         self.receivingEntityID.serialize(outputStream)

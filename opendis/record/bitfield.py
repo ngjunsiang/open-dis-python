@@ -31,10 +31,9 @@ DisFieldType = Literal["INTEGER"]
 INTEGER = "INTEGER"
 
 
-def _field(name: str,
-          ftype: DisFieldType,
-          bits: int,
-          base_ctype: type[_SimpleCData]) -> CTypeFieldDescription:
+def _field(
+    name: str, ftype: DisFieldType, bits: int, base_ctype: type[_SimpleCData]
+) -> CTypeFieldDescription:
     """Helper function to create the field description tuple used by ctypes.
 
     Args:
@@ -50,8 +49,7 @@ def _field(name: str,
     return (name, base_ctype, bits)
 
 
-def bitfield(name: str,
-              fields: Sequence[DisFieldDescription]):
+def bitfield(name: str, fields: Sequence[DisFieldDescription]):
     """Factory function for bitfield structs, which are subclasses of
     ctypes.Structure.
     These are used in records that require them to unpack non-octet-sized fields.
@@ -111,8 +109,9 @@ def bitfield(name: str,
             return cls.from_buffer_copy(inputStream.read_bytes(bytesize))
 
     # Sanity check: ensure the struct size matches expected size
-    assert sizeof(Bitfield) == bytesize, \
-        f"Bitfield size mismatch: expected {bytesize}, got {sizeof(Bitfield)}"
+    assert (
+        sizeof(Bitfield) == bytesize
+    ), f"Bitfield size mismatch: expected {bytesize}, got {sizeof(Bitfield)}"
 
     # Assign the class name
     Bitfield.__name__ = name

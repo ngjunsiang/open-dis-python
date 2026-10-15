@@ -25,7 +25,7 @@ __all__ = [
 
 @dataclass(slots=True)
 class InformationOperationsFamilyPdu(Pdu):
-    """Section 5.13 base for IO PDUs: the PDU header plus the
+    """§5.13 base for IO PDUs: the PDU header plus the
     originating simulation ID."""
 
     protocolFamily: ClassVar[int] = 13  # [UID 5]
@@ -44,7 +44,7 @@ class InformationOperationsFamilyPdu(Pdu):
 
 @dataclass(slots=True)
 class InformationOperationsActionPdu(InformationOperationsFamilyPdu):
-    """Section 5.13.3 IO Action PDU
+    """§5.13.3 IO Action PDU
 
     Communicates an IO attack or its effects on one or more target
     entities. Base PDU size is 56 bytes plus IO records."""
@@ -76,14 +76,21 @@ class InformationOperationsActionPdu(InformationOperationsFamilyPdu):
         return len(self.ioRecords)
 
     def _marshalledBodySize(self) -> int:
-        return (super(InformationOperationsActionPdu,
-                      self)._marshalledBodySize()
-                + self.receivingSimID.marshalledSize()
-                + 4 + 2 + 2 + 2 + 2 + 4
-                + self.ioAttackerID.marshalledSize()
-                + self.ioPrimaryTargetID.marshalledSize()
-                + 2 + 2
-                + sum(r.marshalledSize() for r in self.ioRecords))
+        return (
+            super(InformationOperationsActionPdu, self)._marshalledBodySize()
+            + self.receivingSimID.marshalledSize()
+            + 4
+            + 2
+            + 2
+            + 2
+            + 2
+            + 4
+            + self.ioAttackerID.marshalledSize()
+            + self.ioPrimaryTargetID.marshalledSize()
+            + 2
+            + 2
+            + sum(r.marshalledSize() for r in self.ioRecords)
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(InformationOperationsActionPdu, self)._serializeBody(outputStream)
@@ -103,6 +110,7 @@ class InformationOperationsActionPdu(InformationOperationsFamilyPdu):
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         from opendis.record import parseStandardVariableRecord
+
         super(InformationOperationsActionPdu, self)._parseBody(inputStream)
         self.receivingSimID = EntityIdentifier.parse(inputStream)
         self.requestID = inputStream.read_uint32()
@@ -116,14 +124,13 @@ class InformationOperationsActionPdu(InformationOperationsFamilyPdu):
         self.padding2 = inputStream.read_uint16()
         numberOfIORecords = inputStream.read_uint16()
         self.ioRecords = [
-            parseStandardVariableRecord(inputStream)
-            for _ in range(numberOfIORecords)
+            parseStandardVariableRecord(inputStream) for _ in range(numberOfIORecords)
         ]
 
 
 @dataclass(slots=True)
 class InformationOperationsReportPdu(InformationOperationsFamilyPdu):
-    """Section 5.13.4 IO Report PDU
+    """§5.13.4 IO Report PDU
 
     Communicates the effects of an IO attack on one or more target
     entities. Base PDU size is 40 bytes plus IO records."""
@@ -150,13 +157,18 @@ class InformationOperationsReportPdu(InformationOperationsFamilyPdu):
         return len(self.ioRecords)
 
     def _marshalledBodySize(self) -> int:
-        return (super(InformationOperationsReportPdu,
-                      self)._marshalledBodySize()
-                + 2 + 1 + 1
-                + self.ioAttackerID.marshalledSize()
-                + self.ioPrimaryTargetID.marshalledSize()
-                + 2 + 2 + 2
-                + sum(r.marshalledSize() for r in self.ioRecords))
+        return (
+            super(InformationOperationsReportPdu, self)._marshalledBodySize()
+            + 2
+            + 1
+            + 1
+            + self.ioAttackerID.marshalledSize()
+            + self.ioPrimaryTargetID.marshalledSize()
+            + 2
+            + 2
+            + 2
+            + sum(r.marshalledSize() for r in self.ioRecords)
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(InformationOperationsReportPdu, self)._serializeBody(outputStream)
@@ -173,6 +185,7 @@ class InformationOperationsReportPdu(InformationOperationsFamilyPdu):
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         from opendis.record import parseStandardVariableRecord
+
         super(InformationOperationsReportPdu, self)._parseBody(inputStream)
         self.ioSimSource = rich_or_int(286, inputStream.read_uint16())
         self.ioReportType = rich_or_int(289, inputStream.read_uint8())
@@ -183,6 +196,5 @@ class InformationOperationsReportPdu(InformationOperationsFamilyPdu):
         self.padding3 = inputStream.read_uint16()
         numberOfIORecords = inputStream.read_uint16()
         self.ioRecords = [
-            parseStandardVariableRecord(inputStream)
-            for _ in range(numberOfIORecords)
+            parseStandardVariableRecord(inputStream) for _ in range(numberOfIORecords)
         ]

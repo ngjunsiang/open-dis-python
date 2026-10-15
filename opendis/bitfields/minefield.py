@@ -17,16 +17,16 @@ class MinefieldStateAppearance(BitfieldView):
 
     _WIDTH: ClassVar[int] = 16
     _FIELDS: ClassVar[tuple[tuple[str, int, int, int | None], ...]] = (
-        ("minefieldType", 0, 2, None),
-        ("activeStatus", 2, 1, None),
-        ("lane", 3, 1, None),
-        ("state", 13, 1, None),
+        ("minefieldType", 0, 2, 418),
+        ("activeStatus", 2, 1, 419),
+        ("lane", 3, 1, 420),
+        ("state", 13, 1, 421),
     )
 
     @property
     def minefieldType(self) -> int:
-        """Record-keeping (0) or planned (1)?"""
-        return self._getBits(0, 2, 0)
+        """[UID 418] Minefield Appearance-Minefield Type."""
+        return self._getBits(0, 2, 418)
 
     @minefieldType.setter
     def minefieldType(self, value: int) -> None:
@@ -34,7 +34,6 @@ class MinefieldStateAppearance(BitfieldView):
 
     @property
     def activeStatus(self) -> bool:
-        """Active (True) or inactive (False)."""
         return self._getBit(2)
 
     @activeStatus.setter
@@ -43,7 +42,6 @@ class MinefieldStateAppearance(BitfieldView):
 
     @property
     def lane(self) -> bool:
-        """Lane (True) or minefield (False)."""
         return self._getBit(3)
 
     @lane.setter
@@ -52,7 +50,6 @@ class MinefieldStateAppearance(BitfieldView):
 
     @property
     def state(self) -> bool:
-        """Non-DAQ (True) or DAQ-capable (False) State."""
         return self._getBit(13)
 
     @state.setter

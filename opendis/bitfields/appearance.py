@@ -12,6 +12,8 @@ class per entity kind/domain layout, all over the same uint32 wire field.
 # name-mapping table in the generator.
 """
 
+from typing import ClassVar
+
 from opendis.bitfields.base import BitfieldView
 
 __all__ = [
@@ -30,8 +32,8 @@ class LandPlatformAppearance(BitfieldView):
     is deactivated [UID 386]).
     """
 
-    _WIDTH = 32
-    _FIELDS = (
+    _WIDTH: ClassVar[int] = 32
+    _FIELDS: ClassVar[tuple[tuple[str, int, int, int | None], ...]] = (
         ("paintScheme", 0, 1, 378),
         ("mobilityKilled", 1, 1, None),
         ("firePowerKilled", 2, 1, None),
@@ -44,7 +46,7 @@ class LandPlatformAppearance(BitfieldView):
         ("tailLightsOn", 13, 1, None),
         ("brakeLightsOn", 14, 1, None),
         ("isFlaming", 15, 1, None),
-        ("launcherOperational", 16, 1, None),
+        ("launcherOperational", 16, 1, 383),
         ("camouflageType", 17, 2, 384),
         ("concealedPosition", 19, 1, 385),
         ("radarDeployed", 20, 1, None),
@@ -179,7 +181,6 @@ class LandPlatformAppearance(BitfieldView):
 
     @property
     def concealedPosition(self) -> bool:
-        """[UID 385] True is a prepared concealed position."""
         return self._getBit(19)
 
     @concealedPosition.setter
@@ -212,7 +213,6 @@ class LandPlatformAppearance(BitfieldView):
 
     @property
     def state(self) -> bool:
-        """[UID 386] True is deactivated."""
         return self._getBit(23)
 
     @state.setter
@@ -287,8 +287,8 @@ class LandPlatformAppearance(BitfieldView):
 class AirPlatformAppearance(BitfieldView):
     """Entity Appearance layout for air platforms [UID 32]."""
 
-    _WIDTH = 32
-    _FIELDS = (
+    _WIDTH: ClassVar[int] = 32
+    _FIELDS: ClassVar[tuple[tuple[str, int, int, int | None], ...]] = (
         ("paintScheme", 0, 1, 378),
         ("propulsionKilled", 1, 1, None),
         ("nvgMode", 2, 1, 400),
@@ -304,7 +304,7 @@ class AirPlatformAppearance(BitfieldView):
         ("afterburnerOn", 16, 1, None),
         ("lowerAntiCollisionLightOn", 17, 1, None),
         ("upperAntiCollisionLightOn", 18, 1, None),
-        ("antiCollisionLightDayNight", 19, 1, None),
+        ("antiCollisionLightDayNight", 19, 1, 397),
         ("isBlinking", 20, 1, None),
         ("isFrozen", 21, 1, None),
         ("powerPlantOn", 22, 1, None),
@@ -337,7 +337,6 @@ class AirPlatformAppearance(BitfieldView):
 
     @property
     def nvgMode(self) -> bool:
-        """[UID 400] True is covert lighting (night vision goggles)."""
         return self._getBit(2)
 
     @nvgMode.setter
@@ -380,7 +379,7 @@ class AirPlatformAppearance(BitfieldView):
 
     @property
     def canopyTroopDoor(self) -> int:
-        """[UID 387] Appearance-Class 3 Canopy/Colored Light."""
+        """[UID 387] Appearance-Canopy."""
         return self._getBits(9, 3, 387)
 
     @canopyTroopDoor.setter
@@ -477,7 +476,6 @@ class AirPlatformAppearance(BitfieldView):
 
     @property
     def state(self) -> bool:
-        """[UID 386] True is deactivated."""
         return self._getBit(23)
 
     @state.setter
@@ -510,7 +508,6 @@ class AirPlatformAppearance(BitfieldView):
 
     @property
     def navigationPositionBrightness(self) -> bool:
-        """[UID 398] True is bright."""
         return self._getBit(27)
 
     @navigationPositionBrightness.setter
@@ -553,11 +550,11 @@ class AirPlatformAppearance(BitfieldView):
 class LandPlatformCapabilities(BitfieldView):
     """Entity Capabilities layout for land platforms [UID 450].
 
-    Bit 5 is reserved and not exposed; it round-trips untouched.
+    Bits 4–5 are reserved and not exposed; they round-trip untouched.
     """
 
-    _WIDTH = 32
-    _FIELDS = (
+    _WIDTH: ClassVar[int] = 32
+    _FIELDS: ClassVar[tuple[tuple[str, int, int, int | None], ...]] = (
         ("ammunitionSupply", 0, 1, None),
         ("fuelSupply", 1, 1, None),
         ("recovery", 2, 1, None),
@@ -627,8 +624,8 @@ class LandPlatformCapabilities(BitfieldView):
 class AirPlatformCapabilities(BitfieldView):
     """Entity Capabilities layout for air platforms [UID 451]."""
 
-    _WIDTH = 32
-    _FIELDS = (
+    _WIDTH: ClassVar[int] = 32
+    _FIELDS: ClassVar[tuple[tuple[str, int, int, int | None], ...]] = (
         ("ammunitionSupply", 0, 1, None),
         ("fuelSupply", 1, 1, None),
         ("recovery", 2, 1, None),

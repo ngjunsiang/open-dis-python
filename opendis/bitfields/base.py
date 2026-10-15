@@ -73,7 +73,6 @@ class BitfieldView:
         mask = (1 << width) - 1
         if not 0 <= value <= mask:
             raise ValueError(
-                f"{value} does not fit a {width}-bit field "
-                f"(expected 0..{mask})"
+                f"{value} does not fit a {width}-bit field " f"(expected 0..{mask})"
             )
         self._value = (self._value & ~(mask << shift)) | (value << shift)

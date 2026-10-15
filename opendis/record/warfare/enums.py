@@ -8,15 +8,18 @@ from opendis.types import bf_enum, bf_uint
 class DEFireFlags(base.Record):
     """SISO-REF-010-2025 18.5.2 DE Fire Flags [UID 313]"""
 
-    _struct = bitfield.bitfield(name="DEFireFlags", fields=[
-        ("weaponOn", bitfield.INTEGER, 1),  # state of the DE Weapon
-        ("stateUpdateFlag", bitfield.INTEGER, 1),  # DE Weapon State Change
-        ("padding", bitfield.INTEGER, 14)  # unused bits
-    ])
-    
-    def __init__(self,
-                 weaponOn: bool = False,
-                 stateUpdateFlag: bf_enum = 0):  # [UID 299]
+    _struct = bitfield.bitfield(
+        name="DEFireFlags",
+        fields=[
+            ("weaponOn", bitfield.INTEGER, 1),  # state of the DE Weapon
+            ("stateUpdateFlag", bitfield.INTEGER, 1),  # DE Weapon State Change
+            ("padding", bitfield.INTEGER, 14),  # unused bits
+        ],
+    )
+
+    def __init__(
+        self, weaponOn: bool = False, stateUpdateFlag: bf_enum = 0
+    ):  # [UID 299]
         # Net number ranging from 0 to 999 decimal
         self.weaponOn = weaponOn
         self.stateUpdateFlag = stateUpdateFlag

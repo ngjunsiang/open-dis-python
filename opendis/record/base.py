@@ -70,9 +70,9 @@ class VariableRecord(Serializable, Protocol):
         return isinstance(value, int) and value >= 0
 
     @abstractmethod
-    def parse(self,
-              inputStream: DataInputStream,
-              bytelength: int | None = None) -> None:
+    def parse(
+        self, inputStream: DataInputStream, bytelength: int | None = None
+    ) -> None:
         """Parse the record from the input stream.
 
         If bytelength is provided, it indicates the expected length of the record. Some records may require this information to parse correctly.
@@ -85,7 +85,7 @@ class VariableRecord(Serializable, Protocol):
 
 
 class StandardVariableRecord(VariableRecord):
-    """6.2.83 Standard Variable (SV) Record
+    """§6.2.83 Standard Variable (SV) Record
 
     This base class defines the interface for DIS records with variable sizes.
     First SV record of a Standard Variable Specification record shall start on
@@ -95,6 +95,7 @@ class StandardVariableRecord(VariableRecord):
     record is automatically aligned. The record length requirement may be
     achieved by placing padding fields anywhere in the SV record as deemed appropriate, not necessarily at the end of the record.
     """
+
     recordType: enum32  # [UID 66]
 
     @staticmethod
@@ -115,9 +116,11 @@ class StandardVariableRecord(VariableRecord):
         """
 
     @abstractmethod
-    def parse(self,  # pyright: ignore [reportIncompatibleMethodOverride]
-              inputStream: DataInputStream,
-              bytelength: int) -> None:
+    def parse(
+        self,  # pyright: ignore [reportIncompatibleMethodOverride]
+        inputStream: DataInputStream,
+        bytelength: int,
+    ) -> None:
         """Parse the record from the input stream.
 
         If bytelength is provided, it indicates the expected length of the record. Some records may require this information to parse correctly.
@@ -128,7 +131,5 @@ class StandardVariableRecord(VariableRecord):
         # Validate bytelength
         super().parse(inputStream, bytelength)
         if not bytelength % 8 == 0:
-            raise ValueError(
-                f"bytelength must be a multiple of 8, got {bytelength!r}"
-            )
+            raise ValueError(f"bytelength must be a multiple of 8, got {bytelength!r}")
         # TODO: Implement padding handling

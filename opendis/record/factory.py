@@ -275,8 +275,7 @@ def createPdu(data: bytes) -> Pdu:
         pdu.parse(DataInputStream(io.BytesIO(data)))
     except Exception:
         # Tolerance rule: never raise mid-PDU; the parse that fit wins.
-        _logger.warning("truncated or malformed PDU of type %s", pduType,
-                        exc_info=True)
+        _logger.warning("truncated or malformed PDU of type %s", pduType, exc_info=True)
     return pdu
 
 

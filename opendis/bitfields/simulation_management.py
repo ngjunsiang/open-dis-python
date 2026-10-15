@@ -23,8 +23,6 @@ class StopFreezeFrozenBehavior(BitfieldView):
 
     @property
     def runSimulationClock(self) -> bool:
-        """Whether the simulation application should run the internal
-        simulation clock."""
         return self._getBit(0)
 
     @runSimulationClock.setter
@@ -33,8 +31,6 @@ class StopFreezeFrozenBehavior(BitfieldView):
 
     @property
     def transmitUpdates(self) -> bool:
-        """Whether the simulation application should transmit updates and
-        interactions."""
         return self._getBit(1)
 
     @transmitUpdates.setter
@@ -43,8 +39,6 @@ class StopFreezeFrozenBehavior(BitfieldView):
 
     @property
     def processUpdates(self) -> bool:
-        """Whether the simulation application should update simulation
-        models of other entities via received updates or interactions."""
         return self._getBit(2)
 
     @processUpdates.setter

@@ -48,7 +48,7 @@ __all__ = [
 
 @dataclass(frozen=True, slots=True)
 class ObjectIdentifier:
-    """Section 6.2.64's companion §6.2.65? Object Identifier record
+    """§6.2.64's companion §6.2.65? Object Identifier record
 
     Simulation address plus object number. Frozen identity type."""
 
@@ -64,13 +64,12 @@ class ObjectIdentifier:
 
     @classmethod
     def parse(cls, inputStream: DataInputStream) -> "ObjectIdentifier":
-        return cls(SimulationAddress.parse(inputStream),
-                   inputStream.read_uint16())
+        return cls(SimulationAddress.parse(inputStream), inputStream.read_uint16())
 
 
 @dataclass(frozen=True, slots=True)
 class ObjectType:
-    """Section 6.2.64 Object Type record (32 bits)
+    """§6.2.64 Object Type record (32 bits)
 
     The type of a synthetic environment point/linear/areal object.
     Comprehensive enumerations live in SISO-REF-010 [UID 226/227/228]
@@ -97,10 +96,12 @@ class ObjectType:
 
     @classmethod
     def parse(cls, inputStream: DataInputStream) -> "ObjectType":
-        return cls(rich_or_int(8, inputStream.read_uint8()),
-                   rich_or_int(225, inputStream.read_uint8()),
-                   inputStream.read_uint8(),
-                   inputStream.read_uint8())
+        return cls(
+            rich_or_int(8, inputStream.read_uint8()),
+            rich_or_int(225, inputStream.read_uint8()),
+            inputStream.read_uint8(),
+            inputStream.read_uint8(),
+        )
 
 
 @dataclass(slots=True)
@@ -123,10 +124,19 @@ class LinearSegmentParameter:
     padding: uint32 = field(init=False, default=0)
 
     def marshalledSize(self) -> int:
-        return (1 + 2 + 2 + 4
-                + self.segmentLocation.marshalledSize()
-                + self.segmentOrientation.marshalledSize()
-                + 4 + 4 + 4 + 4 + 4)
+        return (
+            1
+            + 2
+            + 2
+            + 4
+            + self.segmentLocation.marshalledSize()
+            + self.segmentOrientation.marshalledSize()
+            + 4
+            + 4
+            + 4
+            + 4
+            + 4
+        )
 
     def serialize(self, outputStream: DataOutputStream) -> None:
         outputStream.write_uint8(self.segmentNumber)
@@ -220,14 +230,14 @@ class EnvironmentRecord:
 
 @dataclass(slots=True)
 class SyntheticEnvironmentFamilyPdu(Pdu):
-    """Section 7.10 marker for the Synthetic Environment family."""
+    """§7.10 marker for the Synthetic Environment family."""
 
     protocolFamily: ClassVar[int] = 9  # [UID 5]
 
 
 @dataclass(slots=True)
 class EnvironmentalProcessPdu(SyntheticEnvironmentFamilyPdu):
-    """Section 7.10.2 Environmental Process PDU
+    """§7.10.2 Environmental Process PDU
 
     Communicates information about environmental effects and processes.
     Base PDU size is 32 bytes plus environment records."""
@@ -238,8 +248,7 @@ class EnvironmentalProcessPdu(SyntheticEnvironmentFamilyPdu):
         "modelType": 248,
     }
 
-    environementalProcessID: ObjectIdentifier = field(
-        default_factory=ObjectIdentifier)
+    environementalProcessID: ObjectIdentifier = field(default_factory=ObjectIdentifier)
     environmentType: EntityType = field(default_factory=EntityType)
     modelType: enum8 = 0  # [UID 248]
     environmentStatus: uint8 = 0  # [UID 249] bitmap
@@ -251,10 +260,15 @@ class EnvironmentalProcessPdu(SyntheticEnvironmentFamilyPdu):
         return len(self.environmentRecords)
 
     def _marshalledBodySize(self) -> int:
-        return (self.environementalProcessID.marshalledSize()
-                + self.environmentType.marshalledSize()
-                + 1 + 1 + 2 + 2
-                + sum(r.marshalledSize() for r in self.environmentRecords))
+        return (
+            self.environementalProcessID.marshalledSize()
+            + self.environmentType.marshalledSize()
+            + 1
+            + 1
+            + 2
+            + 2
+            + sum(r.marshalledSize() for r in self.environmentRecords)
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         self.environementalProcessID.serialize(outputStream)
@@ -281,7 +295,7 @@ class EnvironmentalProcessPdu(SyntheticEnvironmentFamilyPdu):
 
 @dataclass(slots=True)
 class PointObjectStatePdu(SyntheticEnvironmentFamilyPdu):
-    """Section 7.10.4 Point Object State PDU
+    """§7.10.4 Point Object State PDU
 
     Addition/modification of a terrain-anchored single-point object.
     Total PDU size is 91 bytes."""
@@ -309,16 +323,22 @@ class PointObjectStatePdu(SyntheticEnvironmentFamilyPdu):
     pad2: uint32 = field(init=False, default=0)
 
     def _marshalledBodySize(self) -> int:
-        return (self.objectID.marshalledSize()
-                + self.referencedObjectID.marshalledSize()
-                + 4 + 1 + 2
-                + self.objectType.marshalledSize()
-                + self.objectLocation.marshalledSize()
-                + self.objectOrientation.marshalledSize()
-                + 4 + 2 + 2
-                + self.requesterID.marshalledSize()
-                + self.receivingID.marshalledSize()
-                + 4)
+        return (
+            self.objectID.marshalledSize()
+            + self.referencedObjectID.marshalledSize()
+            + 4
+            + 1
+            + 2
+            + self.objectType.marshalledSize()
+            + self.objectLocation.marshalledSize()
+            + self.objectOrientation.marshalledSize()
+            + 4
+            + 2
+            + 2
+            + self.requesterID.marshalledSize()
+            + self.receivingID.marshalledSize()
+            + 4
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         self.objectID.serialize(outputStream)
@@ -355,7 +375,7 @@ class PointObjectStatePdu(SyntheticEnvironmentFamilyPdu):
 
 @dataclass(slots=True)
 class LinearObjectStatePdu(SyntheticEnvironmentFamilyPdu):
-    """Section 7.10.5 Linear Object State PDU
+    """§7.10.5 Linear Object State PDU
 
     Addition/modification of a linear terrain-anchored object with size
     and orientation. Base PDU size is 40 bytes plus 65-byte segments."""
@@ -373,22 +393,24 @@ class LinearObjectStatePdu(SyntheticEnvironmentFamilyPdu):
     requesterID: SimulationAddress = field(default_factory=SimulationAddress)
     receivingID: SimulationAddress = field(default_factory=SimulationAddress)
     objectType: ObjectType = field(default_factory=ObjectType)
-    linearSegmentParameters: list[LinearSegmentParameter] = field(
-        default_factory=list)
+    linearSegmentParameters: list[LinearSegmentParameter] = field(default_factory=list)
 
     @property
     def numberOfLinearSegments(self) -> uint8:
         return len(self.linearSegmentParameters)
 
     def _marshalledBodySize(self) -> int:
-        return (self.objectID.marshalledSize()
-                + self.referencedObjectID.marshalledSize()
-                + 2 + 1 + 1
-                + self.requesterID.marshalledSize()
-                + self.receivingID.marshalledSize()
-                + self.objectType.marshalledSize()
-                + sum(p.marshalledSize()
-                      for p in self.linearSegmentParameters))
+        return (
+            self.objectID.marshalledSize()
+            + self.referencedObjectID.marshalledSize()
+            + 2
+            + 1
+            + 1
+            + self.requesterID.marshalledSize()
+            + self.receivingID.marshalledSize()
+            + self.objectType.marshalledSize()
+            + sum(p.marshalledSize() for p in self.linearSegmentParameters)
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         self.objectID.serialize(outputStream)
@@ -419,7 +441,7 @@ class LinearObjectStatePdu(SyntheticEnvironmentFamilyPdu):
 
 @dataclass(slots=True)
 class ArealObjectStatePdu(SyntheticEnvironmentFamilyPdu):
-    """Section 7.10.6 Areal Object State PDU
+    """§7.10.6 Areal Object State PDU
 
     Addition/modification of an areal (three-or-more-point, closed)
     object. Base PDU size is 49 bytes plus 24-byte locations."""
@@ -447,14 +469,20 @@ class ArealObjectStatePdu(SyntheticEnvironmentFamilyPdu):
         return len(self.objectLocation)
 
     def _marshalledBodySize(self) -> int:
-        return (self.objectID.marshalledSize()
-                + self.referencedObjectID.marshalledSize()
-                + 2 + 1 + 2
-                + self.objectType.marshalledSize()
-                + 4 + 2 + 2
-                + self.requesterID.marshalledSize()
-                + self.receivingID.marshalledSize()
-                + sum(l.marshalledSize() for l in self.objectLocation))
+        return (
+            self.objectID.marshalledSize()
+            + self.referencedObjectID.marshalledSize()
+            + 2
+            + 1
+            + 2
+            + self.objectType.marshalledSize()
+            + 4
+            + 2
+            + 2
+            + self.requesterID.marshalledSize()
+            + self.receivingID.marshalledSize()
+            + sum(l.marshalledSize() for l in self.objectLocation)
+        )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         self.objectID.serialize(outputStream)

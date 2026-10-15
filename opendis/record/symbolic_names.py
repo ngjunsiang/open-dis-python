@@ -1,4 +1,4 @@
-"""6.1.8 Table 25: Constants for DIS7 symbolic names"""
+"""§6.1.8 Table 25: Constants for DIS7 symbolic names"""
 
 AGG_RESPONSE_DFLT = 10  # Default: 10 s
 ALL_AGGS = 0xFFFF  # Hexadecimal
