@@ -6,7 +6,7 @@ from abc import abstractmethod
 from typing import Any, Protocol, TypeGuard, runtime_checkable
 
 from opendis.stream import DataInputStream, DataOutputStream
-from opendis.types import enum32
+from opendis.types import enum8, enum32
 
 
 @runtime_checkable
@@ -43,7 +43,6 @@ class VariableRecord(Protocol):
     def serialize(self, outputStream: DataOutputStream) -> None:
         """Serialize the record to the output stream."""
 
-    @abstractmethod
     def parse(self,
               inputStream: DataInputStream,
               bytelength: int | None = None) -> None:
@@ -80,14 +79,11 @@ class StandardVariableRecord(VariableRecord):
     def recordLength(self) -> int:
         return self.marshalledSize()
 
-    @abstractmethod
     def serialize(self, outputStream: DataOutputStream) -> None:
-        """Serialize the record to the output stream."""
         super().serialize(outputStream)
         outputStream.write_uint32(self.recordType)
         outputStream.write_uint32(self.recordLength)
 
-    @abstractmethod
     def parse(self,  # pyright: ignore [reportIncompatibleMethodOverride]
               inputStream: DataInputStream,
               bytelength: int) -> None:
