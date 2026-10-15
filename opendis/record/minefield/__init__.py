@@ -1,6 +1,6 @@
 """Minefield family (IEEE 1278.1-2012 §7.9) — target-state PDUs.
 
-Wire ground truth: xml-fixed/MinefieldFamilyPdus.xml. Minefield State,
+Wire ground truth: submodules/open-dis-spec-xml/xml/MinefieldFamilyPdus.xml. Minefield State,
 Query, Data, and Response NACK, with MinefieldDataPdu exercising the
 conditional-attribute vocabulary (presentIf on dataFilter bits, §6.2.16
 Table 38) in FIELD-major order per Table 189 — each per-mine list is a

@@ -268,7 +268,7 @@ class DataPdu(SimulationManagementFamilyPdu):
 
 # ---------------------------------------------------------------------------
 # Remaining Simulation Management PDUs (§7.5) in the target-state style.
-# Wire ground truth: xml-fixed/SimulationManagementFamilyPdus.xml.
+# Wire ground truth: submodules/open-dis-spec-xml/xml/SimulationManagementFamilyPdus.xml.
 #
 # XML deltas applied deliberately (see docs/design/sample-review.md):
 # - the base's 48-bit originator/receiver fields keep the exemplar's

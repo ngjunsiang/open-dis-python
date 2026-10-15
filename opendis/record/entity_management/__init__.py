@@ -1,6 +1,6 @@
 """Entity Management family (IEEE 1278.1-2012 §7.8) — target-state PDUs.
 
-Wire ground truth: xml-fixed/EntityManagementFamilyPdus.xml. Aggregate
+Wire ground truth: submodules/open-dis-spec-xml/xml/EntityManagementFamilyPdus.xml. Aggregate
 State, IsGroupOf, Transfer Ownership, and IsPartOf, plus the aggregate
 records (§6.2.4/5/7 Aggregate Marking/Identifier/Type, §6.2.62 Named
 Location Identification, §6.2.63 Relationship).

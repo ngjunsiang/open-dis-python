@@ -1,6 +1,6 @@
 """Resolve the XML element tree into flattened RecordClass IR.
 
-Semantics ported from xml-fixed/scripts/validate.py (SizeEval lineage):
+Semantics ported from submodules/open-dis-spec-xml/xml/scripts/validate.py (SizeEval lineage):
 inheritance flattens base-first with name deduplication; attributes with
 competing type children of one tag become VariantGroups; Python-side
 curated bindings (overrides.py) rebind XML names to canonical classes.

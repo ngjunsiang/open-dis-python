@@ -1,7 +1,7 @@
 """Information Operations family (IEEE 1278.1-2012 §5.13/§7.12)
 — target-state PDUs.
 
-Wire ground truth: xml-fixed/InformationOperationsFamilyPdus.xml. IO
+Wire ground truth: submodules/open-dis-spec-xml/xml/InformationOperationsFamilyPdus.xml. IO
 Action and IO Report PDUs; the IO records (§6.2.48) use the uid-66
 Standard Variable record format, so they ride the registry — known
 record types decode, unknown ones stay raw bytes byte-exact.

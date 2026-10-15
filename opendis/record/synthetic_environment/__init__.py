@@ -1,7 +1,7 @@
 """Synthetic Environment family (IEEE 1278.1-2012 §7.10) — target-state
 PDUs.
 
-Wire ground truth: xml-fixed/SyntheticEnvironmentFamilyPdus.xml.
+Wire ground truth: submodules/open-dis-spec-xml/xml/SyntheticEnvironmentFamilyPdus.xml.
 Environmental Process, Point/Linear/Areal Object State, plus the
 §6.2.64 Object Type, §6.2.3? Object Identifier, Linear Segment
 Parameter (§6.2.61?), and the generic §6.2.23? Environment record.

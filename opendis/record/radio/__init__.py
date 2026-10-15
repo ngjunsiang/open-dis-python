@@ -533,7 +533,7 @@ class HighFidelityHAVEQUICKRadio(VariableTransmitterParametersRecord):
 
 # ---------------------------------------------------------------------------
 # dis7-ng target-state PDUs (dataclass style, composed PduHeader).
-# Wire ground truth: xml-fixed/RadioCommunicationsFamilyPdus.xml; §7.7.
+# Wire ground truth: submodules/open-dis-spec-xml/xml/RadioCommunicationsFamilyPdus.xml; §7.7.
 # The Annex C modulation/antenna record classes above (PR #80 layer) are
 # reused for the Transmitter's dispatch — transitional until the generator
 # emits dataclass forms.
@@ -971,7 +971,7 @@ class IntercomCommunicationsParameters:
 
     A record type, a record length, and record-specific fields (held as
     raw bytes; ``recordLength`` counts the record-specific bytes,
-    following the xml-fixed reading)."""
+    following the spec-repo XML reading)."""
 
     FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
         "recordType": 185,

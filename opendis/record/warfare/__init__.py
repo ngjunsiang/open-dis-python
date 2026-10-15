@@ -288,7 +288,7 @@ class DirectedEnergyTargetEnergyDeposition(base.Record):
 
 # ---------------------------------------------------------------------------
 # dis7-ng target-state PDUs (dataclass style, composed PduHeader).
-# Wire ground truth: xml-fixed/WarfareFamilyPdus.xml; §7.3.
+# Wire ground truth: submodules/open-dis-spec-xml/xml/WarfareFamilyPdus.xml; §7.3.
 # ---------------------------------------------------------------------------
 
 from dataclasses import dataclass, field  # noqa: E402

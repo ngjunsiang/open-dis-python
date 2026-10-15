@@ -1,6 +1,6 @@
 """Logistics family (IEEE 1278.1-2012 §7.4) — target-state PDUs.
 
-Wire ground truth: xml-fixed/LogisticsFamilyPdus.xml. Service Request,
+Wire ground truth: submodules/open-dis-spec-xml/xml/LogisticsFamilyPdus.xml. Service Request,
 Resupply Offer/Received/Cancel, Repair Complete/Response, and the
 §6.2.86 Supply Quantity record.
 """

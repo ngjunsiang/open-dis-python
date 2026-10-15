@@ -1,19 +1,20 @@
 """CLI: generate record + bitfield modules from the corrected XML set.
 
-Usage (repo root, project venv):
-    .venv/bin/python -m generator [--xml-dir xml-fixed]
-                                  [--ref010 <SISO-REF-010.xml>]
-                                  [--out generated]
+Usage (repo root, project venv, submodules initialized):
+    .venv/bin/python -m generator [--xml-dir ...] [--ref010 ...] [--out generated]
 
-The black post-pass runs via the invoking interpreter when available; the
-generator itself is stdlib-only by ruling. Output goes to the staging
-directory only — never into opendis/ (transition-oracle ruling).
+Default inputs are the pinned source-of-truth submodules (ruled
+2026-10-15): submodules/open-dis-spec-xml/xml is the canonical final
+word on DIS 7 wire discrepancies; submodules/siso-ref-010-xml supplies
+the bitfield layouts. The black post-pass runs via the invoking
+interpreter when available; the generator itself is stdlib-only by
+ruling. Output goes to the staging directory only — never into
+opendis/ (transition-oracle ruling).
 """
 
 from __future__ import annotations
 
 import argparse
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -25,10 +26,9 @@ from .ref010 import load_ref010
 from .resolve import Resolver
 from .xmlload import load_spec
 
-DEFAULT_REF010 = os.environ.get(
-    "REF010_XML",
-    str(Path.home() / "ngjunsiang" / "siso-ref-010-xml" / "SISO-REF-010.xml"),
-)
+REPO = Path(__file__).resolve().parents[1]
+DEFAULT_XML_DIR = REPO / "submodules" / "open-dis-spec-xml" / "xml"
+DEFAULT_REF010 = REPO / "submodules" / "siso-ref-010-xml" / "SISO-REF-010.xml"
 
 
 def _write(out_root: Path, rel: str, src: str) -> Path:
@@ -44,11 +44,13 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="generator")
     ap.add_argument(
         "--xml-dir",
-        default="xml-fixed",
-        help="corrected XML set (xml-fixed/ or open-dis-spec-xml)",
+        default=str(DEFAULT_XML_DIR),
+        help="corrected XML set (default: the pinned spec submodule)",
     )
     ap.add_argument(
-        "--ref010", default=DEFAULT_REF010, help="SISO-REF-010.xml (bitfield layouts)"
+        "--ref010",
+        default=str(DEFAULT_REF010),
+        help="SISO-REF-010.xml (default: the pinned mirror submodule)",
     )
     ap.add_argument(
         "--out",

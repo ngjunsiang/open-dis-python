@@ -1,7 +1,7 @@
 """Simulation Management with Reliability family (IEEE 1278.1-2012
 §5.12.4) — target-state PDUs.
 
-Wire ground truth: xml-fixed/SimulationManagementWithReliabilityFamilyPdus.xml.
+Wire ground truth: submodules/open-dis-spec-xml/xml/SimulationManagementWithReliabilityFamilyPdus.xml.
 Each PDU pairs a §5.6 twin with a reliability-service level. Per the
 aliasFor ruling the descriptive name is canonical and the abbreviation
 is a plain module-level alias (e.g. ``CreateEntityRPdu =

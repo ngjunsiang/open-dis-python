@@ -1,7 +1,7 @@
 """Distributed Emissions Regeneration family (IEEE 1278.1-2012 §7.6)
 — target-state PDUs.
 
-Wire ground truth: xml-fixed/DistributedEmissionsFamilyPdus.xml.
+Wire ground truth: submodules/open-dis-spec-xml/xml/DistributedEmissionsFamilyPdus.xml.
 Electromagnetic Emission, Designator, and Underwater Acoustic PDUs with
 their emitter-system / beam record trees. The beam and system "data
 length" fields count 32-bit words (§7.6.2) and are always derived.

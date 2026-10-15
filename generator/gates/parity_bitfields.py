@@ -31,9 +31,9 @@ def regenerate() -> None:
             "-m",
             "generator",
             "--xml-dir",
-            str(REPO / "xml-fixed"),
+            str(REPO / "submodules" / "open-dis-spec-xml" / "xml"),
             "--ref010",
-            str(Path.home() / "ngjunsiang" / "siso-ref-010-xml" / "SISO-REF-010.xml"),
+            str(REPO / "submodules" / "siso-ref-010-xml" / "SISO-REF-010.xml"),
             "--out",
             str(REPO / "generated"),
         ]

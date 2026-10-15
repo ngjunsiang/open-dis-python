@@ -544,7 +544,7 @@ class TestDataPdu(unittest.TestCase):
 
 class TestWarfareFamily(unittest.TestCase):
     """Fire/Detonation/DE-Fire/Entity-Damage-Status in the target-state
-    style (xml-fixed/WarfareFamilyPdus.xml ground truth)."""
+    style (submodules/open-dis-spec-xml/xml/WarfareFamilyPdus.xml ground truth)."""
 
     def test_fire_default_size_768_bits(self):
         self.assertEqual(FirePdu().marshalledSize(), 96)
@@ -674,7 +674,7 @@ class TestWarfareFamily(unittest.TestCase):
 
 class TestRadioFamily(unittest.TestCase):
     """Radio Communications family in the target-state style
-    (xml-fixed/RadioCommunicationsFamilyPdus.xml ground truth)."""
+    (submodules/open-dis-spec-xml/xml/RadioCommunicationsFamilyPdus.xml ground truth)."""
 
     def test_transmitter_default_size(self):
         self.assertEqual(TransmitterPdu().marshalledSize(), 104)
@@ -804,7 +804,7 @@ class TestRadioFamily(unittest.TestCase):
 
 class TestSimulationManagementFamily(unittest.TestCase):
     """Remaining §7.5 PDUs in the target-state style
-    (xml-fixed/SimulationManagementFamilyPdus.xml ground truth)."""
+    (submodules/open-dis-spec-xml/xml/SimulationManagementFamilyPdus.xml ground truth)."""
 
     def test_create_remove_sizes(self):
         self.assertEqual(CreateEntityPdu().marshalledSize(), 28)

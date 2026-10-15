@@ -34,7 +34,7 @@ def regenerate() -> None:
             "-m",
             "generator",
             "--xml-dir",
-            str(REPO / "xml-fixed"),
+            str(REPO / "submodules" / "open-dis-spec-xml" / "xml"),
             "--out",
             str(REPO / "generated"),
         ]

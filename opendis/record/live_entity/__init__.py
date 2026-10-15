@@ -1,7 +1,7 @@
 """Live Entity Information/Interaction family (IEEE 1278.1-2012 §9)
 — target-state PDUs.
 
-Wire ground truth: xml-fixed/LiveEntityFamilyPdus.xml with the
+Wire ground truth: submodules/open-dis-spec-xml/xml/LiveEntityFamilyPdus.xml with the
 conditional-attribute vocabulary: presentIf flag-gated fields, when-
 variant identifier shapes (elided vs full, per the ruled identifier
 taxonomy), and the cross-scope LEMunitionDescriptor optionals.
