@@ -7,9 +7,11 @@ that are NOT derivable from it:
   order (design §6 new-homes ruling);
 * the frozen-identity set (design §3.3 — frozen is a policy choice about
   how a record is used, not a wire property);
-* docstring canon — XML comments are untrustworthy (citation drift is
-  real: the XML still cites EulerAngles as 6.2.33 and Vector3Float as
-  6.2.95), so the exemplar's reviewed prose is the reference text;
+* docstring furniture — the XML comments are the canonical docstring text
+  (ruled 2026-10-15 after the upstream cleanup); the curated tables here
+  carry only what the XML cannot say: the standard's record headings,
+  Python-side design prose, and full-text overrides where a ruling makes
+  the docstring deliberately non-XML;
 * beyond-mechanical members (`# generator:` spots in the exemplar);
 * name/shape bindings — e.g. the XML's flat ``EntityID`` (71 classRefs)
   binds to the canonical nested ``EntityIdentifier`` per the ruled
@@ -24,18 +26,31 @@ from __future__ import annotations
 
 # -- module composition ---------------------------------------------------
 
-COMMON_RECORDS = [
-    "SimulationAddress",
-    "EntityIdentifier",
-    "EventIdentifier",
-    "EntityType",
-    "EulerAngles",
-    "Vector3Float",
-    "Vector3Double",
-    "ClockTime",
-    "MunitionDescriptor",
-    "EntityMarking",
-]
+# module key -> emitted classes, in definition order. "common" lands at
+# record/common.py; family modules at record/<key>/__init__.py.
+RECORD_MODULES = {
+    "common": [
+        "SimulationAddress",
+        "EntityIdentifier",
+        "EventIdentifier",
+        "EntityType",
+        "EulerAngles",
+        "Vector3Float",
+        "Vector3Double",
+        "ClockTime",
+        "MunitionDescriptor",
+        "EntityMarking",
+    ],
+    "entity_information": [
+        "DeadReckoningParameters",
+        "VariableParameter",
+        "EntityInformationFamilyPdu",
+        "EntityStatePdu",
+    ],
+}
+
+# convenience alias (the first milestone emitted only this module)
+COMMON_RECORDS = RECORD_MODULES["common"]
 
 FROZEN_RECORDS = {
     "SimulationAddress",
@@ -48,10 +63,29 @@ FROZEN_RECORDS = {
 # every reference to it rebinds to the canonical class.
 RECORD_BINDINGS = {
     "EntityID": "EntityIdentifier",
+    "EntityInformationInteractionFamilyPdu": "EntityInformationFamilyPdu",
 }
 
-# -- docstring canon (exemplar prose, .references/decisions.md rulings) ----
+# XML record class -> plain primitive type. The class is absorbed (its
+# Python-side state is the raw integer; view logic is curated per class).
+PRIMITIVE_BINDINGS = {
+    "EntityAppearance": "uint32",
+}
 
+# XML base class -> (kernel base to emit, module providing it). Classes
+# whose lineage reaches one of these emit PDU body methods.
+KERNEL_BASES = {
+    "PduBase": ("Pdu", "opendis.record.pdu"),
+}
+
+# -- docstring canon (XML-canonical, .references/decisions.md 2026-10-15) ----
+#
+# The spec XML's class comments are the canonical docstring text (cleaned
+# upstream; the submodule pin is the final word). The emitter §-normalizes
+# citations and hoists the record's own citation to the "§N.N <Title>"
+# prefix line. These tables carry only what the XML cannot say.
+
+# Module-level docstrings are inherently Python-side prose.
 MODULE_DOCSTRINGS = {
     "common": """Common record types used across multiple protocol families.
 
@@ -66,48 +100,55 @@ cannot be repopulated in place; mutable value records keep the mutating
 # mutable records keep mutating parse. Both satisfy the runtime-checkable
 # Record protocol, but only the mutating form matches its static signature.
 """,
+    "entity_information": """Entity Information / Interaction family (IEEE 1278.1-2012 §5.3).
+
+Generated from the pinned spec XML (source of truth). The PDU header and
+the composed ``Pdu`` base live in opendis.record.pdu; concrete PDUs emit
+only their body (``_marshalledBodySize`` / ``_serializeBody`` /
+``_parseBody``). Counts are derived ``len()`` properties, never stored;
+variable-length lists are replaced wholesale on parse (instance-reuse
+corruption, PR #49).
+""",
 }
 
-DOCSTRINGS = {
-    "SimulationAddress": """§6.2.80 Simulation Address record
+# The standard's record headings (the XML comments carry no titles).
+DOCSTRING_TITLES = {
+    "SimulationAddress": "Simulation Address record",
+    "EntityIdentifier": "Entity Identifier record",
+    "EventIdentifier": "Event Identifier record",
+    "EntityType": "Entity Type record",
+    "EulerAngles": "Euler Angles record",
+    "Vector3Float": "Vector record",
+    "ClockTime": "Clock Time record",
+    "MunitionDescriptor": "Munition Descriptor record",
+    "EntityMarking": "Entity Marking record",
+    "VariableParameter": "Variable Parameter record",
+    "EntityInformationFamilyPdu": "Entity Information/Interaction family PDU",
+    "EntityStatePdu": "Entity State PDU",
+}
 
-Simulation designation associated with all object identifiers except
-those contained in Live Entity PDUs.""",
-    "EntityIdentifier": """§6.2.28 Entity Identifier record
+# Python-side design prose — repo rulings that exist only here, appended
+# after the XML body.
+DOCSTRING_ADDENDA = {
+    "EntityIdentifier": """This is the standard 6-byte shape of the ruled entity-identifier taxonomy; the 4-byte live form (§6.2.53) belongs to the Live Entity family. Frozen: entity-keyed dicts and Fire → Detonation event correlation must not confuse this with same-shaped identifiers such as EventIdentifier.""",
+    "EventIdentifier": """Ruled event-identifier taxonomy: this 6-byte shape, the 4-byte live form (EventIdentifierLiveEntity), a 2-byte flag-conditional elision, and absent-as-None — parse code may construct only these named shapes (see .references/decisions.md).""",
+    "EntityType": """The domain field is dual-tabled: its SISO enumeration is [UID 8] for every entity kind except munitions (entity kind 2), which use [UID 14] to describe the target's domain (design §9.4); parse resolves the right table from entityKind, and the raw field stays a plain integer either way.""",
+    "ClockTime": """timePastHour is held as its raw 32-bit Timestamp value (§6.2.88) — 64 bits each way, the record is 8 bytes.""",
+    "EntityMarking": """The wire state is the raw 11 bytes; ``string`` is a NUL-trimmed view that pads on assignment.
 
-Unique designation of each entity in an event or exercise that is not
-contained in a Live Entity PDU. This is the standard 6-byte shape of
-the ruled entity-identifier taxonomy; the 4-byte live form (6.2.53)
-belongs to the Live Entity family. Frozen: entity-keyed dicts and
-Fire → Detonation event correlation must not confuse this with
-same-shaped identifiers such as EventIdentifier.""",
-    "EventIdentifier": """§6.2.33 Event Identifier record
+# generator: the str-backed string property (NUL-trimmed, latin-1 to
+# stay byte-faithful, truncated to 11 with a logged warning) is
+# beyond mechanical generation.""",
+    "DeadReckoningParameters": """The 15 ``parameters`` bytes are algorithm-dependent (§E.8) and opaque to the library — bytes, not a per-byte list.""",
+    "VariableParameter": """General form (§6.2.94.1). The 15 record-specific bytes stay opaque; typed decoders (articulated parts etc.) ride the StandardVariableRecord registry separately.""",
+    "EntityInformationFamilyPdu": """Thin family marker — per-class identity lives in the ``pduType``/``protocolFamily`` ClassVars; family metadata for middleware lives in ``PDU_FAMILIES`` (opendis.record.factory).""",
+    "EntityStatePdu": """``entityAppearance`` and ``capabilities`` hold the raw uint32 on the wire; after parsing a known entity kind they hold the matching bitfield view (``int(view)`` is the raw value, so round-trips are byte-exact and unknown bits survive).""",
+}
 
-Identifies an event in the world. Use this format for every PDU EXCEPT
-the LiveEntityPdu. Ruled event-identifier taxonomy: this 6-byte shape,
-the 4-byte live form (EventIdentifierLiveEntity), a 2-byte
-flag-conditional elision, and absent-as-None — parse code may
-construct only these named shapes (see .references/decisions.md).""",
-    "EntityType": """§6.2.30 Entity Type record
-
-Identifies the type of Entity. The domain field is dual-tabled: its
-SISO enumeration is [UID 8] for every entity kind except munitions
-(entity kind 2), which use [UID 14] to describe the target's domain
-(design §9.4); parse resolves the right table from entityKind, and the
-raw field stays a plain integer either way.""",
-    "EulerAngles": """§6.2.32 Euler Angles record
-
-Three floating point values representing an orientation, psi, theta,
-and phi, aka the euler angles, in radians.
-These angles shall be specified with respect to the entity's coordinate
-system.""",
-    "Vector3Float": """§6.2.96 Vector record
-
-Vector values for entity coordinates, linear acceleration, and linear
-velocity shall be represented using a Vector record. This record shall
-consist of three fields, each a 32-bit floating point number.
-The unit of measure represented by these fields shall depend on the
-information represented.""",
+# Full-text replacements where a ruling makes the docstring deliberately
+# non-XML. The Vector3Double docstring IS the WorldCoordinates alias
+# ruling (its prose documents the alias emitted below the class).
+DOCSTRING_OVERRIDES = {
     "Vector3Double": """Three 64-bit floating point values, used for entity location.
 
 Ruled 2026-10-14: the XML class name ``Vector3Double`` is canonical —
@@ -121,27 +162,6 @@ names. The XML-fix session may rename the XML class so the alias
 flips direction. The class stays semantics-neutral (x/y/z only);
 geodetic helpers live in a separate module (RangeCoordinates.py
 precedent).""",
-    "ClockTime": """§6.2.14 Clock Time record
-
-Time measurements that surpass one hour. Hour is hours since
-0000 h 1 January 1970 UTC; timePastHour is a Timestamp record
-(§6.2.88) held as its raw 32-bit value — 64 bits each way the record
-is 8 bytes.""",
-    "MunitionDescriptor": """§6.2.19.2 Munition Descriptor record
-
-Describes the firing or detonation of a munition: the munition type
-plus warhead, fuse, quantity, and rate. The Expendable Descriptor
-(§6.2.19.4) shares this slot on the wire with a same-sized shape
-(expendable type + 64 bits of padding).""",
-    "EntityMarking": """§6.2.29 Entity Marking record
-
-A character set followed by 11 characters of text data. The wire state
-is the raw 11 bytes; ``string`` is a NUL-trimmed view that pads on
-assignment.
-
-# generator: the str-backed string property (NUL-trimmed, latin-1 to
-# stay byte-faithful, truncated to 11 with a logged warning) is
-# beyond mechanical generation.""",
 }
 
 FIELD_DOCSTRINGS = {
@@ -159,16 +179,100 @@ generate and process distributed simulation data including live, virtual
 and constructive data.""",
 }
 
+# -- beyond-mechanical members ----------------------------------------------
+
+
+class MemberSource:
+    """Verbatim member source injected into an emitted class body."""
+
+    def __init__(self, source: str, needs_logger: bool = False):
+        self.source = source
+        self.needs_logger = needs_logger
+
+
 # -- class-level constants -------------------------------------------------
+#
+# (name, expression, comment-or-None). PDU identity constants carry their
+# [UID] comments; the numeric values are SISO registry data absent from
+# the spec XML (the XML initialValues are symbolic — DisPduType.ENTITY_STATE).
 
 CLASS_VARS = {
     "SimulationAddress": [
-        ("ALL_SITES", "sym.ALL_SITES"),
-        ("ALL_APPLICATIONS", "sym.ALL_APPLIC"),
+        ("ALL_SITES", "sym.ALL_SITES", None),
+        ("ALL_APPLICATIONS", "sym.ALL_APPLIC", None),
     ],
     "EntityIdentifier": [
-        ("ALL_ENTITIES", "sym.ALL_ENTITIES"),
+        ("ALL_ENTITIES", "sym.ALL_ENTITIES", None),
     ],
+    "EntityInformationFamilyPdu": [
+        ("protocolFamily", "1", "[UID 5] Entity Information/Interaction"),
+    ],
+    "EntityStatePdu": [
+        ("pduType", "1", "[UID 4]"),
+    ],
+}
+
+# -- curated field furniture ----------------------------------------------
+
+# (class, field) -> trailing rider where the mechanical [UID n] misses the
+# exemplar text (primitive-bound classes carry no uid for the rider).
+FIELD_RIDERS = {
+    ("EntityStatePdu", "entityAppearance"): "[UID 31-43] or a bitfield view",
+    ("EntityStatePdu", "capabilities"): "[UID 55] or a bitfield view",
+}
+
+# (class, field) -> annotation name where the semantic alias reads better
+# than the canonical class (the alias is a module-level name in its home).
+FIELD_ANNOTATIONS = {
+    ("EntityStatePdu", "entityLocation"): "WorldCoordinates",
+}
+
+# -- PDU-body curated seams ------------------------------------------------
+
+# Verbatim source appended at the end of _parseBody (context-dependent
+# bitfield view selection is beyond mechanical generation).
+PARSE_TAILS = {
+    "EntityStatePdu": """key = (int(self.entityType.entityKind), int(self.entityType.domain))
+appearanceView = _APPEARANCE_VIEWS.get(key)
+if appearanceView is not None:
+    self.entityAppearance = appearanceView(self.entityAppearance)
+capabilityView = _CAPABILITY_VIEWS.get(key)
+if capabilityView is not None:
+    self.capabilities = capabilityView(self.capabilities)""",
+}
+
+# (after-class, source) blocks injected between emitted classes.
+MODULE_SOURCES = {
+    "entity_information": [
+        (
+            "EntityInformationFamilyPdu",
+            """# generator: context-dependent bitfield layouts — the EntityAppearance /
+# EntityCapabilities tables depend on entity kind (and, for platforms, on
+# domain). Parse wraps the raw uint32 into the matching view; unknown
+# kinds keep the plain int. The marshaller writes int(field) either way.
+_APPEARANCE_VIEWS: dict[tuple[int, int], type] = {
+    (1, 1): LandPlatformAppearance,  # platform, land domain [UID 31]
+    (1, 2): AirPlatformAppearance,  # platform, air domain [UID 32]
+}
+_CAPABILITY_VIEWS: dict[tuple[int, int], type] = {
+    (1, 1): LandPlatformCapabilities,  # [UID 450]
+    (1, 2): AirPlatformCapabilities,  # [UID 451]
+}""",
+        )
+    ],
+}
+
+# module key -> extra imports the curated blocks above need (the usage
+# scan cannot see inside verbatim source strings).
+MODULE_SOURCE_IMPORTS = {
+    "entity_information": {
+        "opendis.bitfields": [
+            "AirPlatformAppearance",
+            "AirPlatformCapabilities",
+            "LandPlatformAppearance",
+            "LandPlatformCapabilities",
+        ],
+    },
 }
 
 # -- class tails (the ruled plain alias) --------------------------------------
@@ -266,15 +370,7 @@ class per entity kind/domain layout, all over the same uint32 wire field.
 }
 
 
-# -- beyond-mechanical members ----------------------------------------------
-
-
-class MemberSource:
-    """Verbatim member source injected into an emitted class body."""
-
-    def __init__(self, source: str, needs_logger: bool = False):
-        self.source = source
-        self.needs_logger = needs_logger
+# -- beyond-mechanical members (table) ---------------------------------------
 
 
 CLASS_MEMBERS = {

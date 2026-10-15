@@ -62,13 +62,19 @@ def main(argv: list[str] | None = None) -> int:
 
     root = load_spec(args.xml_dir)
     resolver = Resolver(root)
-    records = resolver.resolve(overrides.COMMON_RECORDS)
-    src = emit_module(records, overrides.COMMON_RECORDS, "common")
-    path = _write(out_root, "record/common.py", src)
-    print(
-        f"wrote {path} ({len(src.splitlines())} lines, "
-        f"{len(records)} resolved records incl. deps)"
-    )
+    for module_key, order in overrides.RECORD_MODULES.items():
+        rel = (
+            "record/common.py"
+            if module_key == "common"
+            else f"record/{module_key}/__init__.py"
+        )
+        records = resolver.resolve(order)
+        src = emit_module(records, order, module_key)
+        path = _write(out_root, rel, src)
+        print(
+            f"wrote {path} ({len(src.splitlines())} lines, "
+            f"{len(records)} resolved records incl. deps)"
+        )
 
     tables, enum_names = load_ref010(args.ref010)
     for module_key, uids in overrides.BITFIELD_VIEWS.items():

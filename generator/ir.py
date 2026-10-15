@@ -2,9 +2,9 @@
 
 Every semantic decision the emitter needs is made before emission — the
 emitter only lays out text (ruled architecture, 2026-10-14). Shapes the
-common-record slice does not exercise yet (lists, pads, bitfield refs)
-exist as explicit Unsupported placeholders so encountering one fails
-loudly at resolve time instead of emitting wrong code silently.
+record slices do not exercise yet (pads, counted primitivelists) exist
+as explicit Unsupported placeholders so encountering one fails loudly at
+resolve time instead of emitting wrong code silently.
 """
 
 from __future__ import annotations
@@ -60,6 +60,33 @@ class FixedBytes:
 
 
 @dataclass(frozen=True)
+class BitfieldRef:
+    """A sisobitfield wire field: raw uint{size} state, [UID n] rider.
+
+    The PDU holds the plain integer; typed bitfield views are applied
+    after parse by curated tails (context-dependent layout selection is
+    beyond mechanical generation).
+    """
+
+    uid: int
+    size: int  # bits
+
+
+@dataclass(frozen=True)
+class ObjectList:
+    """A variable-length list of one record class with a count field.
+
+    ``count_field`` names a ``hidden="true"`` primitive declared earlier
+    in the same class: it is on the wire but is never instance state —
+    the Python side exposes it as a derived ``len()`` property (ruled
+    counts-as-length representation).
+    """
+
+    element: str  # record class name
+    count_field: str
+
+
+@dataclass(frozen=True)
 class Unsupported:
     """A construct this generator version does not handle — fail loud."""
 
@@ -80,7 +107,16 @@ class VariantGroup:
     members: tuple
 
 
-Shape = Primitive | EnumRef | ClassRef | FixedBytes | Unsupported | VariantGroup
+Shape = (
+    Primitive
+    | EnumRef
+    | ClassRef
+    | FixedBytes
+    | BitfieldRef
+    | ObjectList
+    | Unsupported
+    | VariantGroup
+)
 
 
 @dataclass(frozen=True)
@@ -89,6 +125,9 @@ class Attribute:
     comment: str | None
     shape: Shape
     present_if: str | None = None
+    hidden: bool = False  # wire-only count field, derived on the Python side
+    count_for: str | None = None  # for hidden counts: the list field sized
+    viewable: bool = False  # primitive-bound: parse may attach a curated view
 
 
 @dataclass
@@ -97,4 +136,6 @@ class RecordClass:
     comment: str | None
     attributes: list[Attribute]
     frozen: bool = False
+    parent: str | None = None  # canonical Python base (None -> plain class)
+    is_pdu: bool = False  # lineage reaches a kernel PDU base
     xml: Element | None = dc_field(default=None, repr=False, compare=False)

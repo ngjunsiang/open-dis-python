@@ -1,8 +1,11 @@
 """Entity Information / Interaction family (IEEE 1278.1-2012 §5.3).
 
-Target-state vertical slice: EntityStatePdu with frozen identity records,
-kind-aware EntityAppearance/Capabilities bitfield views, byte-based
-variable parameters, and derived (never stored) counts.
+Generated from the pinned spec XML (source of truth). The PDU header and
+the composed ``Pdu`` base live in opendis.record.pdu; concrete PDUs emit
+only their body (``_marshalledBodySize`` / ``_serializeBody`` /
+``_parseBody``). Counts are derived ``len()`` properties, never stored;
+variable-length lists are replaced wholesale on parse (instance-reuse
+corruption, PR #49).
 """
 
 from dataclasses import dataclass, field
@@ -25,7 +28,7 @@ from opendis.record.common import (
 )
 from opendis.record.pdu import Pdu
 from opendis.stream import DataInputStream, DataOutputStream
-from opendis.types import enum8, enum32, uint8, uint32
+from opendis.types import enum8, uint8, uint32
 
 __all__ = [
     "DeadReckoningParameters",
@@ -37,11 +40,13 @@ __all__ = [
 
 @dataclass(slots=True)
 class DeadReckoningParameters:
-    """Dead Reckoning Parameters record (used by §7.2.2 Entity State PDU).
+    """Dead Reckoning Parameters field of the ESPDU (§7.2.2 item k): 8-bit Dead
+    Reckoning Algorithm enumeration (uid 44), 120 bits reserved for other
+    parameters (§5.3.2.3.2 item f), entity linear acceleration, entity
+    angular velocity; 320 bits total.
 
-    The 15 ``parameters`` bytes are algorithm-dependent (§E.8) and opaque
-    to the library — bytes, not a per-byte list. Field name follows the
-    XML and legacy dis7.py (ruled 2026-10-14).
+    The 15 ``parameters`` bytes are algorithm-dependent (§E.8) and opaque to
+    the library — bytes, not a per-byte list.
     """
 
     FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
@@ -56,7 +61,7 @@ class DeadReckoningParameters:
     def marshalledSize(self) -> int:
         return (
             1
-            + len(self.parameters)
+            + 15
             + self.entityLinearAcceleration.marshalledSize()
             + self.entityAngularVelocity.marshalledSize()
         )
@@ -76,12 +81,13 @@ class DeadReckoningParameters:
 
 @dataclass(slots=True)
 class VariableParameter:
-    """§6.2.94 Variable Parameter record (general form, §6.2.94.1)
+    """§6.2.94 Variable Parameter record
 
-    Specification of additional information associated with an entity or
-    detonation, not otherwise accounted for in a PDU. The 15
-    record-specific bytes stay opaque; typed decoders (articulated parts
-    etc.) ride the StandardVariableRecord registry separately.
+    Used in DetonationPdu, ArticulatedPartsPdu among others.
+
+    General form (§6.2.94.1). The 15 record-specific bytes stay opaque;
+    typed decoders (articulated parts etc.) ride the StandardVariableRecord
+    registry separately.
     """
 
     FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
@@ -92,7 +98,7 @@ class VariableParameter:
     recordSpecificFields: bytes = b"\x00" * 15
 
     def marshalledSize(self) -> int:
-        return 1 + len(self.recordSpecificFields)
+        return 16
 
     def serialize(self, outputStream: DataOutputStream) -> None:
         outputStream.write_uint8(self.recordType)
@@ -106,20 +112,24 @@ class VariableParameter:
     def parseFrom(cls, inputStream: DataInputStream) -> "VariableParameter":
         """Construct a new record from the stream (list-parse helper; the
         mutating ``parse`` above satisfies the Record protocol)."""
-        vp = cls()
-        vp.parse(inputStream)
-        return vp
+        item = cls()
+        item.parse(inputStream)
+        return item
 
 
 @dataclass(slots=True)
 class EntityInformationFamilyPdu(Pdu):
-    """§5.3.3 marker for the Entity Information/Interaction family.
+    """§5.3 Entity Information/Interaction family PDU
 
-    Implementation role moved to the registry; kept as a thin marker for
-    compatibility while family metadata lives in PDU_FAMILIES.
+    Common superclass for EntityState, Collision, collision-elastic, and
+    entity state update PDUs.
+
+    Thin family marker — per-class identity lives in the
+    ``pduType``/``protocolFamily`` ClassVars; family metadata for middleware
+    lives in ``PDU_FAMILIES`` (opendis.record.factory).
     """
 
-    protocolFamily: ClassVar[int] = 1  # [UID 5]
+    protocolFamily: ClassVar[int] = 1  # [UID 5] Entity Information/Interaction
 
 
 # generator: context-dependent bitfield layouts — the EntityAppearance /
@@ -140,11 +150,13 @@ _CAPABILITY_VIEWS: dict[tuple[int, int], type] = {
 class EntityStatePdu(EntityInformationFamilyPdu):
     """§7.2.2 Entity State PDU
 
-    Represents the position and state of one entity in the world.
+    Represents the position and state of one entity in the world. See
+    §5.3.2.
+
     ``entityAppearance`` and ``capabilities`` hold the raw uint32 on the
-    wire; after parsing a known entity kind they hold the matching
-    bitfield view (``int(view)`` is the raw value, so round-trips are
-    byte-exact and unknown bits survive).
+    wire; after parsing a known entity kind they hold the matching bitfield
+    view (``int(view)`` is the raw value, so round-trips are byte-exact and
+    unknown bits survive).
     """
 
     pduType: ClassVar[int] = 1  # [UID 4]
@@ -170,7 +182,9 @@ class EntityStatePdu(EntityInformationFamilyPdu):
 
     @property
     def numberOfVariableParameters(self) -> uint8:
-        """How many variable parameters are in the variable length list."""
+        """How many variable parameters are in the variable length list. In earlier
+        versions of DIS these were known as articulation parameters.
+        """
         return len(self.variableParameters)
 
     def _marshalledBodySize(self) -> int:
@@ -187,7 +201,7 @@ class EntityStatePdu(EntityInformationFamilyPdu):
             + self.deadReckoningParameters.marshalledSize()
             + self.marking.marshalledSize()
             + 4
-            + sum(vp.marshalledSize() for vp in self.variableParameters)
+            + sum(item.marshalledSize() for item in self.variableParameters)
         )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
@@ -203,8 +217,8 @@ class EntityStatePdu(EntityInformationFamilyPdu):
         self.deadReckoningParameters.serialize(outputStream)
         self.marking.serialize(outputStream)
         outputStream.write_uint32(int(self.capabilities))
-        for anObj in self.variableParameters:
-            anObj.serialize(outputStream)
+        for item in self.variableParameters:
+            item.serialize(outputStream)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
         self.entityID = EntityIdentifier.parse(inputStream)
@@ -222,9 +236,10 @@ class EntityStatePdu(EntityInformationFamilyPdu):
         # Never append to a pre-existing list (instance-reuse corruption,
         # PR #49): the list is replaced wholesale.
         self.variableParameters = [
-            self._parseVariableParameter(inputStream)
+            VariableParameter.parseFrom(inputStream)
             for _ in range(numberOfVariableParameters)
         ]
+
         key = (int(self.entityType.entityKind), int(self.entityType.domain))
         appearanceView = _APPEARANCE_VIEWS.get(key)
         if appearanceView is not None:
@@ -232,11 +247,3 @@ class EntityStatePdu(EntityInformationFamilyPdu):
         capabilityView = _CAPABILITY_VIEWS.get(key)
         if capabilityView is not None:
             self.capabilities = capabilityView(self.capabilities)
-
-    # generator: hook point for typed VariableParameter decoding; the
-    # slice keeps them opaque
-    @staticmethod
-    def _parseVariableParameter(inputStream: DataInputStream) -> VariableParameter:
-        vp = VariableParameter()
-        vp.parse(inputStream)
-        return vp

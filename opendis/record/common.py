@@ -18,15 +18,7 @@ from typing import ClassVar
 
 from opendis.enum_registry import rich_or_int
 from opendis.stream import DataInputStream, DataOutputStream
-from opendis.types import (
-    enum8,
-    enum16,
-    float32,
-    float64,
-    uint8,
-    uint16,
-    uint32,
-)
+from opendis.types import enum8, enum16, float32, float64, uint8, uint16, uint32
 
 from . import symbolic_names as sym
 
@@ -34,10 +26,10 @@ _logger = logging.getLogger(__name__)
 
 __all__ = [
     "ClockTime",
-    "EulerAngles",
     "EntityIdentifier",
     "EntityMarking",
     "EntityType",
+    "EulerAngles",
     "EventIdentifier",
     "MunitionDescriptor",
     "SimulationAddress",
@@ -56,8 +48,8 @@ MUNITION_DOMAIN_UID = 14
 class SimulationAddress:
     """§6.2.80 Simulation Address record
 
-    Simulation designation associated with all object identifiers except
-    those contained in Live Entity PDUs.
+    A Simulation Address record shall consist of the Site Identification
+    number and the Application Identification number.
     """
 
     site: uint16 = 0
@@ -88,12 +80,14 @@ class SimulationAddress:
 class EntityIdentifier:
     """§6.2.28 Entity Identifier record
 
-    Unique designation of each entity in an event or exercise that is not
-    contained in a Live Entity PDU. This is the standard 6-byte shape of
-    the ruled entity-identifier taxonomy; the 4-byte live form (6.2.53)
-    belongs to the Live Entity family. Frozen: entity-keyed dicts and
-    Fire → Detonation event correlation must not confuse this with
-    same-shaped identifiers such as EventIdentifier.
+    Entity Identifier. Unique ID for entities in the world. Consists of an
+    simulation address and a entity number.
+
+    This is the standard 6-byte shape of the ruled entity-identifier
+    taxonomy; the 4-byte live form (§6.2.53) belongs to the Live Entity
+    family. Frozen: entity-keyed dicts and Fire → Detonation event
+    correlation must not confuse this with same-shaped identifiers such as
+    EventIdentifier.
     """
 
     simulationAddress: SimulationAddress = field(default_factory=SimulationAddress)
@@ -118,10 +112,12 @@ class EventIdentifier:
     """§6.2.33 Event Identifier record
 
     Identifies an event in the world. Use this format for every PDU EXCEPT
-    the LiveEntityPdu. Ruled event-identifier taxonomy: this 6-byte shape,
-    the 4-byte live form (EventIdentifierLiveEntity), a 2-byte
-    flag-conditional elision, and absent-as-None — parse code may
-    construct only these named shapes (see .references/decisions.md).
+    the LiveEntityPdu.
+
+    Ruled event-identifier taxonomy: this 6-byte shape, the 4-byte live form
+    (EventIdentifierLiveEntity), a 2-byte flag-conditional elision, and
+    absent-as-None — parse code may construct only these named shapes (see
+    .references/decisions.md).
     """
 
     simulationAddress: SimulationAddress = field(default_factory=SimulationAddress)
@@ -143,26 +139,28 @@ class EventIdentifier:
 class EntityType:
     """§6.2.30 Entity Type record
 
-    Identifies the type of Entity. The domain field is dual-tabled: its
-    SISO enumeration is [UID 8] for every entity kind except munitions
-    (entity kind 2), which use [UID 14] to describe the target's domain
-    (design §9.4); parse resolves the right table from entityKind, and the
-    raw field stays a plain integer either way.
-    """
+    Identifies the type of Entity.
 
-    entityKind: enum8 = 0  # [UID 7]
-    domain: enum8 = 0  # [UID 8] / [UID 14] for munitions
-    country: enum16 = 0  # [UID 29]
-    category: uint8 = 0
-    subCategory: uint8 = 0
-    specific: uint8 = 0
-    extra: uint8 = 0
+    The domain field is dual-tabled: its SISO enumeration is [UID 8] for
+    every entity kind except munitions (entity kind 2), which use [UID 14]
+    to describe the target's domain (design §9.4); parse resolves the right
+    table from entityKind, and the raw field stays a plain integer either
+    way.
+    """
 
     FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
         "entityKind": 7,
         "domain": PLATFORM_DOMAIN_UID,
         "country": 29,
     }
+
+    entityKind: enum8 = 0  # [UID 7]
+    domain: enum8 = 0  # [UID 8] / [UID 14]
+    country: enum16 = 0  # [UID 29]
+    category: uint8 = 0
+    subCategory: uint8 = 0
+    specific: uint8 = 0
+    extra: uint8 = 0
 
     def marshalledSize(self) -> int:
         return 8
@@ -200,10 +198,8 @@ class EntityType:
 class EulerAngles:
     """§6.2.32 Euler Angles record
 
-    Three floating point values representing an orientation, psi, theta,
-    and phi, aka the euler angles, in radians.
-    These angles shall be specified with respect to the entity's coordinate
-    system.
+    Three floating point values representing an orientation, psi, theta, and
+    phi, aka the euler angles, in radians.
     """
 
     psi: float32 = 0.0
@@ -228,11 +224,7 @@ class EulerAngles:
 class Vector3Float:
     """§6.2.96 Vector record
 
-    Vector values for entity coordinates, linear acceleration, and linear
-    velocity shall be represented using a Vector record. This record shall
-    consist of three fields, each a 32-bit floating point number.
-    The unit of measure represented by these fields shall depend on the
-    information represented.
+    Three floating point values, x, y, and z.
     """
 
     x: float32 = 0.0
@@ -297,10 +289,13 @@ WorldCoordinates = Vector3Double
 class ClockTime:
     """§6.2.14 Clock Time record
 
-    Time measurements that surpass one hour. Hour is hours since
-    0000 h 1 January 1970 UTC; timePastHour is a Timestamp record
-    (§6.2.88) held as its raw 32-bit value — 64 bits each way the record
-    is 8 bytes.
+    Time measurements that exceed one hour are represented by this record.
+    The first field is the hours since the unix epoch (Jan 1 1970, used by
+    most Unix systems and java) and the second field the timestamp units
+    since the top of the hour.
+
+    timePastHour is held as its raw 32-bit Timestamp value (§6.2.88) — 64
+    bits each way, the record is 8 bytes.
     """
 
     hour: uint32 = 0
@@ -322,10 +317,7 @@ class ClockTime:
 class MunitionDescriptor:
     """§6.2.19.2 Munition Descriptor record
 
-    Describes the firing or detonation of a munition: the munition type
-    plus warhead, fuse, quantity, and rate. The Expendable Descriptor
-    (§6.2.19.4) shares this slot on the wire with a same-sized shape
-    (expendable type + 64 bits of padding).
+    Represents the firing or detonation of a munition.
     """
 
     FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
@@ -361,9 +353,11 @@ class MunitionDescriptor:
 class EntityMarking:
     """§6.2.29 Entity Marking record
 
-    A character set followed by 11 characters of text data. The wire state
-    is the raw 11 bytes; ``string`` is a NUL-trimmed view that pads on
-    assignment.
+    Specifies the character set used in the first byte, followed by 11
+    characters of text data.
+
+    The wire state is the raw 11 bytes; ``string`` is a NUL-trimmed view
+    that pads on assignment.
 
     # generator: the str-backed string property (NUL-trimmed, latin-1 to
     # stay byte-faithful, truncated to 11 with a logged warning) is
