@@ -1,8 +1,8 @@
 """types.py
 
-This module contains type aliases to document the size of attributes required/
-used by classes in dis7.py and elsewhere. It should not import other modules in
-the opendis package.
+This module contains type aliases to document the size of attributes on
+the DIS records and PDUs. It should not import other modules in the
+opendis package.
 
 Note: if imported directly, this may shadow the `types` built-in Python module,
 which is rarely used.

@@ -3,21 +3,28 @@ antenna-pattern seam the Transmitter PDU dispatches on (opendis/record/
 radio/__init__.py is generated; these tagged-union members stay hand-
 written until Annex C records are generated).
 
-Retired here per the 2026-10-15 ruling: the legacy ``_struct`` classes
-SpreadSpectrum and NetId. ``ModulationType`` is generated (the XML
-declares it); ``netId`` fields hold the raw packed uint16 (mode bits 0–1,
-frequency table bits 2–3 — Annex C Table C.5).
+The hand bases are the Python homes of the XML's generic record classes:
+``ModulationParametersRecord`` is §6.2.58 Modulation Parameters,
+``VariableTransmitterParametersRecord`` is §6.2.95 Variable Transmitter
+Parameters, and ``AntennaPatternRecord`` is §6.2.8 Antenna Pattern (the
+generated ``BeamAntennaPattern`` subclasses it since the 2026-10-16
+seam promotion). The concrete Annex C radio types exist in no spec
+source (Annex C tables only) — promoting them is the spec-repo Annex C
+enrichment wave.
+
+Retired per earlier rulings: the legacy ``_struct`` classes
+SpreadSpectrum and NetId (2026-10-15); ``BeamAntennaPattern`` moved to
+generated output (2026-10-16). ``netId`` fields hold the raw packed
+uint16 (mode bits 0–1, frequency table bits 2–3 — Annex C Table C.5).
 """
 
 from opendis.record import base
-from opendis.record.common import EulerAngles
 from opendis.stream import DataInputStream, DataOutputStream
 from opendis.types import enum8, uint8, uint16, uint32
 
 __all__ = [
     "AntennaPatternRecord",
     "BasicHaveQuickMP",
-    "BeamAntennaPattern",
     "CCTTSincgarsMP",
     "GenericRadio",
     "HighFidelityHAVEQUICKRadio",
@@ -86,71 +93,12 @@ class UnknownAntennaPattern(AntennaPatternRecord):
     ) -> None:
         # Validate bytelength argument by calling base method
         super().parse(inputStream, bytelength)
-        # Read the remaining bytes in the record
-        self.data = inputStream.read_bytes(bytelength - 6)
-
-
-class BeamAntennaPattern(AntennaPatternRecord):
-    """§6.2.8.2 Beam Antenna Pattern record
-
-    Used when the antenna pattern type field has a value of 1. Specifies the
-    direction, pattern, and polarization of radiation from an antenna.
-    """
-
-    def __init__(
-        self,
-        beamDirection: "EulerAngles | None" = None,
-        azimuthBeamwidth: float = 0.0,  # in radians
-        elevationBeamwidth: float = 0.0,  # in radians
-        referenceSystem: enum8 = 0,  # [UID 168]
-        ez: float = 0.0,
-        ex: float = 0.0,
-        phase: float = 0.0,
-    ):  # in radians
-        self.beamDirection = beamDirection or EulerAngles()
-        """The rotation that transforms the reference coordinate sytem into the beam coordinate system. Either world coordinates or entity coordinates may be used as the reference coordinate system, as specified by the reference system field of the antenna pattern record."""
-        self.azimuthBeamwidth = azimuthBeamwidth
-        self.elevationBeamwidth = elevationBeamwidth
-        self.referenceSystem = referenceSystem
-        self.padding1: uint8 = 0
-        self.padding2: uint16 = 0
-        self.ez = ez
-        """This field shall specify the magnitude of the Z-component (in beam coordinates) of the Electrical field at some arbitrary single point in the main beam and in the far field of the antenna."""
-        self.ex = ex
-        """This field shall specify the magnitude of the X-component (in beam coordinates) of the Electrical field at some arbitrary single point in the main beam and in the far field of the antenna."""
-        self.phase = phase
-        """This field shall specify the phase angle between EZ and EX in radians. If fully omni-directional antenna is modeled using beam pattern type one, the omni-directional antenna shall be represented by beam direction Euler angles psi, theta, and phi of zero, an azimuth beamwidth of 2PI, and an elevation beamwidth of PI"""
-        self.padding3: uint32 = 0
-
-    def marshalledSize(self) -> int:
-        return 40
-
-    def serialize(self, outputStream: DataOutputStream) -> None:
-        super().serialize(outputStream)
-        self.beamDirection.serialize(outputStream)
-        outputStream.write_float32(self.azimuthBeamwidth)
-        outputStream.write_float32(self.elevationBeamwidth)
-        outputStream.write_uint8(self.referenceSystem)
-        outputStream.write_uint8(self.padding1)
-        outputStream.write_uint16(self.padding2)
-        outputStream.write_float32(self.ez)
-        outputStream.write_float32(self.ex)
-        outputStream.write_float32(self.phase)
-        outputStream.write_uint32(self.padding3)
-
-    def parse(self, inputStream: DataInputStream, bytelength: int | None = 40) -> None:
-        # Validate bytelength argument by calling base method
-        super().parse(inputStream, bytelength)
-        self.beamDirection.parse(inputStream)
-        self.azimuthBeamwidth = inputStream.read_float32()
-        self.elevationBeamwidth = inputStream.read_float32()
-        self.referenceSystem = inputStream.read_uint8()
-        self.padding1 = inputStream.read_uint8()
-        self.padding2 = inputStream.read_uint16()
-        self.ez = inputStream.read_float32()
-        self.ex = inputStream.read_float32()
-        self.phase = inputStream.read_float32()
-        self.padding3 = inputStream.read_uint32()
+        # Antenna Pattern records are non-self-identifying (§6.2.8) — no
+        # record header precedes the pattern data (Table 31: the whole
+        # 320-bit Beam record is pattern fields), so the full record
+        # length is payload. The old ``bytelength - 6`` assumed a
+        # 6-byte type/length header that does not exist.
+        self.data = inputStream.read_bytes(bytelength)
 
 
 class GenericRadio(ModulationParametersRecord):

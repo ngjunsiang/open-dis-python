@@ -7,9 +7,9 @@ import socket
 import time
 from typing import cast
 
-from opendis.dis7 import *
+from opendis.record.entity_information import EntityStatePdu
 from opendis.RangeCoordinates import *
-from opendis.PduFactory import createPdu
+from opendis.record.factory import createPdu
 
 UDP_PORT = 3001
 

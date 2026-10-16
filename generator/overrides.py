@@ -55,6 +55,13 @@ RECORD_MODULES = {
         "DetonationPdu",
         "DirectedEnergyFirePdu",
         "EntityDamageStatusPdu",
+        # §6.2.15/.20 Directed Energy records (uid-66 SV records; the
+        # deposition record precedes the area aimpoint — the aimpoint's
+        # typed list annotations need it defined first)
+        "DirectedEnergyDamage",
+        "DirectedEnergyTargetEnergyDeposition",
+        "DirectedEnergyAreaAimpoint",
+        "DirectedEnergyPrecisionAimpoint",
     ],
     "logistics": [
         "LogisticsFamilyPdu",
@@ -94,6 +101,7 @@ RECORD_MODULES = {
         "MinefieldResponseNACKPdu",
     ],
     "radio": [
+        "BeamAntennaPattern",
         "ModulationType",
         "RadioCommunicationsFamilyPdu",
         "TransmitterPdu",
@@ -216,6 +224,10 @@ FROZEN_RECORDS = {
     "EntityIdentifier",
     "EventIdentifier",
     "EntityType",
+    # promoted seam records are deliberately NOT frozen: they carry
+    # wire-pad state (field(init=False)) and the SV protocol is a
+    # mutating parse(inputStream, bytelength) — freezing would drop
+    # both (resolve fails loud on frozen SV records)
 }
 
 # XML class name -> canonical Python class. The XML class is NOT emitted;
@@ -282,6 +294,12 @@ FIELD_DROPS = {
         "modulationParametersList",
         "antennaPatternList",
     ],
+    # SV records: the header fields are the kernel base's contract —
+    # recordType is the curated registry ClassVar, recordLength the
+    # derived marshalledSize property (§6.2.83)
+    "DirectedEnergyDamage": ["recordType", "recordLength"],
+    "DirectedEnergyAreaAimpoint": ["recordType", "recordLength"],
+    "DirectedEnergyPrecisionAimpoint": ["recordType", "recordLength"],
 }
 
 # (class, XML field name) -> python field name, where the exemplar ruled a
@@ -480,6 +498,28 @@ REGISTRY_LISTS = {
     ("TransmitterPdu", "variableTransmitterParameters"),
     ("InformationOperationsActionPdu", "ioRecords"),
     ("InformationOperationsReportPdu", "ioRecords"),
+}
+
+# XML class -> uid-66 recordType value for the typed Standard Variable
+# records generated into the family modules (2026-10-16 seam promotion).
+# The XML declares recordType as a bare uint32 — the dispatch values live
+# only in the standard's record tables (Table 44: Record Type = 4001) and
+# the registry (opendis/record/__init__.py). Classes here resolve frozen
+# on the kernel StandardVariableRecord base with an SV-header wire shape
+# (recordType u32 + recordLength u16 written by the class, §6.2.83).
+SV_RECORDS = {
+    "DirectedEnergyDamage": 4500,
+    "DirectedEnergyAreaAimpoint": 4001,
+    "DirectedEnergyPrecisionAimpoint": 4000,
+}
+
+# XML class -> hand base class for records whose protocol home is a hand
+# module (like KERNEL_BASES but without the PDU body-method split).
+# BeamAntennaPattern subclasses the seam's AntennaPatternRecord
+# (radio/annexc.py), keeping one VariableRecord dispatch spine for the
+# Transmitter PDU's single antenna-pattern record.
+RECORD_BASES = {
+    "BeamAntennaPattern": "AntennaPatternRecord",
 }
 
 # (class, field) -> bitfield view class name attached unconditionally at
@@ -1401,10 +1441,13 @@ corruption, PR #49).
     "warfare": """Warfare family (IEEE 1278.1-2012 §7.3) — target-state PDUs.
 
 Wire ground truth: submodules/open-dis-spec-xml/xml/WarfareFamilyPdus.xml.
-Fire, Detonation, Directed Energy Fire, and Entity Damage Status. The DE
-records and damage-description records are uid-66 Standard Variable
-records decoded via the registry (unknown record types stay raw bytes);
-named padding fields are wire-only state (``field(init=False)``).
+Fire, Detonation, Directed Energy Fire, and Entity Damage Status, plus
+the §6.2.15/.20 Directed Energy records (damage description, target
+energy deposition, aimpoints) — uid-66 Standard Variable records
+generated here and decoded via the registry (unknown record types stay
+raw bytes); their recordType dispatch values are registry data
+(opendis/record/__init__.py), not XML. Named padding fields are
+wire-only state (``field(init=False)``).
 """,
     "logistics": """Logistics family (IEEE 1278.1-2012 §7.4) — target-state PDUs.
 
@@ -1444,9 +1487,11 @@ already owns the attribute name ``header``; legacy dis7.py made the same
 call); the Transmitter keeps SINGLE Modulation Parameters and Antenna
 Pattern records (the XML's objectlists are wrong there — the standard
 allows one of each, §7.7.2/Annex C/§6.2.8) with byte-length counts, and
-its VTP list decodes uid-66 records via the registry. The Annex C
-dispatch classes (GenericRadio, HAVE QUICK, SINCGARS, BeamAntennaPattern,
-unknown placeholders) live in the hand seam ``radio/annexc.py``. Signal
+its VTP list decodes uid-66 records via the registry. The §6.2.8.2 Beam
+Antenna Pattern record is generated here (header-less, Table 31 — the
+Transmitter's ``antennaPatternType`` field types it); the Annex C
+dispatch classes (GenericRadio, HAVE QUICK, SINCGARS, unknown
+placeholders) live in the hand seam ``radio/annexc.py``. Signal
 and Intercom Signal carry bit-counted byte payloads padded to 32 bits.
 """,
     "information_operations": """Information Operations family (IEEE 1278.1-2012 §5.13) — target-state PDUs.
@@ -1569,6 +1614,11 @@ DOCSTRING_TITLES = {
     "DetonationPdu": "Detonation PDU",
     "DirectedEnergyFirePdu": "Directed Energy Fire PDU",
     "EntityDamageStatusPdu": "Entity Damage Status PDU",
+    "DirectedEnergyDamage": "Directed Energy Damage Description record",
+    "DirectedEnergyTargetEnergyDeposition": "DE Target Energy Deposition record",
+    "DirectedEnergyAreaAimpoint": "DE Area Aimpoint record",
+    "DirectedEnergyPrecisionAimpoint": "DE Precision Aimpoint record",
+    "BeamAntennaPattern": "Beam Antenna Pattern record",
     "LogisticsFamilyPdu": "Logistics family PDU",
     "SupplyQuantity": "Supply Quantity record",
     "ServiceRequestPdu": "Service Request PDU",
@@ -1707,6 +1757,17 @@ DOCSTRING_ADDENDA = {
 # beyond mechanical generation.""",
     "DeadReckoningParameters": """The 15 ``parameters`` bytes are algorithm-dependent (§E.8) and opaque to the library — bytes, not a per-byte list.""",
     "VariableParameter": """General form (§6.2.94.1). The 15 record-specific bytes stay opaque; typed decoders (articulated parts etc.) ride the StandardVariableRecord registry separately.""",
+    "DirectedEnergyDamage": """Uid-66 Standard Variable record (§6.2.20.1): the class writes its own
+recordType/recordLength header and the registry decodes the wire by
+``recordType`` — the 4500 dispatch value is registry data (Table 44's
+format, not the XML).""",
+    "DirectedEnergyAreaAimpoint": """Uid-66 Standard Variable record decoded via the registry (dispatch
+value 4001). The lists carry non-self-identifying records (§6.2.20.2):
+Beam Antenna Pattern records (320 bits each, §6.2.8.2) and DE Target
+Energy Deposition records (96 bits each, §6.2.20.4). The trailing pad
+is packer-computed to the 64-bit boundary §6.2.83 requires.""",
+    "DirectedEnergyPrecisionAimpoint": """Uid-66 Standard Variable record decoded via the registry (dispatch
+value 4000, Table 46's format).""",
     "EntityInformationFamilyPdu": """Thin family marker — per-class identity lives in the ``pduType``/``protocolFamily`` ClassVars; family metadata for middleware lives in ``PDU_FAMILIES`` (opendis.record.factory).""",
     "EntityStatePdu": """``entityAppearance`` and ``capabilities`` hold the raw uint32 on the wire; after parsing a known entity kind they hold the matching bitfield view (``int(view)`` is the raw value, so round-trips are byte-exact and unknown bits survive).""",
     "WarfareFamilyPdu": """Thin family marker — per-class identity lives in the ``pduType``/``protocolFamily`` ClassVars; family metadata for middleware lives in ``PDU_FAMILIES`` (opendis.record.factory).""",
@@ -1742,12 +1803,26 @@ DOCSTRING_ADDENDA = {
     "LEMunitionDescriptor": """Warhead/fuse ride the owning PDU's flag bit 4, quantity/rate bit 5 (None = absent on the wire); ``parse`` takes the inclusion flags (cross-scope presentIf, §6.2.19.2).""",
     "TimeSpacePositionInformationPdu": """The standard's TSPIFlag-conditional fields are not modeled in the XML; this implementation serializes every state-vector field unconditionally (mechanical XML fidelity).""",
     "CommentReliablePdu": """The fixed datum count is not used by this PDU (shall be zero); the list is kept so malformed-but-parseable datagrams still round-trip byte-exact.""",
+    "BeamAntennaPattern": """Non-self-identifying (§6.2.8): Antenna Pattern records carry no
+record header of their own — the Transmitter PDU's
+``antennaPatternType`` field types the record and its byte-length
+count bounds it on the wire (Table 31: 320 bits total).""",
 }
 
 # Full-text replacements where a ruling makes the docstring deliberately
 # non-XML. The Vector3Double docstring IS the WorldCoordinates alias
 # ruling (its prose documents the alias emitted below the class).
 DOCSTRING_OVERRIDES = {
+    "DirectedEnergyAreaAimpoint": """§6.2.20.2 DE Area Aimpoint record
+
+The DE Area Aimpoint record shall be used to communicate targeting
+information when the target of the directed energy weapon is an area.
+The area may or may not be associated with one or more target entities.
+
+# generator: the XML comment carries the Precision Aimpoint title
+# ("DE Precision Aimpoint Record. Section 6.2.20.2") — an upstream
+# copy-paste bug; this body is the standard's §6.2.20.2 opening prose
+# (XML-comment-enrichment candidate).""",
     "Vector3Double": """Three 64-bit floating point values, used for entity location.
 
 Ruled 2026-10-14: the XML class name ``Vector3Double`` is canonical —
@@ -1824,6 +1899,17 @@ CLASS_VARS = {
     ],
     "EntityDamageStatusPdu": [
         ("pduType", "69", "[UID 4]"),
+    ],
+    # uid-66 dispatch values (Table 44/46; the XML's recordType primitives
+    # carry no value — registry data, mirrored in record/__init__.py)
+    "DirectedEnergyDamage": [
+        ("recordType", "4500", "[UID 66] Variable Record Type"),
+    ],
+    "DirectedEnergyAreaAimpoint": [
+        ("recordType", "4001", "[UID 66] Variable Record Type"),
+    ],
+    "DirectedEnergyPrecisionAimpoint": [
+        ("recordType", "4000", "[UID 66] Variable Record Type"),
     ],
     "LogisticsFamilyPdu": [
         ("protocolFamily", "3", "[UID 5] Logistics"),
@@ -2135,12 +2221,16 @@ MODULE_SOURCE_IMPORTS = {
             "AntennaPatternRecord",
             "BasicHaveQuickMP",
             "ModulationParametersRecord",
-            "BeamAntennaPattern",
             "CCTTSincgarsMP",
             "GenericRadio",
             "SimpleIntercomRadio",
             "UnknownAntennaPattern",
             "UnknownRadio",
+        ],
+    },
+    "warfare": {
+        "opendis.record.base": [
+            "StandardVariableRecord",
         ],
     },
     "live_entity": {

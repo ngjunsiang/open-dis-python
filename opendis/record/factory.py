@@ -5,10 +5,6 @@ byte produces an ``UnrecognizedPdu`` — fully parsed header plus the raw
 payload as bytes — rather than an exception or a silent skip, so a DIS v8
 or malformed datagram never kills a long-running listener. Truncated
 datagrams parse as far as the bytes allow and never raise.
-
-This is the target-state factory for the converted families; the legacy
-``opendis.PduFactory`` keeps serving ``opendis.dis7`` classes unchanged
-until the per-family conversion completes.
 """
 
 import io

@@ -28,7 +28,6 @@ from .radio import *
 from .radio.annexc import (
     AntennaPatternRecord,
     BasicHaveQuickMP,
-    BeamAntennaPattern,
     CCTTSincgarsMP,
     GenericRadio,
     HighFidelityHAVEQUICKRadio,
@@ -39,21 +38,15 @@ from .radio.annexc import (
     VariableTransmitterParametersRecord,
 )
 from .warfare import *
-from .warfare.damage import (
-    DamageDescriptionRecord,
-    DirectedEnergyAreaAimpoint,
-    DirectedEnergyDamage,
-    DirectedEnergyPrecisionAimpoint,
-)
 
 SV = TypeVar("SV", bound=base.StandardVariableRecord)
 
 
 __variableRecordClasses: dict[int, type[base.StandardVariableRecord]] = {
-    3000: HighFidelityHAVEQUICKRadio,
-    4000: DirectedEnergyPrecisionAimpoint,
-    4001: DirectedEnergyAreaAimpoint,
-    4500: DirectedEnergyDamage,
+    3000: HighFidelityHAVEQUICKRadio,  # Annex C seam (hand)
+    4000: DirectedEnergyPrecisionAimpoint,  # generated (warfare)
+    4001: DirectedEnergyAreaAimpoint,  # generated (warfare)
+    4500: DirectedEnergyDamage,  # generated (warfare)
 }
 
 
@@ -117,10 +110,16 @@ def parseStandardVariableRecord(
     Consumes the record header (recordType u32 + recordLength u16,
     §6.2.83) and delegates the remainder to the registered class; an
     unregistered recordType parses as the opaque placeholder whose
-    ``data`` preserves the raw bytes byte-exact.
+    ``data`` preserves the raw bytes byte-exact. Record Length shall be
+    a multiple of 8 (§6.2.83) — validated here once for every typed or
+    placeholder decoder.
     """
     recordType = inputStream.read_uint32()
     recordLength = inputStream.read_uint16()
+    if recordLength % 8 != 0:
+        raise ValueError(
+            f"recordLength must be a multiple of 8, got {recordLength!r}"
+        )
     vrClass = getStandardVariableClass(recordType)
     record = vrClass()
     record.parse(inputStream, recordLength)

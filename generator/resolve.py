@@ -107,6 +107,20 @@ class Resolver:
             attributes.append(attr)
         attributes = self._link_counts(name, xml_owner, attributes, extras)
         parent, is_pdu = self._lineage(el)
+        # curated parent overrides: SV records resolve onto the kernel
+        # StandardVariableRecord base; RECORD_BASES rehomes a record onto
+        # a hand protocol class (BeamAntennaPattern -> AntennaPatternRecord)
+        is_sv = xml_owner in self.ov.SV_RECORDS
+        if is_sv:
+            parent = "StandardVariableRecord"
+            if name in self.ov.FROZEN_RECORDS:
+                raise SpecError(
+                    f"SV record {name!r} must stay mutable: the kernel "
+                    "protocol is a mutating parse(inputStream, bytelength) "
+                    "and wire pads round-trip through instance state"
+                )
+        elif xml_owner in self.ov.RECORD_BASES:
+            parent = self.ov.RECORD_BASES[xml_owner]
         attributes = self._mark_pads(attributes)
         return ir.RecordClass(
             name=name,
@@ -115,6 +129,7 @@ class Resolver:
             frozen=name in self.ov.FROZEN_RECORDS,
             parent=parent,
             is_pdu=is_pdu,
+            is_sv=is_sv,
             xml=el,
         )
 

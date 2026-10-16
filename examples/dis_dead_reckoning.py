@@ -10,7 +10,8 @@ over a period of time.
 
 import time
 import numpy as np
-from opendis.dis7 import EntityStatePdu, Vector3Float
+from opendis.record.entity_information import EntityStatePdu
+from opendis.record.common import Vector3Float
 from opendis import DeadReckoning
 
 def run_demo():

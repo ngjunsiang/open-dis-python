@@ -12,5 +12,6 @@
 # generator: setter range validation is beyond mechanical layout emission
 # generator: single-record MP/AP dispatch is beyond mechanical
 # generator: the str-backed string property (NUL-trimmed, latin-1 to
+# generator: the XML comment carries the Precision Aimpoint title
 # generator: truncation warning is beyond mechanical generation
 # generator: typed uid-66 decoder wiring; unknown record types

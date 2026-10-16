@@ -213,4 +213,7 @@ class RecordClass:
     frozen: bool = False
     parent: str | None = None  # canonical Python base (None -> plain class)
     is_pdu: bool = False  # lineage reaches a kernel PDU base
+    is_sv: bool = False  # uid-66 Standard Variable record (SV_RECORDS):
+    # writes its own recordType/recordLength header; frozen parse takes
+    # the wire bytelength (§6.2.83)
     xml: Element | None = dc_field(default=None, repr=False, compare=False)

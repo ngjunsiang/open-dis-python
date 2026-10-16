@@ -2,10 +2,12 @@
 """Tests for the DIS 7 target-state exemplar slice (branch dis7-ng).
 
 Covers the acceptance criteria of docs/design/sample-code-kickoff.md:
-byte-exact round-trip parity against opendis.dis7 for the same PDUs,
 unknown-pduType capture with byte-exact re-serialization, bitfield
 unknown-bit preservation, and Timestamp wrap behavior — plus the design §2
-construct categories the slice is meant to demonstrate.
+construct categories the slice is meant to demonstrate. The old-vs-new
+dis7.py transition-oracle parity tests retired with dis7.py itself
+(2026-10-16 replacement review; the .raw corpus + verification harnesses
+carry the wire guarantees now).
 """
 
 import io
@@ -483,7 +485,7 @@ class TestDataPdu(unittest.TestCase):
         self.assertEqual(pdu2.variableDatumRecords[0].marshalledSize(), 16)
 
     def test_typed_uid66_decoder(self):
-        from opendis.record.warfare.damage import DirectedEnergyDamage
+        from opendis.record.warfare import DirectedEnergyDamage
         record = DirectedEnergyDamage()
         record.damageDiameter = 1.5
         buffer = io.BytesIO()
@@ -604,7 +606,7 @@ class TestWarfareFamily(unittest.TestCase):
         self.assertEqual(parsed.to_bytes(), raw)
 
     def test_de_fire_sv_record_list_round_trip(self):
-        from opendis.record.warfare.damage import DirectedEnergyDamage
+        from opendis.record.warfare import DirectedEnergyDamage
         pdu = DirectedEnergyFirePdu()
         record = DirectedEnergyDamage()
         record.damageDiameter = 2.5
@@ -617,6 +619,37 @@ class TestWarfareFamily(unittest.TestCase):
         self.assertAlmostEqual(parsed.dERecords[0].damageDiameter, 2.5,
                                places=6)
         self.assertEqual(parsed.to_bytes(), raw)
+
+    def test_area_aimpoint_64_bit_pad_and_round_trip(self):
+        # Table 44: 96 fixed bits + 320N + 96M + 8P — the trailing pad
+        # rides the SV record to the 64-bit boundary §6.2.83 requires
+        # (generated output; the promoted seam class had no pad at all).
+        from opendis.record import parseStandardVariableRecord
+        from opendis.record.radio import BeamAntennaPattern
+        from opendis.record.warfare import (
+            DirectedEnergyAreaAimpoint,
+            DirectedEnergyTargetEnergyDeposition,
+        )
+        record = DirectedEnergyAreaAimpoint()
+        self.assertEqual(record.marshalledSize(), 16)
+        record.beamAntennaParameterList.append(BeamAntennaPattern())
+        record.directedEnergyTargetEnergyDepositionRecordList.append(
+            DirectedEnergyTargetEnergyDeposition()
+        )
+        # 6 + 2 + 4 + 40 + 12 = 64 — already 64-bit aligned, no pad
+        self.assertEqual(record.marshalledSize(), 64)
+        buffer = io.BytesIO()
+        record.serialize(DataOutputStream(buffer))
+        self.assertEqual(len(buffer.getvalue()), 64)
+        decoded = parseStandardVariableRecord(
+            DataInputStream(io.BytesIO(buffer.getvalue()))
+        )
+        self.assertIsInstance(decoded, DirectedEnergyAreaAimpoint)
+        self.assertEqual(len(decoded.beamAntennaParameterList), 1)
+        self.assertEqual(
+            len(decoded.directedEnergyTargetEnergyDepositionRecordList), 1
+        )
+        self.assertEqual(decoded.marshalledSize(), 64)
 
     def test_entity_damage_status_unknown_sv_stays_raw(self):
         from opendis.record import getStandardVariableClass
@@ -636,40 +669,6 @@ class TestWarfareFamily(unittest.TestCase):
         self.assertEqual(int(unknown.recordType), 0xABCD)
         self.assertEqual(unknown.data, b"\xEE" * 10)
         self.assertEqual(parsed.to_bytes(), raw)
-
-    def test_warfare_parity_with_dis7(self):
-        from opendis.dis7 import FirePdu as LegacyFirePdu
-        from opendis.dis7 import (EntityIdentifier as LegacyEntityIdentifier,
-                                  EventIdentifier as LegacyEventIdentifier,
-                                  SimulationAddress as LegacySimulationAddress,
-                                  Vector3Float as LegacyVector3Float,
-                                  WorldCoordinates as LegacyWorldCoordinates)
-        legacy = LegacyFirePdu()
-        legacy.protocolVersion = 7
-        legacy.exerciseID = 2
-        legacy.timestamp = 77
-        legacy.firingEntityID = LegacyEntityIdentifier(
-            LegacySimulationAddress(1, 2), 3)
-        legacy.targetEntityID = LegacyEntityIdentifier(
-            LegacySimulationAddress(4, 5), 6)
-        legacy.munitionExpendableID = LegacyEntityIdentifier(
-            LegacySimulationAddress(7, 8), 9)
-        legacy.eventID = LegacyEventIdentifier(
-            LegacySimulationAddress(1, 2), 77)
-        legacy.fireMissionIndex = 5
-        legacy.location = LegacyWorldCoordinates(1.0, 2.0, 3.0)
-        legacy.velocity = LegacyVector3Float(4.0, 5.0, 6.0)
-        legacy.range = 99.5
-        buffer = io.BytesIO()
-        legacy.length = 96
-        legacy.serialize(DataOutputStream(buffer))
-        raw = buffer.getvalue()
-        self.assertEqual(len(raw), 96)
-        modern = createPdu(raw)
-        self.assertIsInstance(modern, FirePdu)
-        self.assertEqual(modern.firingEntityID.entityNumber, 3)
-        self.assertEqual(modern.eventID.eventNumber, 77)
-        self.assertEqual(modern.to_bytes(), raw)
 
 
 class TestRadioFamily(unittest.TestCase):
@@ -698,7 +697,7 @@ class TestRadioFamily(unittest.TestCase):
         self.assertEqual(parsed.to_bytes(), raw)
 
     def test_transmitter_antenna_pattern(self):
-        from opendis.record.radio.annexc import BeamAntennaPattern
+        from opendis.record.radio import BeamAntennaPattern
         pdu = TransmitterPdu()
         pdu.antennaPatternType = 1
         pdu.antennaPattern = BeamAntennaPattern()
@@ -706,6 +705,23 @@ class TestRadioFamily(unittest.TestCase):
         raw = pdu.to_bytes()
         parsed = createPdu(raw)
         self.assertIsInstance(parsed.antennaPattern, BeamAntennaPattern)
+        self.assertEqual(parsed.to_bytes(), raw)
+
+    def test_unknown_antenna_pattern_consumes_full_length(self):
+        # §6.2.8: Antenna Pattern records are non-self-identifying — no
+        # 6-byte record header precedes the pattern data (Table 31), so
+        # the placeholder consumes the full record length. Regression
+        # lock: the seam's ``bytelength - 6`` left 6 bytes unparsed and
+        # desynchronized the PDU.
+        from opendis.record.radio.annexc import UnknownAntennaPattern
+        pdu = TransmitterPdu()
+        pdu.antennaPatternType = 2
+        pdu.antennaPattern = UnknownAntennaPattern(b"\xAB" * 24)
+        raw = pdu.to_bytes()
+        self.assertEqual(pdu.antennaPatternCount, 24)
+        parsed = createPdu(raw)
+        self.assertIsInstance(parsed.antennaPattern, UnknownAntennaPattern)
+        self.assertEqual(parsed.antennaPattern.data, b"\xAB" * 24)
         self.assertEqual(parsed.to_bytes(), raw)
 
     def test_signal_bit_length_and_alignment(self):
@@ -773,33 +789,6 @@ class TestRadioFamily(unittest.TestCase):
         self.assertEqual(parsed.intercomParameters[0].recordSpecificField,
                          b"\x07\x08")
         self.assertEqual(parsed.to_bytes(), raw)
-
-    def test_transmitter_parity_with_dis7(self):
-        from opendis.dis7 import TransmitterPdu as LegacyTransmitterPdu
-        from opendis.dis7 import BeamAntennaPattern as LegacyBeam
-        legacy = LegacyTransmitterPdu()
-        legacy.protocolVersion = 7
-        legacy.exerciseID = 4
-        legacy.timestamp = 500
-        legacy.radioNumber = 3
-        legacy.transmitState = 1
-        legacy.frequency = 123456789
-        legacy.power = 10.0
-        legacy.antennaPatternType = 1
-        legacy.antennaPattern = LegacyBeam()
-        buffer = io.BytesIO()
-        legacy.length = 104 + 40
-        legacy.serialize(DataOutputStream(buffer))
-        raw = buffer.getvalue()
-        self.assertEqual(len(raw), 144)
-        modern = createPdu(raw)
-        self.assertIsInstance(modern, TransmitterPdu)
-        self.assertEqual(modern.radioNumber, 3)
-        self.assertEqual(modern.frequency, 123456789)
-        self.assertEqual(modern.antennaPatternCount, 40)
-        self.assertEqual(modern.to_bytes(), raw)
-
-
 
 
 class TestSimulationManagementFamily(unittest.TestCase):
@@ -939,26 +928,6 @@ class TestSimulationManagementFamily(unittest.TestCase):
                          b"hello msg")
         self.assertEqual(parsed.to_bytes(), raw)
 
-    def test_set_data_parity_with_dis7(self):
-        from opendis.dis7 import SetDataPdu as LegacySetDataPdu
-        legacy = LegacySetDataPdu()
-        legacy.protocolVersion = 7
-        legacy.exerciseID = 1
-        legacy.timestamp = 42
-        legacy.requestID = 33
-        from opendis.dis7 import FixedDatum as LegacyFixedDatum
-        legacy.fixedDatumRecords.append(LegacyFixedDatum(10, 20))
-        buffer = io.BytesIO()
-        legacy.length = 12 + 12 + 4 + 4 + 4 + 4 + 8
-        legacy.serialize(DataOutputStream(buffer))
-        raw = buffer.getvalue()
-        modern = createPdu(raw)
-        self.assertIsInstance(modern, SetDataPdu)
-        self.assertEqual(modern.requestID, 33)
-        self.assertEqual(modern.fixedDatumRecords[0].fixedDatumValue, 20)
-        self.assertEqual(modern.to_bytes(), raw)
-
-
 
 class TestSimulationManagementReliableFamily(unittest.TestCase):
     """-R family PDUs (§5.12.4): reliability header + datum/record tails."""
@@ -1033,7 +1002,6 @@ class TestSimulationManagementReliableFamily(unittest.TestCase):
         self.assertIs(smr.CommentRPdu, smr.CommentReliablePdu)
 
 
-
 class TestLogisticsFamily(unittest.TestCase):
     """Logistics family (§7.4): service/resupply/repair PDUs."""
 
@@ -1089,26 +1057,6 @@ class TestLogisticsFamily(unittest.TestCase):
         parsed = createPdu(raw)
         self.assertEqual(parsed.repairResult, 2)
         self.assertEqual(parsed.to_bytes(), raw)
-
-    def test_service_request_parity_with_dis7(self):
-        from opendis.dis7 import ServiceRequestPdu as LegacyServiceRequest
-        legacy = LegacyServiceRequest()
-        legacy.protocolVersion = 7
-        legacy.exerciseID = 1
-        legacy.timestamp = 33
-        legacy.serviceTypeRequested = 1
-        from opendis.dis7 import SupplyQuantity as LegacySupplyQuantity
-        legacy.supplies.append(LegacySupplyQuantity())
-        legacy.supplies[0].quantity = 42.0
-        buffer = io.BytesIO()
-        legacy.length = 28 + 12
-        legacy.serialize(DataOutputStream(buffer))
-        raw = buffer.getvalue()
-        modern = createPdu(raw)
-        self.assertIsInstance(modern, ServiceRequestPdu)
-        self.assertAlmostEqual(modern.supplies[0].quantity, 42.0, places=4)
-        self.assertEqual(modern.to_bytes(), raw)
-
 
 
 class TestEntityManagementFamily(unittest.TestCase):
@@ -1193,7 +1141,6 @@ class TestEntityManagementFamily(unittest.TestCase):
         self.assertEqual(parsed.to_bytes(), raw)
 
 
-
 class TestDistributedEmissionsFamily(unittest.TestCase):
     """Distributed Emissions family (§7.6): EEE, Designator, UA."""
 
@@ -1269,7 +1216,6 @@ class TestDistributedEmissionsFamily(unittest.TestCase):
         self.assertIsInstance(pdu, UnrecognizedPdu)
         self.assertEqual(pdu.header.pduType, 28)
         self.assertEqual(pdu.to_bytes(), raw)
-
 
 
 class TestMinefieldFamily(unittest.TestCase):
@@ -1384,7 +1330,6 @@ class TestMinefieldFamily(unittest.TestCase):
         self.assertEqual(parsed.to_bytes(), raw)
 
 
-
 class TestSyntheticEnvironmentFamily(unittest.TestCase):
     """Synthetic Environment family (§7.10): objects + env process."""
 
@@ -1452,7 +1397,6 @@ class TestSyntheticEnvironmentFamily(unittest.TestCase):
         self.assertEqual(parsed.environmentRecords[0].environmentType, 4100)
         self.assertEqual(parsed.environmentRecords[0].geometry, b"\xAA" * 8)
         self.assertEqual(parsed.to_bytes(), raw)
-
 
 
 class TestLiveEntityFamily(unittest.TestCase):
@@ -1602,7 +1546,6 @@ class TestLiveEntityFamily(unittest.TestCase):
             self.assertEqual(parsed.to_bytes(), pdu.to_bytes())
 
 
-
 class TestInformationOperationsFamily(unittest.TestCase):
     """Information Operations family (§5.13): IO Action/Report with
     uid-66 IO records through the SV registry."""
@@ -1666,118 +1609,6 @@ class TestUnrecognizedPdu(unittest.TestCase):
         pdu = createPduFromFilePath(path.join(TEST_DIR,
                                               "EntityStatePdu-26.raw"))
         self.assertIsInstance(pdu, EntityStatePdu)
-
-
-class TestParityWithDis7(unittest.TestCase):
-    """Byte-exact old-vs-new parity: build with the legacy API, serialize,
-    parse with the new layer, re-serialize, compare."""
-
-    @staticmethod
-    def _serializeLegacy(pdu, length):
-        pdu.length = length
-        buffer = io.BytesIO()
-        pdu.serialize(DataOutputStream(buffer))
-        return buffer.getvalue()
-
-    def test_entity_state_pdu_parity(self):
-        from opendis.dis7 import (EntityStatePdu as LegacyEntityStatePdu,
-                                  EntityIdentifier as LegacyEntityIdentifier,
-                                  EntityType as LegacyEntityType,
-                                  EntityMarking as LegacyEntityMarking,
-                                  VariableParameter as LegacyVariableParameter,
-                                  DeadReckoningParameters as LegacyDR,
-                                  Vector3Float as LegacyVector3Float,
-                                  WorldCoordinates as LegacyWorldCoordinates,
-                                  EulerAngles as LegacyEulerAngles,
-                                  SimulationAddress as LegacySimulationAddress)
-
-        legacy = LegacyEntityStatePdu()
-        legacy.protocolVersion = 7
-        legacy.exerciseID = 9
-        legacy.timestamp = 0x11223344
-        legacy.pduStatus = 0
-        legacy.entityID = LegacyEntityIdentifier(
-            LegacySimulationAddress(150, 300), 42)
-        legacy.forceId = 2
-        legacy.entityType = LegacyEntityType(1, 1, 39, 1, 2, 3, 4)
-        legacy.alternativeEntityType = LegacyEntityType(1, 1, 39, 1, 2, 3, 4)
-        legacy.entityLinearVelocity = LegacyVector3Float(1.0, 2.0, 3.0)
-        legacy.entityLocation = LegacyWorldCoordinates(100.0, 200.0, -50.0)
-        legacy.entityOrientation = LegacyEulerAngles(0.1, 0.2, 0.3)
-        legacy.entityAppearance = 0x000022B8  # damage bits + lights + smoke
-        dr = LegacyDR()
-        dr.deadReckoningAlgorithm = 2
-        dr.parameters = [9] * 15
-        dr.entityLinearAcceleration = LegacyVector3Float(0.5, 0.5, 0.5)
-        dr.entityAngularVelocity = LegacyVector3Float(0.01, 0.02, 0.03)
-        legacy.deadReckoningParameters = dr
-        legacy.marking = LegacyEntityMarking()
-        legacy.marking.setString("LEGACY")
-        legacy.capabilities = 0x00000003
-        vp = LegacyVariableParameter()
-        vp.recordType = 1
-        vp.variableParameterFields1 = 3.14159
-        vp.variableParameterFields2 = 0xAABBCCDD
-        vp.variableParameterFields3 = 0x1234
-        vp.variableParameterFields4 = 0xEE
-        legacy.variableParameters.append(vp)
-        legacy.variableParameters.append(LegacyVariableParameter())
-
-        raw = self._serializeLegacy(legacy, 144 + 2 * 16)
-        self.assertEqual(len(raw), 144 + 32)
-
-        modern = createPdu(raw)
-        self.assertIsInstance(modern, EntityStatePdu)
-        self.assertEqual(modern.exerciseID, 9)
-        self.assertEqual(modern.timestamp.raw, 0x11223344)
-        self.assertEqual(modern.entityID.entityNumber, 42)
-        self.assertEqual(modern.entityID.simulationAddress.application, 300)
-        self.assertEqual(modern.forceId, 2)
-        self.assertEqual(modern.entityType,
-                         EntityType(1, 1, 39, 1, 2, 3, 4))
-        self.assertEqual(modern.entityLocation.z, -50.0)
-        self.assertAlmostEqual(modern.entityOrientation.psi, 0.1, places=6)
-        self.assertEqual(int(modern.entityAppearance), 0x000022B8)
-        self.assertEqual(
-            modern.deadReckoningParameters.parameters, b"\t" * 15)
-        self.assertEqual(modern.marking.string, "LEGACY")
-        self.assertEqual(int(modern.capabilities), 0x00000003)
-        self.assertEqual(modern.numberOfVariableParameters, 2)
-        # the legacy typed VP fields occupy the 15 opaque bytes
-        import struct as _struct
-        self.assertEqual(
-            modern.variableParameters[0].recordSpecificFields,
-            _struct.pack(">dIHB", 3.14159, 0xAABBCCDD, 0x1234, 0xEE))
-        self.assertEqual(modern.to_bytes(), raw)
-
-    def test_data_pdu_parity(self):
-        from opendis.dis7 import (DataPdu as LegacyDataPdu,
-                                  FixedDatum as LegacyFixedDatum,
-                                  VariableDatum as LegacyVariableDatum)
-
-        legacy = LegacyDataPdu()
-        legacy.protocolVersion = 7
-        legacy.exerciseID = 1
-        legacy.timestamp = 99
-        legacy.requestID = 555
-        legacy.fixedDatumRecords.append(LegacyFixedDatum(10, 20))
-        vd = LegacyVariableDatum()
-        vd.variableDatumID = 1
-        vd.variableDatumLength = 64  # bits
-        vd.variableData = list(b"allunits")
-        legacy.variableDatumRecords.append(vd)
-
-        bodySize = (12 + 6 + 6 + 4 + 4 + 4 + 4 + 8 + (8 + 8))
-        raw = self._serializeLegacy(legacy, bodySize)
-        self.assertEqual(len(raw), bodySize)
-
-        modern = createPdu(raw)
-        self.assertIsInstance(modern, DataPdu)
-        self.assertEqual(modern.requestID, 555)
-        self.assertEqual(modern.fixedDatumRecords[0].fixedDatumID, 10)
-        self.assertEqual(modern.variableDatumRecords[0].variableData,
-                         b"allunits")
-        self.assertEqual(modern.to_bytes(), raw)
 
 
 class TestEnumRegistry(unittest.TestCase):

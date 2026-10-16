@@ -46,9 +46,9 @@ __all__ = [
 ]
 
 
-def _padTo32(byteCount: int) -> int:
-    """Pad bytes needed to bring a datagram to a 32-bit boundary."""
-    return (4 - byteCount % 4) % 4
+def _padTo64(byteCount: int) -> int:
+    """Pad bytes needed to bring a datagram to a 64-bit boundary."""
+    return (8 - byteCount % 8) % 8
 
 
 @dataclass(slots=True)

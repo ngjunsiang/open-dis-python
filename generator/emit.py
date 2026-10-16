@@ -20,6 +20,10 @@ ENUM_IO = {8: "uint8", 16: "uint16", 32: "uint32"}
 # pads are computed against header + body (opendis/record/pdu.py).
 HEADER_BYTES = 12
 
+# The uid-66 Standard Variable record header (§6.2.83): recordType u32 +
+# recordLength u16, written by the generated class itself.
+SV_HEADER_BYTES = 6
+
 # types-import ordering: kind group (enum, float, uint, int, ...), then
 # width — matches the exemplar's hand order (enum8, enum16, float32,
 # float64, uint8, uint16, uint32)
@@ -329,13 +333,14 @@ def emit_module(
     kernel_exports = {base: mod for base, mod in overrides.KERNEL_BASES.values()}
     for name in order:
         rec = records[name]
-        if rec.is_pdu and rec.parent:
-            if rec.parent in kernel_exports:
+        if rec.parent and rec.parent not in info.own:
+            if rec.is_pdu and rec.parent in kernel_exports:
                 info.add_import(kernel_exports[rec.parent], rec.parent)
-            elif rec.parent not in info.own:
-                home = info.module_path(rec.parent)
-                if home:
-                    info.add_import(home, rec.parent)
+                continue
+            home = info.module_path(rec.parent)
+            if home:
+                info.add_import(home, rec.parent)
+            # hand bases (RECORD_BASES targets) ride MODULE_SOURCE_IMPORTS
     for mod, names in info.cross_imports.items():
         imports[mod] = sorted(names)
     if info.uses_rich_or_int:
@@ -386,18 +391,24 @@ def emit_module(
         ),
         None,
     )
-    # trailing whole-datagram alignment pads need the shared helper
-    needs_pad_helper = any(
-        attrs
-        and isinstance(attrs[-1].shape, ir.PadToBoundary)
-        for attrs in (records[name].attributes for name in order)
-    )
-    if needs_pad_helper:
+    # trailing whole-datagram alignment pads need the shared helpers, one
+    # per boundary the module's trailing pads use (32-bit PDU pads, the
+    # 64-bit SV-record alignment of §6.2.83)
+    for bits in sorted(
+        {
+            attrs[-1].shape.length
+            for attrs in (records[name].attributes for name in order)
+            if attrs and isinstance(attrs[-1].shape, ir.PadToBoundary)
+        }
+    ):
+        octets = bits // 8
         lines.append("")
         lines.append("")
-        lines.append("def _padTo32(byteCount: int) -> int:")
-        lines.append('    """Pad bytes needed to bring a datagram to a 32-bit boundary."""')
-        lines.append("    return (4 - byteCount % 4) % 4")
+        lines.append(f"def _padTo{bits}(byteCount: int) -> int:")
+        lines.append(
+            f'    """Pad bytes needed to bring a datagram to a {bits}-bit boundary."""'
+        )
+        lines.append(f"    return ({octets} - byteCount % {octets}) % {octets}")
     for name in order:
         lines.append("")
         lines.append("")
@@ -522,6 +533,13 @@ def _emit_record(
         else ("marshalledSize", "serialize", "parse")
     )
     trailing_pad = wire and isinstance(wire[-1].shape, ir.PadToBoundary)
+    # the boundary and the header the pad is computed against: PDU pads
+    # run over the 12-byte datagram header at a 32-bit boundary; SV
+    # records pad over their own 6-byte header to the 64-bit boundary
+    # §6.2.83 requires (Table 44's 8P padding octets)
+    pad_bits = wire[-1].shape.length if trailing_pad else 32
+    pad_fn = f"_padTo{pad_bits}"
+    wire_header = SV_HEADER_BYTES if rec.is_sv else HEADER_BYTES
     mid_body_pads = [
         a
         for a in (wire[:-1] if trailing_pad else wire)
@@ -535,22 +553,24 @@ def _emit_record(
     if body and size_name in body:
         _emit_method(lines, size_name, ["self"], body[size_name])
     elif trailing_pad:
-        # whole-datagram alignment pad: size + pad(12-header + size), and
-        # the pad bytes ride serialize/parse via the unpadded helper
+        # trailing alignment pad: size + pad(header + unpadded fields),
+        # the pad bytes riding serialize/parse via the unpadded helper
         lines.append("")
         lines.append(f"    def _unpaddedBodySize(self) -> int:")
         for ln in _size_stmts(rec, super_base, wire[:-1]):
             lines.append(ln)
         lines.append("")
         lines.append(f"    def {size_name}(self) -> int:")
+        unpadded = "self._unpaddedBodySize()"
+        prefix = f"{wire_header} + " if rec.is_sv else ""
         lines.append(
-            f"        return self._unpaddedBodySize() + "
-            f"_padTo32({HEADER_BYTES} + self._unpaddedBodySize())"
+            f"        return {prefix}{unpadded} + "
+            f"{pad_fn}({wire_header} + {unpadded})"
         )
     else:
         lines.append("")
         lines.append(f"    def {size_name}(self) -> int:")
-        for ln in _size_stmts(rec, super_base, wire):
+        for ln in _size_stmts(rec, super_base, wire, sv_header=rec.is_sv):
             lines.append(ln)
     if body and ser_name in body:
         _emit_method(
@@ -559,7 +579,12 @@ def _emit_record(
     else:
         lines.append("")
         lines.append(f"    def {ser_name}(self, outputStream: DataOutputStream) -> None:")
-        if super_base:
+        if rec.is_sv:
+            # §6.2.83 SV header: the class writes recordType (the curated
+            # registry ClassVar) + recordLength (the derived total length)
+            lines.append("        outputStream.write_uint32(self.recordType)")
+            lines.append("        outputStream.write_uint16(self.recordLength)")
+        elif super_base:
             lines.append(f"        super({rec.name}, self).{ser_name}(outputStream)")
         for attr in wire:
             if isinstance(attr.shape, ir.PadToBoundary):
@@ -567,7 +592,7 @@ def _emit_record(
             lines += _serialize_line(rec.name, attr)
         if trailing_pad:
             lines.append(
-                f"        padding = _padTo32({HEADER_BYTES} + self._unpaddedBodySize())"
+                f"        padding = {pad_fn}({wire_header} + self._unpaddedBodySize())"
             )
             lines.append("        if padding:")
             lines.append('            outputStream.write_bytes(b"\\x00" * padding)')
@@ -604,9 +629,12 @@ def _emit_record(
                 f'    def parse(cls, inputStream: DataInputStream) -> "{rec.name}":'
             )
         else:
-            lines.append(
-                f"    def {parse_name}(self, inputStream: DataInputStream) -> None:"
-            )
+            params = "self, inputStream: DataInputStream"
+            if rec.is_sv:
+                # the wire recordLength rides the signature (§6.2.83);
+                # validation lives in the registry helper
+                params += ", bytelength: int"
+            lines.append(f"    def {parse_name}({params}) -> None:")
         stmts, args = _parse_pieces(rec, super_base, wire, records)
         uses_registry = any(
             isinstance(a.shape, ir.ObjectList)
@@ -623,7 +651,7 @@ def _emit_record(
             )
         if trailing_pad:
             stmts.append(
-                f"        padding = _padTo32({HEADER_BYTES} + self._unpaddedBodySize())"
+                f"        padding = {pad_fn}({wire_header} + self._unpaddedBodySize())"
             )
             stmts.append("        if padding:")
             stmts.append("            inputStream.read_bytes(padding)")
@@ -700,8 +728,9 @@ def _size_stmts(
     rec: ir.RecordClass,
     super_base: str | None,
     wire: list[ir.Attribute],
+    sv_header: bool = False,
 ) -> list[str]:
-    expr = _marshalled_expr(rec, super_base, wire)
+    expr = _marshalled_expr(rec, super_base, wire, sv_header=sv_header)
     single = f"        return {expr}"
     if len(single) <= 88:
         return [single]
@@ -826,13 +855,19 @@ def _uid_rider(attr: ir.Attribute) -> str | None:
 
 
 def _marshalled_expr(
-    rec: ir.RecordClass, super_base: str | None = None, wire: list | None = None
+    rec: ir.RecordClass,
+    super_base: str | None = None,
+    wire: list | None = None,
+    sv_header: bool = False,
 ) -> str:
     parts: list[str] = []
     has_ref = False
     if super_base:
         parts.append(f"super({rec.name}, self)._marshalledBodySize()")
         has_ref = True
+    elif sv_header:
+        # §6.2.83 SV header: recordType u32 + recordLength u16
+        parts.append(str(SV_HEADER_BYTES))
     for attr in (wire if wire is not None else rec.attributes):
         shape = attr.shape
         if attr.hidden:
@@ -980,10 +1015,17 @@ def _parse_pieces(
                 expr = f"{shape.target}.parse(inputStream)"
                 _emit_value(rec, attr.name, expr, stmts, args)
             elif rec.frozen:
-                raise SpecError(
-                    f"frozen record {rec.name!r} cannot hold mutable "
-                    f"member {attr.name!r} (no constructive parse exists)"
-                )
+                if target is None:
+                    raise SpecError(
+                        f"frozen record {rec.name!r} holds hand seam member "
+                        f"{attr.name!r} (no constructive parse exists)"
+                    )
+                # mutable member in a frozen record: construct a fresh
+                # instance and repopulate that — the cls() call receives
+                # the new object, never a shared default
+                stmts.append(f"        {attr.name} = {shape.target}()")
+                stmts.append(f"        {attr.name}.parse(inputStream)")
+                args.append(attr.name)
             else:
                 # mutable member: repopulate the owned default instance
                 stmts.append(f"        self.{attr.name}.parse(inputStream)")

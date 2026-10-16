@@ -9,9 +9,11 @@ already owns the attribute name ``header``; legacy dis7.py made the same
 call); the Transmitter keeps SINGLE Modulation Parameters and Antenna
 Pattern records (the XML's objectlists are wrong there — the standard
 allows one of each, §7.7.2/Annex C/§6.2.8) with byte-length counts, and
-its VTP list decodes uid-66 records via the registry. The Annex C
-dispatch classes (GenericRadio, HAVE QUICK, SINCGARS, BeamAntennaPattern,
-unknown placeholders) live in the hand seam ``radio/annexc.py``. Signal
+its VTP list decodes uid-66 records via the registry. The §6.2.8.2 Beam
+Antenna Pattern record is generated here (header-less, Table 31 — the
+Transmitter's ``antennaPatternType`` field types it); the Annex C
+dispatch classes (GenericRadio, HAVE QUICK, SINCGARS, unknown
+placeholders) live in the hand seam ``radio/annexc.py``. Signal
 and Intercom Signal carry bit-counted byte payloads padded to 32 bits.
 """
 
@@ -22,6 +24,7 @@ from opendis.enum_registry import rich_or_int
 from opendis.record.common import (
     EntityIdentifier,
     EntityType,
+    EulerAngles,
     Vector3Float,
     WorldCoordinates,
 )
@@ -29,7 +32,6 @@ from opendis.record.pdu import Pdu
 from opendis.record.radio.annexc import (
     AntennaPatternRecord,
     BasicHaveQuickMP,
-    BeamAntennaPattern,
     CCTTSincgarsMP,
     GenericRadio,
     ModulationParametersRecord,
@@ -41,6 +43,7 @@ from opendis.stream import DataInputStream, DataOutputStream
 from opendis.types import enum8, enum16, float32, uint8, uint16, uint32, uint64
 
 __all__ = [
+    "BeamAntennaPattern",
     "IntercomCommunicationsParameters",
     "IntercomControlPdu",
     "IntercomReferenceID",
@@ -56,6 +59,72 @@ __all__ = [
 def _padTo32(byteCount: int) -> int:
     """Pad bytes needed to bring a datagram to a 32-bit boundary."""
     return (4 - byteCount % 4) % 4
+
+
+@dataclass(slots=True)
+class BeamAntennaPattern(AntennaPatternRecord):
+    """§6.2.8.2 Beam Antenna Pattern record
+
+    Used when the antenna pattern type field has a value of 1. Specifies the
+    direction, pattern, and polarization of radiation from an antenna.
+
+    Non-self-identifying (§6.2.8): Antenna Pattern records carry no record
+    header of their own — the Transmitter PDU's ``antennaPatternType`` field
+    types the record and its byte-length count bounds it on the wire (Table
+    31: 320 bits total).
+    """
+
+    FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
+        "referenceSystem": 168,
+    }
+
+    beamDirection: EulerAngles = field(default_factory=EulerAngles)
+    azimuthBeamwidth: float32 = 0.0
+    elevationBeamwidth: float32 = 0.0
+    referenceSystem: enum8 = 0  # [UID 168]
+    ez: float32 = 0.0
+    ex: float32 = 0.0
+    phase: float32 = 0.0
+    # Padding ruling: explicit attribute, out of __init__ (zero by default,
+    # holds the wire value after parse so odd pads round-trip byte-exact).
+    padding1: uint8 = field(init=False, default=0)
+    padding2: uint16 = field(init=False, default=0)
+    padding3: uint32 = field(init=False, default=0)
+
+    def marshalledSize(self) -> int:
+        return self.beamDirection.marshalledSize() + 4 + 4 + 1 + 1 + 2 + 4 + 4 + 4 + 4
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        self.beamDirection.serialize(outputStream)
+        outputStream.write_float32(self.azimuthBeamwidth)
+        outputStream.write_float32(self.elevationBeamwidth)
+        outputStream.write_uint8(self.referenceSystem)
+        outputStream.write_uint8(self.padding1)
+        outputStream.write_uint16(self.padding2)
+        outputStream.write_float32(self.ez)
+        outputStream.write_float32(self.ex)
+        outputStream.write_float32(self.phase)
+        outputStream.write_uint32(self.padding3)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        self.beamDirection.parse(inputStream)
+        self.azimuthBeamwidth = inputStream.read_float32()
+        self.elevationBeamwidth = inputStream.read_float32()
+        self.referenceSystem = rich_or_int(168, inputStream.read_uint8())
+        self.padding1 = inputStream.read_uint8()
+        self.padding2 = inputStream.read_uint16()
+        self.ez = inputStream.read_float32()
+        self.ex = inputStream.read_float32()
+        self.phase = inputStream.read_float32()
+        self.padding3 = inputStream.read_uint32()
+
+    @classmethod
+    def parseFrom(cls, inputStream: DataInputStream) -> "BeamAntennaPattern":
+        """Construct a new record from the stream (list-parse helper; the
+        mutating ``parse`` above satisfies the Record protocol)."""
+        item = cls()
+        item.parse(inputStream)
+        return item
 
 
 @dataclass(slots=True)
@@ -134,8 +203,6 @@ class TransmitterPdu(RadioCommunicationsFamilyPdu):
     modulationParameters: ModulationParametersRecord | None = None
     antennaPattern: AntennaPatternRecord | None = None
     variableTransmitterParameters: list = field(default_factory=list)
-    # Padding ruling: explicit attribute, out of __init__ (zero by default,
-    # holds the wire value after parse so odd pads round-trip byte-exact).
     padding1: uint8 = field(init=False, default=0)
     padding2: uint16 = field(init=False, default=0)
 

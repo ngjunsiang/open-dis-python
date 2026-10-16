@@ -9,7 +9,7 @@ import time
 from io import BytesIO
 
 from opendis.stream import DataOutputStream
-from opendis.dis7 import EntityStatePdu
+from opendis.record.entity_information import EntityStatePdu
 from opendis.RangeCoordinates import *
 
 UDP_PORT = 3001
