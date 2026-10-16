@@ -19,3 +19,5 @@
 # generator: axis descriptors dispatch on their trailing axisType byte
 # generator: layers 2-5 are length-driven — each begins with a Layer
 # generator: representation types 3-6 have no record format
+# generator: curated runtime placeholder — radio systems without an
+# generator: curated runtime placeholder — reserved/unknown antenna

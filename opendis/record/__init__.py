@@ -25,25 +25,13 @@ from . import base, bitfield, symbolic_names as sym
 from .base import StandardVariableRecord
 from .common import *
 from .radio import *
-from .radio.annexc import (
-    AntennaPatternRecord,
-    BasicHaveQuickMP,
-    CCTTSincgarsMP,
-    GenericRadio,
-    HighFidelityHAVEQUICKRadio,
-    ModulationParametersRecord,
-    SimpleIntercomRadio,
-    UnknownAntennaPattern,
-    UnknownRadio,
-    VariableTransmitterParametersRecord,
-)
 from .warfare import *
 
 SV = TypeVar("SV", bound=base.StandardVariableRecord)
 
 
 __variableRecordClasses: dict[int, type[base.StandardVariableRecord]] = {
-    3000: HighFidelityHAVEQUICKRadio,  # Annex C seam (hand)
+    3000: HighFidelityHAVEQUICKRadio,  # generated (radio)
     4000: DirectedEnergyPrecisionAimpoint,  # generated (warfare)
     4001: DirectedEnergyAreaAimpoint,  # generated (warfare)
     4500: DirectedEnergyDamage,  # generated (warfare)

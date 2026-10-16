@@ -111,7 +111,11 @@ class Resolver:
         # a hand protocol class (BeamAntennaPattern -> AntennaPatternRecord)
         is_sv = xml_owner in self.ov.SV_RECORDS
         if is_sv:
-            parent = "StandardVariableRecord"
+            # an SV record whose XML lineage already provides a generated
+            # record base (§6.2.95 home) keeps it — only root-parented SV
+            # records rehome onto the kernel base directly
+            if parent not in self.ov.KERNEL_RECORD_BASES:
+                parent = "StandardVariableRecord"
             if name in self.ov.FROZEN_RECORDS:
                 raise SpecError(
                     f"SV record {name!r} must stay mutable: the kernel "
@@ -270,6 +274,11 @@ class Resolver:
     def _lineage(self, el) -> tuple[str | None, bool]:
         """Canonical Python base name + whether the lineage reaches a
         kernel PDU base (the class emits body methods)."""
+        # abstract record bases (§6.2.58/§6.2.8/§6.2.95 homes): generated
+        # classes themselves, parented on a kernel protocol base
+        if el.get("name") in self.ov.KERNEL_RECORD_BASES:
+            base, _module = self.ov.KERNEL_RECORD_BASES[el.get("name")]
+            return base, False
         parent = el.get("inheritsFrom")
         if parent in (None, "root"):
             return None, False

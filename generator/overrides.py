@@ -110,7 +110,20 @@ RECORD_MODULES = {
         "MinefieldResponseNACKPdu",
     ],
     "radio": [
+        # §6.2.8 Antenna Pattern home + §6.2.8.2 Beam record, then the
+        # Annex C MP records (C.2/C.3 zero-length markers, Table C.3
+        # Basic HAVE QUICK, Table C.7 CCTT SINCGARS) under the §6.2.58
+        # home, and the §6.2.95 home + its Table C.4 record — the
+        # spec-repo annex-c-mp-ap wave; bases precede their subclasses
+        "AntennaPatternRecord",
         "BeamAntennaPattern",
+        "ModulationParametersRecord",
+        "GenericRadio",
+        "SimpleIntercomRadio",
+        "BasicHaveQuickMP",
+        "CCTTSincgarsMP",
+        "VariableTransmitterParametersRecord",
+        "HighFidelityHAVEQUICKRadio",
         "ModulationType",
         "RadioCommunicationsFamilyPdu",
         "TransmitterPdu",
@@ -347,17 +360,24 @@ FIELD_DROPS = {
     # §9.3.2: subprotocolNumber rides the header PDU Status byte; the pad
     # byte is the header's own (composed header — LE PDU adds zero bytes)
     "LiveEntityFamilyPdu": ["subprotocolNumber", "padding"],
+    # the Annex C XML (spec repo annex-c-mp-ap) now declares the single
+    # MP/AP records as variant groups and the VTP list natively; the
+    # curated shapes below (EXTRA_FIELDS OptionalRecord/ObjectList +
+    # METHOD_BODIES dispatch) still own the field — the variant-group
+    # selection is beyond mechanical resolution
     "TransmitterPdu": [
         "variableTransmitterParameterCount",
         "modulationParameterCount",
         "antennaPatternCount",
-        "modulationParametersList",
-        "antennaPatternList",
+        "modulationParameters",
+        "antennaPattern",
+        "variableTransmitterParameters",
     ],
     # SV records: the header fields are the kernel base's contract —
     # recordType is the curated registry ClassVar, recordLength the
     # derived marshalledSize property (§6.2.83)
     "DirectedEnergyDamage": ["recordType", "recordLength"],
+    "HighFidelityHAVEQUICKRadio": ["recordType", "recordLength"],
     "DirectedEnergyAreaAimpoint": ["recordType", "recordLength"],
     "DirectedEnergyPrecisionAimpoint": ["recordType", "recordLength"],
     # generic SV-format records: the trailing alignment pad rides the
@@ -766,17 +786,32 @@ REGISTRY_LISTS = {
 # (recordType u32 + recordLength u16 written by the class, §6.2.83).
 SV_RECORDS = {
     "DirectedEnergyDamage": 4500,
+    # Annex C.4.2.3 Table C.4: Record Type = 3000 (the dispatch value the
+    # registry decodes; REF-010 uid 66 names it "High Fidelity HAVE
+    # QUICK/SATURN Radio")
+    "HighFidelityHAVEQUICKRadio": 3000,
     "DirectedEnergyAreaAimpoint": 4001,
     "DirectedEnergyPrecisionAimpoint": 4000,
 }
 
 # XML class -> hand base class for records whose protocol home is a hand
 # module (like KERNEL_BASES but without the PDU body-method split).
-# BeamAntennaPattern subclasses the seam's AntennaPatternRecord
-# (radio/annexc.py), keeping one VariableRecord dispatch spine for the
-# Transmitter PDU's single antenna-pattern record.
-RECORD_BASES = {
-    "BeamAntennaPattern": "AntennaPatternRecord",
+# Empty since the Annex C promotion: BeamAntennaPattern's parent is now
+# XML-declared (AntennaPatternRecord, a generated class below).
+RECORD_BASES = {}
+
+# XML abstract record class -> (kernel protocol base, module providing
+# it). The §6.2.58/§6.2.8/§6.2.95 homes are generated as fieldless
+# classes on the kernel record protocol bases (the annexc.py seam's
+# roles, promoted 2026-10-16); concrete records subclass them through
+# their XML inheritsFrom.
+KERNEL_RECORD_BASES = {
+    "ModulationParametersRecord": ("VariableRecord", "opendis.record.base"),
+    "AntennaPatternRecord": ("VariableRecord", "opendis.record.base"),
+    "VariableTransmitterParametersRecord": (
+        "StandardVariableRecord",
+        "opendis.record.base",
+    ),
 }
 
 # (class, field) -> bitfield view class name attached unconditionally at
@@ -885,6 +920,18 @@ METHOD_PARAMS = {
 # class -> {method name -> verbatim body} replacing mechanical emission
 # (bit-count payloads, packer-computed alignment pads, dispatch tails).
 METHOD_BODIES = {
+    # Annex C.2/C.3: the zero-length MP markers carry no record-specific
+    # fields — nothing on the wire (fieldless classes with curated bodies)
+    "GenericRadio": {
+        "marshalledSize": "return 0",
+        "serialize": "pass",
+        "parse": "pass",
+    },
+    "SimpleIntercomRadio": {
+        "marshalledSize": "return 0",
+        "serialize": "pass",
+        "parse": "pass",
+    },
     "IFFData": {
         "marshalledSize": "return 6 + len(self.recordSpecificFields)",
         "serialize": """outputStream.write_uint32(self.recordType)
@@ -2028,13 +2075,16 @@ Python-side deltas from the XML (sample-review rulings): the XML's
 RadioCommsHeader is flattened onto the PDUs (the composed PDU header
 already owns the attribute name ``header``; legacy dis7.py made the same
 call); the Transmitter keeps SINGLE Modulation Parameters and Antenna
-Pattern records (the XML's objectlists are wrong there — the standard
-allows one of each, §7.7.2/Annex C/§6.2.8) with byte-length counts, and
-its VTP list decodes uid-66 records via the registry. The §6.2.8.2 Beam
-Antenna Pattern record is generated here (header-less, Table 31 — the
-Transmitter's ``antennaPatternType`` field types it); the Annex C
-dispatch classes (GenericRadio, HAVE QUICK, SINCGARS, unknown
-placeholders) live in the hand seam ``radio/annexc.py``. Signal
+Pattern records (§7.7.2 s: "zero or one" of each; byte-length counts
+per Table 176) with the Annex C MP dispatch (variant group on
+``modulationType.radioSystem``) and its VTP list decodes uid-66 records
+via the registry. The §6.2.8 Antenna Pattern home and §6.2.8.2 Beam
+record (header-less, Table 31), the §6.2.58 home with the Annex C MP
+records (Generic Radio / Simple Intercom zero-length markers, Basic
+HAVE QUICK Table C.3, CCTT SINCGARS Table C.7), and the §6.2.95 home
+with the High-Fidelity HAVE QUICK VTP record (Table C.4, recordType
+3000) are generated here since the annex-c-mp-ap spec wave; the unknown
+radio/pattern placeholders are curated runtime fallbacks. Signal
 and Intercom Signal carry bit-counted byte payloads padded to 32 bits.
 """,
     "information_operations": """Information Operations family (IEEE 1278.1-2012 §5.13) — target-state PDUs.
@@ -2172,6 +2222,10 @@ DOCSTRING_TITLES = {
     "DirectedEnergyAreaAimpoint": "DE Area Aimpoint record",
     "DirectedEnergyPrecisionAimpoint": "DE Precision Aimpoint record",
     "BeamAntennaPattern": "Beam Antenna Pattern record",
+    # the §6.2.58/§6.2.8/§6.2.95 record-type homes (Annex C promotion)
+    "AntennaPatternRecord": "Antenna Pattern record",
+    "ModulationParametersRecord": "Modulation Parameters record",
+    "VariableTransmitterParametersRecord": ("Variable Transmitter Parameters record"),
     "LogisticsFamilyPdu": "Logistics family PDU",
     "SupplyQuantity": "Supply Quantity record",
     "ServiceRequestPdu": "Service Request PDU",
@@ -2338,6 +2392,12 @@ DOCSTRING_ADDENDA = {
 recordType/recordLength header and the registry decodes the wire by
 ``recordType`` — the 4500 dispatch value is registry data (Table 44's
 format, not the XML).""",
+    "HighFidelityHAVEQUICKRadio": """Uid-66 Standard Variable record (Annex C.4.2.3): the class writes its own
+recordType/recordLength header and the registry decodes the wire by
+``recordType`` — the 3000 dispatch value is registry data (Table C.4's
+format, not the XML; REF-010 uid 66 names the type "High Fidelity HAVE
+QUICK/SATURN Radio"). The Basic HAVE QUICK MP record rides the
+Transmitter's modulationParameters slot alongside this record.""",
     "DirectedEnergyAreaAimpoint": """Uid-66 Standard Variable record decoded via the registry (dispatch
 value 4001). The lists carry non-self-identifying records (§6.2.20.2):
 Beam Antenna Pattern records (320 bits each, §6.2.8.2) and DE Target
@@ -2512,6 +2572,9 @@ CLASS_VARS = {
     ],
     "DirectedEnergyPrecisionAimpoint": [
         ("recordType", "4000", "[UID 66] Variable Record Type"),
+    ],
+    "HighFidelityHAVEQUICKRadio": [
+        ("recordType", "3000", "[UID 66] Variable Record Type"),
     ],
     "LogisticsFamilyPdu": [
         ("protocolFamily", "3", "[UID 5] Logistics"),
@@ -2842,6 +2905,71 @@ _CAPABILITY_KIND_VIEWS: dict[int, type] = {
     return byteCount""",
         )
     ],
+    "radio": [
+        (
+            "AntennaPatternRecord",
+            """# generator: curated runtime placeholder — reserved/unknown antenna
+# pattern types carry their bytes raw (§6.2.8 non-self-identifying
+# records; not an XML type, so generation adds nothing)
+
+
+class UnknownAntennaPattern(AntennaPatternRecord):
+    \"\"\"Placeholder for unknown or unimplemented antenna pattern types.\"\""
+
+    def __init__(self, data: bytes = b""):
+        self.data = data
+
+    def marshalledSize(self) -> int:
+        return len(self.data)
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        super().serialize(outputStream)
+        outputStream.write_bytes(self.data)
+
+    def parse(
+        self,  # pyright: ignore[reportIncompatibleMethodOverride]
+        inputStream: DataInputStream,
+        bytelength: int,
+    ) -> None:
+        # Validate bytelength argument by calling base method
+        super().parse(inputStream, bytelength)
+        # Antenna Pattern records are non-self-identifying (§6.2.8) — no
+        # record header precedes the pattern data (Table 31: the whole
+        # 320-bit Beam record is pattern fields), so the full record
+        # length is payload. The old ``bytelength - 6`` assumed a
+        # 6-byte type/length header that does not exist.
+        self.data = inputStream.read_bytes(bytelength)""",
+        ),
+        (
+            "ModulationParametersRecord",
+            """# generator: curated runtime placeholder — radio systems without an
+# in-standard MP record (SINCGARS 5 and EPLRS 7 define none, Annex
+# C.5/C.7; JTIDS/MIDS 8 records live in SISO-STD-002, C.8.2.3) keep
+# their bytes raw; not an XML type, so generation adds nothing
+
+
+class UnknownRadio(ModulationParametersRecord):
+    \"\"\"Placeholder for unknown or unimplemented radio types.\"\""
+
+    def __init__(self, data: bytes = b""):
+        self.data = data
+
+    def marshalledSize(self) -> int:
+        return len(self.data)
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        super().serialize(outputStream)
+        outputStream.write_bytes(self.data)
+
+    def parse(
+        self, inputStream: DataInputStream, bytelength: int | None = None
+    ) -> None:
+        # Validate bytelength argument by calling base method
+        super().parse(inputStream, bytelength)
+        assert isinstance(bytelength, int)
+        self.data = inputStream.read_bytes(bytelength)""",
+        ),
+    ],
 }
 
 # module key -> extra imports the curated blocks above need (the usage
@@ -2868,18 +2996,6 @@ MODULE_SOURCE_IMPORTS = {
             "SupplyAppearance",
             "SurfacePlatformAppearance",
             "SurfacePlatformCapabilities",
-        ],
-    },
-    "radio": {
-        "opendis.record.radio.annexc": [
-            "AntennaPatternRecord",
-            "BasicHaveQuickMP",
-            "ModulationParametersRecord",
-            "CCTTSincgarsMP",
-            "GenericRadio",
-            "SimpleIntercomRadio",
-            "UnknownAntennaPattern",
-            "UnknownRadio",
         ],
     },
     "warfare": {

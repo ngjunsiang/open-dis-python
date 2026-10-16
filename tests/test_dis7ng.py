@@ -131,11 +131,21 @@ from opendis.record.entity_information import (
 from opendis.record.pdu import Pdu, PduHeader, UnrecognizedPdu
 from opendis.record.factory import createPdu, createPduFromFilePath
 from opendis.record.radio import (
+    AntennaPatternRecord,
+    BasicHaveQuickMP,
+    CCTTSincgarsMP,
+    GenericRadio,
+    HighFidelityHAVEQUICKRadio,
     IntercomControlPdu,
     IntercomSignalPdu,
+    ModulationParametersRecord,
     ReceiverPdu,
     SignalPdu,
+    SimpleIntercomRadio,
     TransmitterPdu,
+    UnknownAntennaPattern,
+    UnknownRadio,
+    VariableTransmitterParametersRecord,
 )
 from opendis.record.synthetic_environment import (
     ArealObjectStatePdu,
@@ -716,8 +726,6 @@ class TestRadioFamily(unittest.TestCase):
         self.assertEqual(TransmitterPdu().marshalledSize(), 104)
 
     def test_transmitter_round_trip_with_havequick(self):
-        from opendis.record.radio.annexc import BasicHaveQuickMP
-
         pdu = TransmitterPdu()
         pdu.radioReferenceID = EntityIdentifier(SimulationAddress(5, 6), 7)
         pdu.radioNumber = 2
@@ -732,6 +740,112 @@ class TestRadioFamily(unittest.TestCase):
         self.assertIsInstance(parsed.modulationParameters, BasicHaveQuickMP)
         self.assertEqual(parsed.radioNumber, 2)
         self.assertEqual(parsed.frequency, pdu.frequency)
+        self.assertEqual(parsed.to_bytes(), raw)
+
+    def test_basic_havequick_mp_record(self):
+        # Table C.3 (Annex C.4.2.2): 128 bits — NET ID (packed u16, the
+        # Table C.5 layout), MWOD Index, three reserved fields, Time of
+        # Day, 32-bit padding.
+        mp = BasicHaveQuickMP(netId=0x1F40, mwodIndex=7, timeOfDay=123456)
+        self.assertEqual(mp.marshalledSize(), 16)
+        pdu = TransmitterPdu()
+        pdu.modulationType.radioSystem = 3  # HAVE QUICK II
+        pdu.modulationParameters = mp
+        raw = pdu.to_bytes()
+        self.assertEqual(pdu.modulationParameterCount, 16)
+        parsed = createPdu(raw)
+        got = parsed.modulationParameters
+        self.assertIsInstance(got, BasicHaveQuickMP)
+        self.assertEqual(got.mwodIndex, 7)
+        self.assertEqual(got.netId, 0x1F40)
+        self.assertEqual(got.timeOfDay, 123456)
+        self.assertEqual(parsed.to_bytes(), raw)
+
+    def test_transmitter_cctt_sincgars_dispatch(self):
+        # Table C.7 (Annex C.6.2.3): FH Net/Hop Set/Lockout Set u16s,
+        # Start of Message [UID 170], Clear Channel [UID 171], FH Sync
+        # Time Offset u32, Transmission Security Key u16, padding u16.
+        mp = CCTTSincgarsMP(
+            fhNetId=0x0ABC,
+            hopSetId=2,
+            lockoutSetId=3,
+            startOfMessage=1,
+            clearChannel=1,
+            fhSyncTimeOffset=7000,
+            transmissionSecurityKey=99,
+        )
+        self.assertEqual(mp.marshalledSize(), 16)
+        pdu = TransmitterPdu()
+        pdu.modulationType.radioSystem = 6  # CCTT SINCGARS
+        pdu.modulationParameters = mp
+        raw = pdu.to_bytes()
+        parsed = createPdu(raw)
+        got = parsed.modulationParameters
+        self.assertIsInstance(got, CCTTSincgarsMP)
+        self.assertEqual(got.fhNetId, 0x0ABC)
+        self.assertEqual(got.fhSyncTimeOffset, 7000)
+        self.assertEqual(got.transmissionSecurityKey, 99)
+        self.assertEqual(parsed.to_bytes(), raw)
+
+    def test_transmitter_generic_and_intercom_markers(self):
+        # C.2/C.3: zero-length MP markers. On the wire, presence with
+        # Length of Modulation Parameters = 0 is indistinguishable from
+        # absence, so the round trip parses back to None.
+        self.assertIsInstance(GenericRadio(), ModulationParametersRecord)
+        self.assertIsInstance(SimpleIntercomRadio(), ModulationParametersRecord)
+        self.assertEqual(GenericRadio().marshalledSize(), 0)
+        self.assertEqual(SimpleIntercomRadio().marshalledSize(), 0)
+        pdu = TransmitterPdu()
+        pdu.modulationType.radioSystem = 1  # Generic Radio or Simple Intercom
+        pdu.modulationType.majorModulation = 1  # nonzero -> generic radio
+        pdu.modulationParameters = GenericRadio()
+        raw = pdu.to_bytes()
+        self.assertEqual(pdu.modulationParameterCount, 0)
+        parsed = createPdu(raw)
+        self.assertIsNone(parsed.modulationParameters)
+        self.assertEqual(parsed.to_bytes(), raw)
+
+    def test_high_fidelity_havequick_vtp_record(self):
+        # Table C.4 (Annex C.4.2.3): uid-66 SV record, recordType 3000,
+        # 320 bits; TOD Delta is a SIGNED 32-bit integer (hundreds of
+        # microseconds) — a negative clock drift must survive the round
+        # trip through the registry decode.
+        vtp = HighFidelityHAVEQUICKRadio(
+            netId=(123 << 6) | (2 << 4) | 1,  # Table C.5 packed NET ID
+            todTransmitIndicator=1,
+            todDelta=-30,  # -3 ms drift per the C.4.2.3 d) example
+            wod1=300025,
+            wod2=376000,
+        )
+        self.assertIsInstance(vtp, VariableTransmitterParametersRecord)
+        self.assertEqual(vtp.recordType, 3000)
+        self.assertEqual(vtp.marshalledSize(), 40)
+        pdu = TransmitterPdu()
+        pdu.modulationType.radioSystem = 2  # HAVE QUICK
+        pdu.modulationParameters = BasicHaveQuickMP()
+        pdu.variableTransmitterParameters.append(vtp)
+        raw = pdu.to_bytes()
+        parsed = createPdu(raw)
+        self.assertEqual(parsed.variableTransmitterParameterCount, 1)
+        got = parsed.variableTransmitterParameters[0]
+        self.assertIsInstance(got, HighFidelityHAVEQUICKRadio)
+        self.assertEqual(got.todDelta, -30)
+        self.assertEqual(got.netId, vtp.netId)
+        self.assertEqual(got.wod1, 300025)
+        self.assertEqual(got.wod2, 376000)
+        self.assertEqual(parsed.to_bytes(), raw)
+
+    def test_unknown_radio_fallback(self):
+        # radio systems without an in-standard MP record (SINCGARS 5,
+        # EPLRS 7 define none; Link 11 = 9 here) keep their bytes raw
+        pdu = TransmitterPdu()
+        pdu.modulationType.radioSystem = 9
+        pdu.modulationParameters = UnknownRadio(b"\x5a" * 8)
+        raw = pdu.to_bytes()
+        parsed = createPdu(raw)
+        got = parsed.modulationParameters
+        self.assertIsInstance(got, UnknownRadio)
+        self.assertEqual(got.data, b"\x5a" * 8)
         self.assertEqual(parsed.to_bytes(), raw)
 
     def test_transmitter_antenna_pattern(self):
@@ -752,8 +866,6 @@ class TestRadioFamily(unittest.TestCase):
         # the placeholder consumes the full record length. Regression
         # lock: the seam's ``bytelength - 6`` left 6 bytes unparsed and
         # desynchronized the PDU.
-        from opendis.record.radio.annexc import UnknownAntennaPattern
-
         pdu = TransmitterPdu()
         pdu.antennaPatternType = 2
         pdu.antennaPattern = UnknownAntennaPattern(b"\xab" * 24)

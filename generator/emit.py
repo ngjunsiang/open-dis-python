@@ -330,10 +330,13 @@ def emit_module(
 
     imports: dict[str, list[str]] = {}
     kernel_exports = {base: mod for base, mod in overrides.KERNEL_BASES.values()}
+    # generated record homes parented on kernel protocol bases import them
+    # like PDUs import Pdu (§6.2.58/§6.2.8/§6.2.95 of the Annex C wave)
+    kernel_exports.update(overrides.KERNEL_RECORD_BASES.values())
     for name in order:
         rec = records[name]
         if rec.parent and rec.parent not in info.own:
-            if rec.is_pdu and rec.parent in kernel_exports:
+            if rec.parent in kernel_exports:
                 info.add_import(kernel_exports[rec.parent], rec.parent)
                 continue
             home = info.module_path(rec.parent)
@@ -366,6 +369,13 @@ def emit_module(
         if not tail:
             continue
         for match in re.finditer(r"^([A-Za-z_][A-Za-z0-9_]*) = ", tail, re.MULTILINE):
+            exports.append(match.group(1))
+    # curated source blocks may define public classes (the Annex C unknown
+    # placeholders) — they export like generated ones
+    for _anchor, block in overrides.MODULE_SOURCES.get(module, []):
+        for match in re.finditer(
+            r"^class ([A-Za-z_][A-Za-z0-9_]*)", block, re.MULTILINE
+        ):
             exports.append(match.group(1))
     lines.append("__all__ = [")
     for name in sorted(exports):
@@ -516,8 +526,11 @@ def _emit_record(
         lines.append("")
         lines += [f"    {ln}" if ln.strip() else "" for ln in member.source.split("\n")]
 
-    if not rec.attributes:
-        return  # family markers carry no wire body — methods inherit
+    if not rec.attributes and rec.name not in overrides.METHOD_BODIES:
+        # family markers carry no wire body — methods inherit; fieldless
+        # records with curated bodies (the zero-length Annex C MP
+        # markers) emit them below
+        return
 
     body = overrides.METHOD_BODIES.get(rec.name)
     size_name, ser_name, parse_name = (
@@ -596,7 +609,21 @@ def _emit_record(
             lines.append('            outputStream.write_bytes(b"\\x00" * padding)')
         lines.append("")
     parse_header = "inputStream: DataInputStream"
+    uses_registry = any(
+        isinstance(a.shape, ir.ObjectList)
+        and (rec.name, a.name) in overrides.REGISTRY_LISTS
+        for a in wire
+    )
     if body and parse_name in body:
+        # curated parse bodies referencing the registry helper get the
+        # same function-local import the mechanical path injects (a
+        # module-level import would cycle through opendis.record)
+        if uses_registry and "parseStandardVariableRecord" in body[parse_name]:
+            body = dict(body)
+            body[parse_name] = (
+                "from opendis.record import parseStandardVariableRecord\n"
+                + body[parse_name]
+            )
         params = overrides.METHOD_PARAMS.get((rec.name, parse_name))
         if params is not None:
             _emit_method(
@@ -632,11 +659,6 @@ def _emit_record(
                 params += ", bytelength: int"
             lines.append(f"    def {parse_name}({params}) -> None:")
         stmts, args = _parse_pieces(rec, super_base, wire, records)
-        uses_registry = any(
-            isinstance(a.shape, ir.ObjectList)
-            and (rec.name, a.name) in overrides.REGISTRY_LISTS
-            for a in wire
-        )
         if uses_registry:
             stmts.insert(
                 1 if super_base else 0,
