@@ -531,6 +531,9 @@ class TestDataPdu(unittest.TestCase):
         from opendis.record.warfare import DirectedEnergyDamage
 
         record = DirectedEnergyDamage()
+        # XML defaultValue flows to the field: absent temperature models
+        # absolute zero (the record's "not modeled" sentinel)
+        self.assertEqual(record.temperature, -273.15)
         record.damageDiameter = 1.5
         buffer = io.BytesIO()
         record.serialize(DataOutputStream(buffer))
@@ -745,7 +748,10 @@ class TestRadioFamily(unittest.TestCase):
     def test_basic_havequick_mp_record(self):
         # Table C.3 (Annex C.4.2.2): 128 bits — NET ID (packed u16, the
         # Table C.5 layout), MWOD Index, three reserved fields, Time of
-        # Day, 32-bit padding.
+        # Day, 32-bit padding. MWOD Index defaults to 1 — the default
+        # maintenance and training value (C.4.2.2 b, Table C.2 Note 2;
+        # the XML defaultValue now flows to the field).
+        self.assertEqual(BasicHaveQuickMP().mwodIndex, 1)
         mp = BasicHaveQuickMP(netId=0x1F40, mwodIndex=7, timeOfDay=123456)
         self.assertEqual(mp.marshalledSize(), 16)
         pdu = TransmitterPdu()

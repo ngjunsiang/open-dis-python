@@ -150,8 +150,20 @@ def _when_expr(when: str, owner: str) -> str:
     return " and ".join(exprs)
 
 
-def _prim_default(prim_type: str) -> str:
-    return "0.0" if prim_type.startswith("float") else "0"
+def _prim_default(prim_type: str, xml_default: str | None = None) -> str:
+    """Field default: the XML primitive's defaultValue when it carries one,
+    else the zero of the type. Integer-valued float literals gain ".0" so
+    zero-default fields keep the exemplar's ``= 0.0`` style."""
+    if xml_default is None:
+        return "0.0" if prim_type.startswith("float") else "0"
+    if not re.fullmatch(r"-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?", xml_default):
+        raise SpecError(
+            f"primitive defaultValue {xml_default!r} is not a plain number — "
+            "cannot emit it as a field default"
+        )
+    if prim_type.startswith("float") and not re.search(r"[.eE]", xml_default):
+        return xml_default + ".0"
+    return xml_default
 
 
 def _variant_members(group: ir.VariantGroup, owner: str):
@@ -790,7 +802,7 @@ def _field_line(owner: str, attr: ir.Attribute) -> str:
         if attr.pad:
             ann, default = shape.type, "field(init=False, default=0)"
         else:
-            ann, default = shape.type, _prim_default(shape.type)
+            ann, default = shape.type, _prim_default(shape.type, shape.default)
     elif isinstance(shape, ir.EnumRef):
         ann, default = ir.ENUM_ANN[shape.size], "0"
     elif isinstance(shape, ir.ClassRef):

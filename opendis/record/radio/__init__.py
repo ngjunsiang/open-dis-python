@@ -259,7 +259,7 @@ class BasicHaveQuickMP(ModulationParametersRecord):
     """
 
     netId: uint16 = 0
-    mwodIndex: uint16 = 0
+    mwodIndex: uint16 = 1
     reserved16: uint16 = 0
     reserved8_1: uint8 = 0
     reserved8_2: uint8 = 0

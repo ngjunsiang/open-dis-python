@@ -397,7 +397,7 @@ class DirectedEnergyDamage(StandardVariableRecord):
 
     damageLocation: Vector3Float = field(default_factory=Vector3Float)
     damageDiameter: float32 = 0.0
-    temperature: float32 = 0.0
+    temperature: float32 = -273.15
     componentIdentification: enum8 = 0  # [UID 314]
     componentDamageStatus: enum8 = 0  # [UID 315]
     componentVisualDamageStatus: uint8 = 0  # [UID 317]
