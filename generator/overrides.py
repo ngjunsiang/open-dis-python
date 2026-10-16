@@ -48,6 +48,15 @@ RECORD_MODULES = {
         "VariableParameter",
         "EntityInformationFamilyPdu",
         "EntityStatePdu",
+        # §7.2.3-§7.2.6 (Phase 5, pduType values per the standard's §5.2.4
+        # enumeration: Collision 4, Collision-Elastic 66, ES-Update 67,
+        # Attribute 72)
+        "CollisionPdu",
+        "CollisionElasticPdu",
+        "EntityStateUpdatePdu",
+        "Attribute",
+        "AttributeRecordSet",
+        "AttributePdu",
     ],
     "warfare": [
         "WarfareFamilyPdu",
@@ -123,6 +132,10 @@ RECORD_MODULES = {
         "AggregateMarking",
         "Relationship",
         "NamedLocationIdentification",
+        # §6.2.79 Silent Entity System record — Table 183's Silent Entity
+        # System list element (the XML's AggregateStatePdu classRefs
+        # EntityType there; upstream XML gap, standard followed)
+        "SilentEntitySystem",
         "EntityManagementFamilyPdu",
         "AggregateStatePdu",
         "IsGroupOfPdu",
@@ -136,6 +149,16 @@ RECORD_MODULES = {
         "EnvironmentRecord",
         "SyntheticEnvironmentFamilyPdu",
         "EnvironmentalProcessPdu",
+        # §6.2.40 grid-axis descriptor records (fixed/variable; the shared
+        # GridAxisDescriptor base is a Java-side abstraction —
+        # PARENT_DROPS) + §6.2.41 Grid Data records (the standard defines
+        # representation types 0-2 only) + §7.10.3 Gridded Data PDU
+        "GridAxisDescriptorFixed",
+        "GridAxisDescriptorVariable",
+        "GridDataType0",
+        "GridDataType1",
+        "GridDataType2",
+        "GriddedDataPdu",
         "PointObjectStatePdu",
         "LinearObjectStatePdu",
         "ArealObjectStatePdu",
@@ -159,6 +182,29 @@ RECORD_MODULES = {
         "UABeam",
         "UAEmitter",
         "UnderwaterAcousticPdu",
+        # §7.6.5 IFF PDU with its layer records (Phase 5): the Layer 1
+        # records, the §6.2.51 Layer Header, the §6.2.43/.44 IFF data
+        # records, the Annex-B basic-data records, and the five concrete
+        # layer formats — then §7.6.6 SEES
+        "SystemIdentifier",
+        "FundamentalOperationalData",
+        "LayerHeader",
+        "IFFFundamentalParameterData",
+        "IFFData",
+        "Mode5InterrogatorBasicData",
+        "Mode5TransponderBasicData",
+        "ModeSInterrogatorBasicData",
+        "ModeSTransponderBasicData",
+        "IFFPduLayer2Data",
+        "IFFPduLayer3TransponderFormatData",
+        "IFFPduLayer3InterrogatorFormatData",
+        "IFFPduLayer4InterrogatorFormatData",
+        "IFFPduLayer4TransponderFormatData",
+        "IFFPduLayer5Data",
+        "IdentificationFriendOrFoePdu",
+        "PropulsionSystemData",
+        "VectoringNozzleSystem",
+        "SupplementalEmissionEntityStatePdu",
     ],
     "live_entity": [
         "LiveSimulationAddress",
@@ -209,6 +255,8 @@ COMMON_RECORDS = RECORD_MODULES["common"]
 
 FROZEN_RECORDS = {
     "TrackJamData",
+    "SystemIdentifier",
+    "IFFFundamentalParameterData",
     "LiveSimulationAddress",
     "LiveEntityIdentifier",
     "LiveEntityIdentifierElided",
@@ -248,10 +296,22 @@ RECORD_BINDINGS = {
 
 # XML class -> plain primitive type. The class is absorbed (its
 # Python-side state is the raw integer; view logic is curated per class).
+# ChangeOptions is 8 bits (Table B.5; Table 118 totals the System
+# Identifier at 48 bits with it) — the pre-Phase-5 uint16 binding was a
+# wire bug that made every IFF PDU one byte long (upstream candidate).
 PRIMITIVE_BINDINGS = {
     "EntityAppearance": "uint32",
     "ProtocolMode": "uint16",
     "EntityCapabilities": "uint32",
+    "ChangeOptions": "uint8",
+}
+
+# XML parent classes that are Java-side abstractions, never emitted and
+# never Python bases: subclasses flatten their fields and stand alone.
+PARENT_DROPS = {
+    "AbstractIFFPduLayerData",
+    "GridData",
+    "GridAxisDescriptor",
 }
 
 # classRef targets that splice their own fields in place (the ruled
@@ -300,6 +360,11 @@ FIELD_DROPS = {
     "DirectedEnergyDamage": ["recordType", "recordLength"],
     "DirectedEnergyAreaAimpoint": ["recordType", "recordLength"],
     "DirectedEnergyPrecisionAimpoint": ["recordType", "recordLength"],
+    # generic SV-format records: the trailing alignment pad rides the
+    # payload contract (recordSpecificFields carries K + pad bytes so a
+    # stored recordLength stays the wire truth; Intercom precedent)
+    "IFFData": ["padding"],
+    "Attribute": ["padding"],
 }
 
 # (class, XML field name) -> python field name, where the exemplar ruled a
@@ -318,6 +383,17 @@ FIELD_RENAMES = {
     ("DataQueryReliablePdu", "variableDatumRecords"): "variableDatumIDs",
     ("DataQueryReliablePdu", "numberOfFixedDatumRecords"): "numberOfFixedDatumIDs",
     ("DataQueryReliablePdu", "numberOfVariableDatumRecords"): "numberOfVariableDatumIDs",
+    # the IFF layer classes carry a copy-pasted Layer 2 count name (the
+    # 7.6.5.4/.5/.6 lists hold IFF Data records, not IFF Fundamental
+    # Parameter Data); Layer 2 keeps the name, minus the tail
+    ("IFFPduLayer2Data", "numberOfIFFFundamentalParameterDataRecordsParameters"): (
+        "numberOfIFFFundamentalParameterDataRecords"
+    ),
+    ("IFFPduLayer3TransponderFormatData", "numberOfIFFFundamentalParameterDataRecordsParameters"): "numberOfIFFDataRecords",
+    ("IFFPduLayer3InterrogatorFormatData", "numberOfIFFFundamentalParameterDataRecordsParameters"): "numberOfIFFDataRecords",
+    ("IFFPduLayer4InterrogatorFormatData", "numberOfIFFFundamentalParameterDataRecordsParameters"): "numberOfIFFDataRecords",
+    ("IFFPduLayer4TransponderFormatData", "numberOfIFFFundamentalParameterDataRecordsParameters"): "numberOfIFFDataRecords",
+    ("IFFPduLayer5Data", "numberOfIFFFundamentalParameterDataRecordsParameters"): "numberOfIFFDataRecords",
 }
 
 # name -> name across every record (uniform-spelling rulings).
@@ -422,6 +498,33 @@ FIELD_OVERRIDES = {
         "LiveEntityOrientation16 | None", "None", None),
     ("LiveEntityDetonationPdu", "entityLocation"): (
         "LiveEntityRelativeEntityCoordinates | None", "None", None),
+    # IFF layers 2-5: presence is length-driven (each begins with a
+    # §6.2.51 Layer Header whose Length includes the header, Table 165) —
+    # absent layers are None; the curated PDU wire methods dispatch.
+    ("IdentificationFriendOrFoePdu", "iFFPduLayer2Data"): (
+        "IFFPduLayer2Data | None", "None", None),
+    ("IdentificationFriendOrFoePdu", "iFFPduLayer3TransponderFormatData"): (
+        "IFFPduLayer3TransponderFormatData | None", "None", None),
+    ("IdentificationFriendOrFoePdu", "iFFPduLayer3InterrogatorFormatData"): (
+        "IFFPduLayer3InterrogatorFormatData | None", "None", None),
+    ("IdentificationFriendOrFoePdu", "iFFPduLayer4InterrogatorFormatData"): (
+        "IFFPduLayer4InterrogatorFormatData | None", "None", None),
+    ("IdentificationFriendOrFoePdu", "iFFPduLayer4TransponderFormatData"): (
+        "IFFPduLayer4TransponderFormatData | None", "None", None),
+    ("IdentificationFriendOrFoePdu", "iFFPduLayer5Data"): (
+        "IFFPduLayer5Data | None", "None", None),
+    # the XML's countFieldName="numberOfGridAxes" on the grid-data list is
+    # an upstream bug: Table 192's G = V x product of the per-axis point
+    # counts — a derived count with no wire field (curated body owns it)
+    ("GriddedDataPdu", "gridDataRecords"): (
+        "list[GridDataType0 | GridDataType1 | GridDataType2]",
+        "field(default_factory=list)",
+        None,
+    ),
+    # recordLength is caller-settable wire state on the generic SV-format
+    # records (6 + K + P, Table 138) — not the derived len() property the
+    # XML's hidden="true" would emit (Intercom precedent)
+    ("Attribute", "recordLength"): ("uint16", "0", None),
 }
 # (class, XML field name) -> hand-ruled shape replacing the XML's (the
 # Data-Query datum-ID rebinding: §7.5.9 lists carry datum IDs, not
@@ -487,6 +590,57 @@ FIELD_SHAPES = {
     ("MinefieldDataPdu", "vertices"): ir.ObjectList(
         element="Vector3Float", count_field="numberOfVertices"
     ),
+    # Table 183: the Silent Entity System list carries §6.2.79 Silent
+    # Entity System records (96 + 32A bits each), not bare EntityType
+    # records — the XML's classRef is an upstream gap; standard followed
+    ("AggregateStatePdu", "silentEntitySystemList"): ir.ObjectList(
+        element="SilentEntitySystem", count_field="numberOfSilentEntityTypes"
+    ),
+    # the layer 3/4/5 lists hold flat §6.2.43 IFF Data records, not the
+    # XML's IFFDataSpecification wrapper (Table 169-173; the wrapper adds
+    # a count the layer already carries — Record-R flattening precedent)
+    ("IFFPduLayer3TransponderFormatData", "IFFFundamentalParameterDataRecord"): ir.ObjectList(
+        element="IFFData", count_field="numberOfIFFFundamentalParameterDataRecordsParameters"
+    ),
+    ("IFFPduLayer3InterrogatorFormatData", "IFFFundamentalParameterDataRecord"): ir.ObjectList(
+        element="IFFData", count_field="numberOfIFFFundamentalParameterDataRecordsParameters"
+    ),
+    ("IFFPduLayer4InterrogatorFormatData", "IFFFundamentalParameterDataRecord"): ir.ObjectList(
+        element="IFFData", count_field="numberOfIFFFundamentalParameterDataRecordsParameters"
+    ),
+    ("IFFPduLayer4TransponderFormatData", "IFFFundamentalParameterDataRecord"): ir.ObjectList(
+        element="IFFData", count_field="numberOfIFFFundamentalParameterDataRecordsParameters"
+    ),
+    ("IFFPduLayer5Data", "IFFFundamentalParameterDataRecord"): ir.ObjectList(
+        element="IFFData", count_field="numberOfIFFFundamentalParameterDataRecordsParameters"
+    ),
+    # generic SV-format records: the payload is byte-granular wire state
+    # sized by the STORED recordLength (K + alignment pad as received;
+    # IntercomCommunicationsParameters precedent)
+    ("IFFData", "recordSpecificFields"): ir.BytesPayload(bit_count_field=None),
+    ("Attribute", "recordSpecificFields"): ir.BytesPayload(bit_count_field=None),
+    # axis descriptors dispatch on the trailing axisType byte ([UID 377]);
+    # the element annotation narrows to the fixed shape (the curated
+    # GriddedDataPdu body stores either subclass)
+    ("GriddedDataPdu", "gridAxisDescriptors"): ir.ObjectList(
+        element="GridAxisDescriptorFixed", count_field="numberOfGridAxes"
+    ),
+    # the 24 system-specific bits of the §6.2.44 record are a fixed blob
+    # (the XML's primitivelist lacks the fixedlength marker)
+    ("IFFFundamentalParameterData", "systemSpecificData"): ir.FixedBytes(length=3),
+}
+
+# (class, field) -> force the hidden-count treatment (derived len()
+# property, never instance state) where the XML forgot hidden="true"
+# (the IFF layer classes' copy-pasted count fields).
+FIELD_HIDDEN = {
+    ("GridAxisDescriptorVariable", "numberOfPointsOnXiAxis"),
+    ("IFFPduLayer2Data", "numberOfIFFFundamentalParameterDataRecordsParameters"),
+    ("IFFPduLayer3TransponderFormatData", "numberOfIFFFundamentalParameterDataRecordsParameters"),
+    ("IFFPduLayer3InterrogatorFormatData", "numberOfIFFFundamentalParameterDataRecordsParameters"),
+    ("IFFPduLayer4InterrogatorFormatData", "numberOfIFFFundamentalParameterDataRecordsParameters"),
+    ("IFFPduLayer4TransponderFormatData", "numberOfIFFFundamentalParameterDataRecordsParameters"),
+    ("IFFPduLayer5Data", "numberOfIFFFundamentalParameterDataRecordsParameters"),
 }
 
 # (class, field) -> uid-66 registry-decoded list: emitted as plain ``list``
@@ -539,6 +693,9 @@ DOCSTRING_CITES = {
     # XML comments still carry 1995-edition PDU numbering; the standard's
     # 2012 numbers rule (upstream campaign candidates, logged in the
     # milestones doc)
+    # the IFF PDU class comment cites the 7.6.5.1 General subclause; the
+    # canonical cite is the PDU section itself
+    "IdentificationFriendOrFoePdu": "7.6.5",
     "ServiceRequestPdu": "7.4.2",
     "ResupplyOfferPdu": "7.4.3",
     "ResupplyReceivedPdu": "7.4.4",
@@ -569,7 +726,8 @@ MODULE_IMPORT_LINES = {
 }
 
 # (class, method) -> full parameter list for curated methods whose
-# signatures carry more than the stream (LEMunitionDescriptor.parse).
+# signatures carry more than the stream (LEMunitionDescriptor.parse,
+# the IFF layers' parseLayer).
 METHOD_PARAMS = {
     ("LEMunitionDescriptor", "parse"): [
         "cls",
@@ -577,11 +735,286 @@ METHOD_PARAMS = {
         "includeWarheadFuse: bool",
         "includeQuantityRate: bool",
     ],
+    ("IFFPduLayer2Data", "parseLayer"): [
+        "cls",
+        "inputStream: DataInputStream",
+        "layerNumber: int",
+        "layerSpecificInformation: int",
+        "length: int",
+    ],
+    ("IFFPduLayer3TransponderFormatData", "parseLayer"): [
+        "cls",
+        "inputStream: DataInputStream",
+        "layerNumber: int",
+        "layerSpecificInformation: int",
+        "length: int",
+    ],
+    ("IFFPduLayer3InterrogatorFormatData", "parseLayer"): [
+        "cls",
+        "inputStream: DataInputStream",
+        "layerNumber: int",
+        "layerSpecificInformation: int",
+        "length: int",
+    ],
+    ("IFFPduLayer4InterrogatorFormatData", "parseLayer"): [
+        "cls",
+        "inputStream: DataInputStream",
+        "layerNumber: int",
+        "layerSpecificInformation: int",
+        "length: int",
+    ],
+    ("IFFPduLayer4TransponderFormatData", "parseLayer"): [
+        "cls",
+        "inputStream: DataInputStream",
+        "layerNumber: int",
+        "layerSpecificInformation: int",
+        "length: int",
+    ],
+    ("IFFPduLayer5Data", "parseLayer"): [
+        "cls",
+        "inputStream: DataInputStream",
+        "layerNumber: int",
+        "layerSpecificInformation: int",
+        "length: int",
+    ],
 }
 
 # class -> {method name -> verbatim body} replacing mechanical emission
 # (bit-count payloads, packer-computed alignment pads, dispatch tails).
 METHOD_BODIES = {
+    "IFFData": {
+        "marshalledSize": "return 6 + len(self.recordSpecificFields)",
+        "serialize": """outputStream.write_uint32(self.recordType)
+outputStream.write_uint16(self.recordLength)
+outputStream.write_bytes(self.recordSpecificFields)""",
+        "parse": """self.recordType = rich_or_int(66, inputStream.read_uint32())
+self.recordLength = inputStream.read_uint16()
+self.recordSpecificFields = inputStream.read_bytes(self.recordLength - 6)""",
+    },
+    "Attribute": {
+        "marshalledSize": "return 6 + len(self.recordSpecificFields)",
+        "serialize": """outputStream.write_uint32(self.recordType)
+outputStream.write_uint16(self.recordLength)
+outputStream.write_bytes(self.recordSpecificFields)""",
+        "parse": """self.recordType = inputStream.read_uint32()
+self.recordLength = inputStream.read_uint16()
+self.recordSpecificFields = inputStream.read_bytes(self.recordLength - 6)""",
+    },
+    "IdentificationFriendOrFoePdu": {
+        "_marshalledBodySize": """size = (
+    self.emittingEntityId.marshalledSize()
+    + self.eventID.marshalledSize()
+    + self.location.marshalledSize()
+    + self.systemID.marshalledSize()
+    + 1
+    + 1
+    + self.fundamentalParameters.marshalledSize()
+)
+size += sum(layer.marshalledSize() for layer in self._layersInOrder())
+return size""",
+        "_serializeBody": """self.emittingEntityId.serialize(outputStream)
+self.eventID.serialize(outputStream)
+self.location.serialize(outputStream)
+self.systemID.serialize(outputStream)
+outputStream.write_uint8(self.systemDesignator)
+outputStream.write_uint8(self.systemSpecificData)
+self.fundamentalParameters.serialize(outputStream)
+for layer in self._layersInOrder():
+    layer.layerHeader.length = layer.marshalledSize()
+    layer.serialize(outputStream)""",
+        "_parseBody": """self.emittingEntityId = EntityIdentifier.parse(inputStream)
+self.eventID = EventIdentifier.parse(inputStream)
+self.location.parse(inputStream)
+self.systemID = SystemIdentifier.parse(inputStream)
+self.systemDesignator = inputStream.read_uint8()
+self.systemSpecificData = inputStream.read_uint8()
+self.fundamentalParameters.parse(inputStream)
+# generator: layers 2-5 are length-driven — each begins with a Layer
+# Header whose Length includes the header (Table 165), so the loop runs
+# on the remaining wire length, not a flag; the Layer 1 System Type
+# field picks the Layer 3/4 format ([UID 82]: interrogator sides are
+# Mark XIIA Interrogator 6, Mode 5 Interrogator 7, Mode S Interrogator
+# 8, and the Combined Interrogator/Transponders 12-13); parseLayer
+# takes the header fields the dispatch already consumed
+remaining = self.header._wireLength - 12 - 48
+while remaining >= 4:
+    layerNumber = inputStream.read_uint8()
+    layerSpecificInformation = inputStream.read_uint8()
+    length = inputStream.read_uint16()
+    if layerNumber == 2:
+        self.iFFPduLayer2Data = IFFPduLayer2Data.parseLayer(
+            inputStream, layerNumber, layerSpecificInformation, length
+        )
+    elif layerNumber == 3:
+        if int(self.systemID.systemType) in (6, 7, 12, 13):
+            self.iFFPduLayer3InterrogatorFormatData = (
+                IFFPduLayer3InterrogatorFormatData.parseLayer(
+                    inputStream, layerNumber, layerSpecificInformation, length
+                )
+            )
+        else:
+            self.iFFPduLayer3TransponderFormatData = (
+                IFFPduLayer3TransponderFormatData.parseLayer(
+                    inputStream, layerNumber, layerSpecificInformation, length
+                )
+            )
+    elif layerNumber == 4:
+        if int(self.systemID.systemType) in (6, 8, 12, 13):
+            self.iFFPduLayer4InterrogatorFormatData = (
+                IFFPduLayer4InterrogatorFormatData.parseLayer(
+                    inputStream, layerNumber, layerSpecificInformation, length
+                )
+            )
+        else:
+            self.iFFPduLayer4TransponderFormatData = (
+                IFFPduLayer4TransponderFormatData.parseLayer(
+                    inputStream, layerNumber, layerSpecificInformation, length
+                )
+            )
+    elif layerNumber == 5:
+        self.iFFPduLayer5Data = IFFPduLayer5Data.parseLayer(
+            inputStream, layerNumber, layerSpecificInformation, length
+        )
+    else:
+        break  # layers 6-7 are not defined; stop before misparsing
+    remaining -= length""",
+    },
+    "GriddedDataPdu": {
+        "_marshalledBodySize": """return (
+    6
+    + 2
+    + 2
+    + 2
+    + 2
+    + 1
+    + 1
+    + self.environmentType.marshalledSize()
+    + self.orientation.marshalledSize()
+    + self.sampleTime.marshalledSize()
+    + 4
+    + 1
+    + 1
+    + 2
+    + sum(axis.marshalledSize() for axis in self.gridAxisDescriptors)
+    + sum(record.marshalledSize() for record in self.gridDataRecords)
+)""",
+        "_serializeBody": """self.environmentalSimulationApplicationID.serialize(outputStream)
+outputStream.write_uint16(self.fieldNumber)
+outputStream.write_uint16(self.pduNumber)
+outputStream.write_uint16(self.pduTotal)
+outputStream.write_uint16(self.coordinateSystem)
+outputStream.write_uint8(self.numberOfGridAxes)
+outputStream.write_uint8(self.constantGrid)
+self.environmentType.serialize(outputStream)
+self.orientation.serialize(outputStream)
+self.sampleTime.serialize(outputStream)
+outputStream.write_uint32(self.totalValues)
+outputStream.write_uint8(self.vectorDimension)
+outputStream.write_uint8(self.padding1)
+outputStream.write_uint16(self.padding2)
+for axis in self.gridAxisDescriptors:
+    axis.serialize(outputStream)
+for record in self.gridDataRecords:
+    record.serialize(outputStream)""",
+        "_parseBody": """self.environmentalSimulationApplicationID = EntityIdentifier.parse(
+    inputStream
+)
+self.fieldNumber = inputStream.read_uint16()
+self.pduNumber = inputStream.read_uint16()
+self.pduTotal = inputStream.read_uint16()
+self.coordinateSystem = rich_or_int(244, inputStream.read_uint16())
+numberOfGridAxes = inputStream.read_uint8()
+self.constantGrid = rich_or_int(245, inputStream.read_uint8())
+self.environmentType = EntityType.parse(inputStream)
+self.orientation.parse(inputStream)
+self.sampleTime.parse(inputStream)
+self.totalValues = inputStream.read_uint32()
+self.vectorDimension = inputStream.read_uint8()
+self.padding1 = inputStream.read_uint8()
+self.padding2 = inputStream.read_uint16()
+# generator: axis descriptors dispatch on their trailing axisType byte
+# ([UID 377]: 0 = regular/fixed, 1 = irregular/variable) — the XML's
+# initialClass hint carries no wire semantics
+self.gridAxisDescriptors = []
+for _ in range(numberOfGridAxes):
+    domainInitialXi = inputStream.read_float64()
+    domainFinalXi = inputStream.read_float64()
+    domainPointsXi = inputStream.read_uint16()
+    interleafFactor = inputStream.read_uint8()
+    axisType = inputStream.read_uint8()
+    if int(axisType) == 1:
+        axis = GridAxisDescriptorVariable(
+            domainInitialXi,
+            domainFinalXi,
+            domainPointsXi,
+            interleafFactor,
+            axisType,
+        )
+        numberOfPointsOnXiAxis = inputStream.read_uint16()
+        axis.initialIndex = inputStream.read_uint16()
+        axis.coordinateScaleXi = inputStream.read_float64()
+        axis.coordinateOffsetXi = inputStream.read_float64()
+        axis.xiValues = [
+            inputStream.read_uint16()
+            for _ in range(numberOfPointsOnXiAxis)
+        ]
+        padding = _padTo64(40 + 2 * len(axis.xiValues))
+        if padding:
+            inputStream.read_bytes(padding)
+    else:
+        axis = GridAxisDescriptorFixed(
+            domainInitialXi,
+            domainFinalXi,
+            domainPointsXi,
+            interleafFactor,
+            axisType,
+        )
+        axis.numberOfPointsOnXiAxis = inputStream.read_uint16()
+        axis.initialIndex = inputStream.read_uint16()
+    self.gridAxisDescriptors.append(axis)
+# generator: Table 192's G = V x product of the per-axis point counts —
+# the record count is derived, not stored (the XML's
+# countFieldName="numberOfGridAxes" is an upstream bug)
+dataCount = self.vectorDimension
+for axis in self.gridAxisDescriptors:
+    dataCount *= axis.numberOfPointsOnXiAxis
+self.gridDataRecords = []
+for _ in range(dataCount):
+    sampleType = inputStream.read_uint16()
+    dataRepresentation = inputStream.read_uint16()
+    # generator: representation types 3-6 have no record format
+    # (§6.2.41 defines 0-2 only); stop before misparsing the rest
+    if int(dataRepresentation) == 0:
+        record = GridDataType0(sampleType, dataRepresentation)
+        numberOfBytes = inputStream.read_uint16()
+        record.dataValues = [
+            inputStream.read_uint8() for _ in range(numberOfBytes)
+        ]
+        padding = _padTo16(6 + len(record.dataValues))
+        if padding:
+            inputStream.read_bytes(padding)
+    elif int(dataRepresentation) == 1:
+        record = GridDataType1(sampleType, dataRepresentation)
+        record.fieldScale = inputStream.read_float32()
+        record.fieldOffset = inputStream.read_float32()
+        numberOfValues = inputStream.read_uint16()
+        record.dataValues = [
+            inputStream.read_uint16() for _ in range(numberOfValues)
+        ]
+        padding = _padTo32(10 + 2 * len(record.dataValues))
+        if padding:
+            inputStream.read_bytes(padding)
+    elif int(dataRepresentation) == 2:
+        record = GridDataType2(sampleType, dataRepresentation)
+        numberOfValues = inputStream.read_uint16()
+        record.padding = inputStream.read_uint16()
+        record.dataValues = [
+            inputStream.read_float32() for _ in range(numberOfValues)
+        ]
+    else:
+        break
+    self.gridDataRecords.append(record)""",
+    },
     "VariableDatum": {
         "marshalledSize": "return 8 + _paddedDatumSize(len(self.variableData))",
         "serialize": """outputStream.write_uint32(self.variableDatumID)
@@ -1221,7 +1654,8 @@ self.silentAggregateSystemList = [
     EntityType.parse(inputStream) for _ in range(numberOfSilentAggregateTypes)
 ]
 self.silentEntitySystemList = [
-    EntityType.parse(inputStream) for _ in range(numberOfSilentEntityTypes)
+    SilentEntitySystem.parseFrom(inputStream)
+    for _ in range(numberOfSilentEntityTypes)
 ]
 numberOfVariableDatumRecords = inputStream.read_uint32()
 self.variableDatumList = [
@@ -1437,6 +1871,12 @@ only their body (``_marshalledBodySize`` / ``_serializeBody`` /
 ``_parseBody``). Counts are derived ``len()`` properties, never stored;
 variable-length lists are replaced wholesale on parse (instance-reuse
 corruption, PR #49).
+
+The full entity-information surface: Entity State, Collision,
+Collision-Elastic (pduType 66 — the standard's §5.2.4 enumeration;
+DIS-6-style type 6 is Resupply Offer), Entity State Update, and
+Attribute (§7.2.2-§7.2.6) with the §6.2.10 Attribute record (generic
+Standard-Variable format; typed decodes ride the registry separately).
 """,
     "warfare": """Warfare family (IEEE 1278.1-2012 §7.3) — target-state PDUs.
 
@@ -1520,32 +1960,36 @@ RecordSpecification layer; IsPartOf keeps the XML's
     "synthetic_environment": """Synthetic Environment family (IEEE 1278.1-2012 §7.10) — target-state PDUs.
 
 Wire ground truth: submodules/open-dis-spec-xml/xml/SyntheticEnvironmentFamilyPdus.xml.
-Environmental Process, Point/Linear/Areal Object State, plus the Object
-Type/Identifier records, Linear Segment Parameter, and the generic
-Environment record (opaque geometry, typed decoders deferred).
-
-Scope note: GriddedDataPdu (type 42) — grid-axis descriptors × grid
-data representation types 0–6 — is NOT implemented in this pass; its
-pduType stays unregistered, so datagrams degrade to the lossless
-``UnrecognizedPdu`` fallback (see docs/design/sample-review.md).
+Environmental Process, Gridded Data, Point/Linear/Areal Object State,
+plus the Object Type/Identifier records, Linear Segment Parameter, and
+the generic Environment record (opaque geometry, typed decoders
+deferred). The Gridded Data PDU (type 42) carries the §6.2.40 grid-axis
+descriptors (fixed/variable dispatch) and the §6.2.41 Grid Data records
+(representation types 0-2; the XML declares exactly those three).
 
 Python-side deltas from the XML (sample-review rulings): the bitfield-
 mapped appearance/modification fields (uids 229, 240, 242, 249) stay raw
-integers in this pass (views deferred, PduStatus precedent).
+integers (the 2026-10-16 viewable-primitive ruling: rich presentation
+belongs to the optional plugin layer); the grid-data record count is
+derived per Table 192 (the XML's countFieldName is an upstream bug).
 """,
     "distributed_emissions": """Distributed Emissions Regeneration family (IEEE 1278.1-2012 §7.6)
 — target-state PDUs.
 
 Wire ground truth: submodules/open-dis-spec-xml/xml/DistributedEmissionsFamilyPdus.xml.
-Electromagnetic Emission, Designator, and Underwater Acoustic PDUs with
-their emitter-system / beam record trees. The beam and system "data
-length" fields count 32-bit words (§7.6.2) and are always derived
+Electromagnetic Emission, Designator, Underwater Acoustic, IFF, and SEES
+PDUs with their emitter-system / beam record trees. The beam and system
+"data length" fields count 32-bit words (§7.6.2) and are always derived
 (``marshalledSize() // 4``; zero means the section is "large").
 
-Scope note: the IFF PDU (type 28) and SEE PDU (type 30) with their
-Annex-B layer structures are NOT implemented in this pass — their
-pduTypes stay unregistered, so datagrams degrade to the lossless
-``UnrecognizedPdu`` fallback (see docs/design/sample-review.md).
+The IFF PDU (type 28) implements the §7.6.5 layer mechanism: Layer 1 is
+always present; layers 2-5 are length-driven optionals dispatched by
+Layer Header layer number (Table 165), with the Layer 3/4 format picked
+by the Layer 1 System Type field. The layer lists hold flat §6.2.43 IFF
+Data records (the XML's IFFDataSpecification wrapper adds a count the
+layer already carries). SystemIdentifier's Change/Options is 8 bits
+(Table B.5, Table 118 total 48 bits — the XML's 16-bit binding made
+every IFF PDU one byte long; upstream candidate).
 """,
     "live_entity": """Live Entity family (IEEE 1278.1-2012 §9) — target-state PDUs.
 
@@ -1609,6 +2053,12 @@ DOCSTRING_TITLES = {
     "VariableParameter": "Variable Parameter record",
     "EntityInformationFamilyPdu": "Entity Information/Interaction family PDU",
     "EntityStatePdu": "Entity State PDU",
+    "CollisionPdu": "Collision PDU",
+    "CollisionElasticPdu": "Collision-Elastic PDU",
+    "EntityStateUpdatePdu": "Entity State Update PDU",
+    "AttributePdu": "Attribute PDU",
+    "Attribute": "Attribute record",
+    "AttributeRecordSet": "Attribute Record Set",
     "WarfareFamilyPdu": "Warfare family PDU",
     "FirePdu": "Fire PDU",
     "DetonationPdu": "Detonation PDU",
@@ -1696,6 +2146,30 @@ DOCSTRING_TITLES = {
     "UABeam": "UA Beam record",
     "UAEmitter": "UA Emitter System record",
     "UnderwaterAcousticPdu": "Underwater Acoustic PDU",
+    "SystemIdentifier": "System Identifier record",
+    "FundamentalOperationalData": "Fundamental Operational Data record",
+    "LayerHeader": "Layer Header record",
+    "IFFFundamentalParameterData": "IFF Fundamental Parameter Data record",
+    "IFFData": "IFF Data record",
+    "Mode5InterrogatorBasicData": "Mode 5 Interrogator Basic Data record",
+    "Mode5TransponderBasicData": "Mode 5 Transponder Basic Data record",
+    "ModeSInterrogatorBasicData": "Mode S Interrogator Basic Data record",
+    "ModeSTransponderBasicData": "Mode S Transponder Basic Data record",
+    "IFFPduLayer2Data": "IFF PDU Layer 2 Emissions Data",
+    "IFFPduLayer3TransponderFormatData": "IFF PDU Layer 3 Mode 5 Transponder Format",
+    "IFFPduLayer3InterrogatorFormatData": "IFF PDU Layer 3 Mode 5 Interrogator Format",
+    "IFFPduLayer4InterrogatorFormatData": "IFF PDU Layer 4 Mode S Interrogator Format",
+    "IFFPduLayer4TransponderFormatData": "IFF PDU Layer 4 Mode S Transponder Format",
+    "IFFPduLayer5Data": "IFF PDU Layer 5 Data Communications",
+    "IdentificationFriendOrFoePdu": "Identification Friend or Foe (IFF) PDU",
+    "PropulsionSystemData": "Propulsion System Data record",
+    "VectoringNozzleSystem": "Vectoring Nozzle System Data record",
+    "SupplementalEmissionEntityStatePdu": "Supplemental Emission/Entity State (SEES) PDU",
+    "SilentEntitySystem": "Silent Entity System record",
+    "GridDataType0": "Grid Data record (representation type 0)",
+    "GridDataType1": "Grid Data record (representation type 1)",
+    "GridDataType2": "Grid Data record (representation type 2)",
+    "GriddedDataPdu": "Gridded Data PDU",
     "LiveSimulationAddress": "Live Simulation Address record",
     "LiveEntityIdentifier": "Live Entity Identifier record",
     "LiveEntityIdentifierElided": "Elided Live Entity Identifier record",
@@ -1770,6 +2244,14 @@ is packer-computed to the 64-bit boundary §6.2.83 requires.""",
 value 4000, Table 46's format).""",
     "EntityInformationFamilyPdu": """Thin family marker — per-class identity lives in the ``pduType``/``protocolFamily`` ClassVars; family metadata for middleware lives in ``PDU_FAMILIES`` (opendis.record.factory).""",
     "EntityStatePdu": """``entityAppearance`` and ``capabilities`` hold the raw uint32 on the wire; after parsing a known entity kind they hold the matching bitfield view (``int(view)`` is the raw value, so round-trips are byte-exact and unknown bits survive).""",
+    "CollisionElasticPdu": """pduType 66 per the standard's §5.2.4 enumeration and Table 136 — the DIS-6-style type 6 legacy code used is Resupply Offer in the 2012 numbering. The elastic-collision response protocol (§5.3.4): a receiving entity that detects the collision answers with its own Collision-Elastic PDU.""",
+    "EntityStateUpdatePdu": """The PDU carries no entityType, so the appearance uint32 cannot be resolved to a bitfield view locally — the receiving application resolves it from its cached entity type for the entity (XML comment).""",
+    "Attribute": """Generic §6.2.10 Standard-Variable-format record: ``recordSpecificFields`` carries the K data octets plus the trailing 64-bit alignment pad exactly as received, and ``recordLength`` (= 6 + K + P, Table 138) stays caller-settable wire state — same contract as IntercomCommunicationsParameters. Typed per-record decodes ride the registry separately.""",
+    "IFFData": """Generic §6.2.43 Standard-Variable-format record: ``recordSpecificFields`` carries the K data octets plus the trailing 32-bit alignment pad (Table 169) exactly as received, and ``recordLength`` (= 6 + K + P) stays caller-settable wire state. Typed decodes of the B.2.1.1 record types ride the registry separately.""",
+    "IdentificationFriendOrFoePdu": """Layer 1 is always present; layers 2-5 are length-driven optionals — each begins with a Layer Header whose Length includes the header (Table 165), so parse consumes layers until the PDU length is exhausted. Layers 3 and 4 each have interrogator and transponder formats; the Layer 1 System Type field [UID 82] picks the format.""",
+    "SupplementalEmissionEntityStatePdu": """Signature representation indexes are handles into the receiving application's signature tables, not physical values (§5.7.7).""",
+    "GriddedDataPdu": """The grid-data record count is derived: G = vectorDimension x the product of the per-axis point counts (Table 192) — the XML's countFieldName="numberOfGridAxes" on the list is an upstream bug. Axis descriptors dispatch on their trailing axisType byte ([UID 377]); grid data records on dataRepresentation ([UID 247], formats 0-2 per §6.2.41).""",
+    "SilentEntitySystem": """One Silent Entity System record stands for a number of same-typed silent entities; the appearance-record list carries one raw uint32 appearance per entity (§6.2.79, Table 183).""",
     "WarfareFamilyPdu": """Thin family marker — per-class identity lives in the ``pduType``/``protocolFamily`` ClassVars; family metadata for middleware lives in ``PDU_FAMILIES`` (opendis.record.factory).""",
     "DirectedEnergyFirePdu": """``flags`` holds the raw uint16 until parsed, then the [UID 313] view. The DE records are uid-66 Standard Variable records decoded via the registry; unknown record types stay raw bytes. Field names are XML-verbatim, including the ``commulativeShotTime`` spelling.""",
     "EntityDamageStatusPdu": """The damage-description list carries uid-66 Standard Variable records (§6.2.17 Damage Description family) decoded via the registry; unknown record types stay raw bytes.""",
@@ -1884,6 +2366,21 @@ CLASS_VARS = {
     ],
     "EntityStatePdu": [
         ("pduType", "1", "[UID 4]"),
+    ],
+    "CollisionPdu": [
+        ("pduType", "4", "[UID 4]"),
+    ],
+    # 66 per IEEE 1278.1-2012 §5.2.4 + Table 136 (the DIS-6-style "6" is
+    # Resupply Offer in the 2012 numbering; XML id, REF-010 uid 4, and the
+    # standard agree on 66)
+    "CollisionElasticPdu": [
+        ("pduType", "66", "[UID 4]"),
+    ],
+    "EntityStateUpdatePdu": [
+        ("pduType", "67", "[UID 4]"),
+    ],
+    "AttributePdu": [
+        ("pduType", "72", "[UID 4]"),
     ],
     "WarfareFamilyPdu": [
         ("protocolFamily", "2", "[UID 5] Warfare"),
@@ -2067,6 +2564,9 @@ CLASS_VARS = {
     "EnvironmentalProcessPdu": [
         ("pduType", "41", "[UID 4]"),
     ],
+    "GriddedDataPdu": [
+        ("pduType", "42", "[UID 4]"),
+    ],
     "PointObjectStatePdu": [
         ("pduType", "43", "[UID 4]"),
     ],
@@ -2087,6 +2587,12 @@ CLASS_VARS = {
     ],
     "UnderwaterAcousticPdu": [
         ("pduType", "29", "[UID 4]"),
+    ],
+    "IdentificationFriendOrFoePdu": [
+        ("pduType", "28", "[UID 4]"),
+    ],
+    "SupplementalEmissionEntityStatePdu": [
+        ("pduType", "30", "[UID 4]"),
     ],
     "LiveEntityFamilyPdu": [
         ("protocolFamily", "11", "[UID 5] Live Entity"),
@@ -2130,6 +2636,10 @@ CLASS_VARS = {
 FIELD_RIDERS = {
     ("EntityStatePdu", "entityAppearance"): "[UID 31-43] or a bitfield view",
     ("EntityStatePdu", "capabilities"): "[UID 55] or a bitfield view",
+    ("SystemIdentifier", "changeOptions"): (
+        "8-bit Change/Options (Table B.5); Table 118 totals the record at "
+        "48 bits — the §6.2.87 prose cites the 16-bit-looking §6.2.13 shape"
+    ),
     ("MinefieldStatePdu", "protocolMode"): "2-bit protocol mode + 14 reserved bits",
     ("MinefieldDataPdu", "fusing"): "[UID 192]",
     ("MinefieldDataPdu", "paintScheme"): "[UID 202]",
@@ -2157,10 +2667,14 @@ FIELD_ANNOTATIONS = {
 # bitfield view selection is beyond mechanical generation).
 PARSE_TAILS = {
     "EntityStatePdu": """key = (int(self.entityType.entityKind), int(self.entityType.domain))
-appearanceView = _APPEARANCE_VIEWS.get(key)
+appearanceView = _APPEARANCE_VIEWS.get(key) or _APPEARANCE_KIND_VIEWS.get(
+    int(self.entityType.entityKind)
+)
 if appearanceView is not None:
     self.entityAppearance = appearanceView(self.entityAppearance)
-capabilityView = _CAPABILITY_VIEWS.get(key)
+capabilityView = _CAPABILITY_VIEWS.get(key) or _CAPABILITY_KIND_VIEWS.get(
+    int(self.entityType.entityKind)
+)
 if capabilityView is not None:
     self.capabilities = capabilityView(self.capabilities)""",
 }
@@ -2172,15 +2686,35 @@ MODULE_SOURCES = {
             "EntityInformationFamilyPdu",
             """# generator: context-dependent bitfield layouts — the EntityAppearance /
 # EntityCapabilities tables depend on entity kind (and, for platforms, on
-# domain). Parse wraps the raw uint32 into the matching view; unknown
-# kinds keep the plain int. The marshaller writes int(field) either way.
+# domain). Parse wraps the raw uint32 into the matching view; kinds with
+# no REF-010 table keep the plain int. The marshaller writes int(field)
+# either way.
 _APPEARANCE_VIEWS: dict[tuple[int, int], type] = {
     (1, 1): LandPlatformAppearance,  # platform, land domain [UID 31]
     (1, 2): AirPlatformAppearance,  # platform, air domain [UID 32]
+    (1, 3): SurfacePlatformAppearance,  # platform, surface domain [UID 33]
+    (1, 4): SubsurfacePlatformAppearance,  # platform, subsurface domain [UID 34]
+    (1, 5): SpacePlatformAppearance,  # platform, space domain [UID 35]
+}
+_APPEARANCE_KIND_VIEWS: dict[int, type] = {
+    2: MunitionAppearance,  # [UID 36]
+    3: LifeFormsAppearance,  # [UID 37]
+    4: EnvironmentalAppearance,  # [UID 38]
+    5: CulturalFeatureAppearance,  # [UID 39]
+    6: SupplyAppearance,  # [UID 40]
+    7: RadioAppearance,  # [UID 41]
+    8: ExpendableAppearance,  # [UID 42]
+    9: SensorEmitterAppearance,  # [UID 43]
 }
 _CAPABILITY_VIEWS: dict[tuple[int, int], type] = {
     (1, 1): LandPlatformCapabilities,  # [UID 450]
     (1, 2): AirPlatformCapabilities,  # [UID 451]
+    (1, 3): SurfacePlatformCapabilities,  # [UID 452]
+    (1, 4): SubsurfacePlatformCapabilities,  # [UID 453]
+    (1, 5): SpacePlatformCapabilities,  # [UID 454]
+}
+_CAPABILITY_KIND_VIEWS: dict[int, type] = {
+    2: MunitionCapabilities,  # [UID 455]
 }""",
         )
     ],
@@ -2212,8 +2746,23 @@ MODULE_SOURCE_IMPORTS = {
         "opendis.bitfields": [
             "AirPlatformAppearance",
             "AirPlatformCapabilities",
+            "CulturalFeatureAppearance",
+            "EnvironmentalAppearance",
+            "ExpendableAppearance",
             "LandPlatformAppearance",
             "LandPlatformCapabilities",
+            "LifeFormsAppearance",
+            "MunitionAppearance",
+            "MunitionCapabilities",
+            "RadioAppearance",
+            "SensorEmitterAppearance",
+            "SpacePlatformAppearance",
+            "SpacePlatformCapabilities",
+            "SubsurfacePlatformAppearance",
+            "SubsurfacePlatformCapabilities",
+            "SupplyAppearance",
+            "SurfacePlatformAppearance",
+            "SurfacePlatformCapabilities",
         ],
     },
     "radio": {
@@ -2276,6 +2825,12 @@ CreateEntityRPdu = CreateEntityReliablePdu""",
     "TimeSpacePositionInformationPdu": "TSPIPdu = TimeSpacePositionInformationPdu",
     "LiveEntityFirePdu": "LEFirePdu = LiveEntityFirePdu",
     "LiveEntityDetonationPdu": "LEDetonationPdu = LiveEntityDetonationPdu",
+    # IFF / SEES abbreviation aliases (aliasFor ruling; first alias in the
+    # module carries the ruling comment)
+    "IdentificationFriendOrFoePdu": """# generator: aliasFor elements — one class plus a name assignment;
+# descriptive name canonical, abbreviation aliased
+IFFPdu = IdentificationFriendOrFoePdu""",
+    "SupplementalEmissionEntityStatePdu": "SEESPdu = SupplementalEmissionEntityStatePdu",
 }
 
 # Variant-uid constant comments (curated prose; REF-010's table names are
@@ -2296,11 +2851,33 @@ VARIANT_PARSE_NOTES = {
 
 # -- bitfield views -----------------------------------------------------------
 
-# family module -> REF-010 bitfield uids, in definition order (the
-# exemplar's set; the remaining appearance variants arrive with their
-# consuming families)
+# family module -> REF-010 bitfield uids, in definition order. The
+# appearance module carries the FULL Entity Appearance / Entity
+# Capabilities surface (Phase 5 survey item): all 13 kind/domain
+# appearance variants [UID 31-43] and the six capability tables with
+# REF-010 layouts [UID 450-455].
 BITFIELD_VIEWS = {
-    "appearance": [31, 32, 450, 451],
+    "appearance": [
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        450,
+        451,
+        452,
+        453,
+        454,
+        455,
+    ],
     "minefield": [190],
     "simulation_management": [68],
     "warfare": [313],
@@ -2348,10 +2925,13 @@ BITFIELD_MODULE_DOCSTRINGS = {
     "appearance": """Entity Appearance (IEEE 1278.1-2012 §6.2.26) and Entity Capabilities
 (§6.2.27) bitfield views.
 
-Layouts transcribed from SISO-REF-010 v37 bitfield tables: Land Platform
-Appearance [UID 31], Air Platform Appearance [UID 32], Land Platform
-Capabilities [UID 450], Air Platform Capabilities [UID 451]. One view
-class per entity kind/domain layout, all over the same uint32 wire field.
+Layouts transcribed from SISO-REF-010 v37 bitfield tables: all 13
+appearance variants [UID 31-43] — one per entity kind, and per domain
+for platforms — plus the six capability tables with REF-010 layouts
+[UID 450-455]. One view class per entity kind/domain layout, all over
+the same uint32 wire field. Kinds without a capability table
+(life forms, environmental, cultural, supply, radio, expendable,
+sensor/emitter) keep the raw integer.
 
 # generator: layouts and bit positions are mechanical output of the
 # SISO-REF-010 bitfield tables; the row-name to camelCase property
@@ -2588,5 +3168,200 @@ def variableTransmitterParameterCount(self) -> uint16:
         source='''@staticmethod
 def _padTo64(byteCount: int) -> int:
     return (8 - byteCount % 8) % 8''',
+    ),
+    "IFFPduLayer2Data": MemberSource(
+        after_methods=True,
+        source="""@classmethod
+def parseLayer(
+        cls,
+        inputStream: DataInputStream,
+        layerNumber: int,
+        layerSpecificInformation: int,
+        length: int,
+    ) -> "IFFPduLayer2Data":
+        \"\"\"Construct the layer from its payload; the dispatching
+        PDU has already read the four Layer Header bytes
+        (layerNumber included).\"\"\"
+        layer = cls()
+        layer.layerHeader = LayerHeader(
+            layerNumber, layerSpecificInformation, length
+        )
+        layer.beamData.parse(inputStream)
+        layer.secondaryOpParameter1 = inputStream.read_uint8()
+        layer.secondaryOpParameter2 = inputStream.read_uint8()
+        numberOfIFFFundamentalParameterDataRecords = inputStream.read_uint16()
+        layer.IFFFundamentalParameterDataRecord = [
+            IFFFundamentalParameterData.parse(inputStream)
+            for _ in range(numberOfIFFFundamentalParameterDataRecords)
+        ]
+        return layer
+""",
+    ),
+    "IFFPduLayer3TransponderFormatData": MemberSource(
+        after_methods=True,
+        source="""@classmethod
+def parseLayer(
+        cls,
+        inputStream: DataInputStream,
+        layerNumber: int,
+        layerSpecificInformation: int,
+        length: int,
+    ) -> "IFFPduLayer3TransponderFormatData":
+        \"\"\"Construct the layer from its payload; the dispatching
+        PDU has already read the four Layer Header bytes
+        (layerNumber included).\"\"\"
+        layer = cls()
+        layer.layerHeader = LayerHeader(
+            layerNumber, layerSpecificInformation, length
+        )
+        layer.siteNumber = inputStream.read_uint16()
+        layer.applicationNumber = inputStream.read_uint16()
+        mode5TransponderBasicData = Mode5TransponderBasicData()
+        mode5TransponderBasicData.parse(inputStream)
+        layer.mode5TransponderBasicData = mode5TransponderBasicData
+        layer.padding = inputStream.read_uint16()
+        numberOfIFFDataRecords = inputStream.read_uint16()
+        layer.IFFFundamentalParameterDataRecord = [
+            IFFData.parseFrom(inputStream) for _ in range(numberOfIFFDataRecords)
+        ]
+        return layer
+""",
+    ),
+    "IFFPduLayer3InterrogatorFormatData": MemberSource(
+        after_methods=True,
+        source="""@classmethod
+def parseLayer(
+        cls,
+        inputStream: DataInputStream,
+        layerNumber: int,
+        layerSpecificInformation: int,
+        length: int,
+    ) -> "IFFPduLayer3InterrogatorFormatData":
+        \"\"\"Construct the layer from its payload; the dispatching
+        PDU has already read the four Layer Header bytes
+        (layerNumber included).\"\"\"
+        layer = cls()
+        layer.layerHeader = LayerHeader(
+            layerNumber, layerSpecificInformation, length
+        )
+        layer.siteNumber = inputStream.read_uint16()
+        layer.applicationNumber = inputStream.read_uint16()
+        mode5InterrogatorBasicData = Mode5InterrogatorBasicData()
+        mode5InterrogatorBasicData.parse(inputStream)
+        layer.mode5InterrogatorBasicData = mode5InterrogatorBasicData
+        layer.padding = inputStream.read_uint16()
+        numberOfIFFDataRecords = inputStream.read_uint16()
+        layer.IFFFundamentalParameterDataRecord = [
+            IFFData.parseFrom(inputStream) for _ in range(numberOfIFFDataRecords)
+        ]
+        return layer
+""",
+    ),
+    "IFFPduLayer4InterrogatorFormatData": MemberSource(
+        after_methods=True,
+        source="""@classmethod
+def parseLayer(
+        cls,
+        inputStream: DataInputStream,
+        layerNumber: int,
+        layerSpecificInformation: int,
+        length: int,
+    ) -> "IFFPduLayer4InterrogatorFormatData":
+        \"\"\"Construct the layer from its payload; the dispatching
+        PDU has already read the four Layer Header bytes
+        (layerNumber included).\"\"\"
+        layer = cls()
+        layer.layerHeader = LayerHeader(
+            layerNumber, layerSpecificInformation, length
+        )
+        layer.siteNumber = inputStream.read_uint16()
+        layer.applicationNumber = inputStream.read_uint16()
+        modeSInterrogatorBasicData = ModeSInterrogatorBasicData()
+        modeSInterrogatorBasicData.parse(inputStream)
+        layer.modeSInterrogatorBasicData = modeSInterrogatorBasicData
+        layer.padding = inputStream.read_uint16()
+        numberOfIFFDataRecords = inputStream.read_uint16()
+        layer.IFFFundamentalParameterDataRecord = [
+            IFFData.parseFrom(inputStream) for _ in range(numberOfIFFDataRecords)
+        ]
+        return layer
+""",
+    ),
+    "IFFPduLayer4TransponderFormatData": MemberSource(
+        after_methods=True,
+        source="""@classmethod
+def parseLayer(
+        cls,
+        inputStream: DataInputStream,
+        layerNumber: int,
+        layerSpecificInformation: int,
+        length: int,
+    ) -> "IFFPduLayer4TransponderFormatData":
+        \"\"\"Construct the layer from its payload; the dispatching
+        PDU has already read the four Layer Header bytes
+        (layerNumber included).\"\"\"
+        layer = cls()
+        layer.layerHeader = LayerHeader(
+            layerNumber, layerSpecificInformation, length
+        )
+        layer.siteNumber = inputStream.read_uint16()
+        layer.applicationNumber = inputStream.read_uint16()
+        modeSTransponderBasicData = ModeSTransponderBasicData()
+        modeSTransponderBasicData.parse(inputStream)
+        layer.modeSTransponderBasicData = modeSTransponderBasicData
+        layer.padding = inputStream.read_uint16()
+        numberOfIFFDataRecords = inputStream.read_uint16()
+        layer.IFFFundamentalParameterDataRecord = [
+            IFFData.parseFrom(inputStream) for _ in range(numberOfIFFDataRecords)
+        ]
+        return layer
+""",
+    ),
+    "IFFPduLayer5Data": MemberSource(
+        after_methods=True,
+        source="""@classmethod
+def parseLayer(
+        cls,
+        inputStream: DataInputStream,
+        layerNumber: int,
+        layerSpecificInformation: int,
+        length: int,
+    ) -> "IFFPduLayer5Data":
+        \"\"\"Construct the layer from its payload; the dispatching
+        PDU has already read the four Layer Header bytes
+        (layerNumber included).\"\"\"
+        layer = cls()
+        layer.layerHeader = LayerHeader(
+            layerNumber, layerSpecificInformation, length
+        )
+        layer.siteNumber = inputStream.read_uint16()
+        layer.applicationNumber = inputStream.read_uint16()
+        layer.padding = inputStream.read_uint16()
+        layer.applicableLayers = inputStream.read_uint8()
+        layer.dataCategory = rich_or_int(369, inputStream.read_uint8())
+        layer.padding2 = inputStream.read_uint16()
+        numberOfIFFDataRecords = inputStream.read_uint16()
+        layer.IFFFundamentalParameterDataRecord = [
+            IFFData.parseFrom(inputStream) for _ in range(numberOfIFFDataRecords)
+        ]
+        return layer
+""",
+    ),
+    "IdentificationFriendOrFoePdu": MemberSource(
+        source="""def _layersInOrder(self) -> list:
+    \"\"\"Present layers in numeric wire order (2, 3, 4, 5; one format
+    per layer — Table 165 allows no duplicate layer numbers).\"\"\"
+    return [
+        layer
+        for layer in (
+            self.iFFPduLayer2Data,
+            self.iFFPduLayer3TransponderFormatData,
+            self.iFFPduLayer3InterrogatorFormatData,
+            self.iFFPduLayer4TransponderFormatData,
+            self.iFFPduLayer4InterrogatorFormatData,
+            self.iFFPduLayer5Data,
+        )
+        if layer is not None
+    ]""",
     ),
 }

@@ -536,10 +536,16 @@ def _emit_record(
     # the boundary and the header the pad is computed against: PDU pads
     # run over the 12-byte datagram header at a 32-bit boundary; SV
     # records pad over their own 6-byte header to the 64-bit boundary
-    # §6.2.83 requires (Table 44's 8P padding octets)
+    # §6.2.83 requires (Table 44's 8P padding octets); plain records pad
+    # over the record itself (Grid Data / Grid Axis alignment pads,
+    # §6.2.40/.41)
     pad_bits = wire[-1].shape.length if trailing_pad else 32
     pad_fn = f"_padTo{pad_bits}"
-    wire_header = SV_HEADER_BYTES if rec.is_sv else HEADER_BYTES
+    wire_header = (
+        SV_HEADER_BYTES
+        if rec.is_sv
+        else (HEADER_BYTES if rec.is_pdu else 0)
+    )
     mid_body_pads = [
         a
         for a in (wire[:-1] if trailing_pad else wire)
@@ -562,10 +568,13 @@ def _emit_record(
         lines.append("")
         lines.append(f"    def {size_name}(self) -> int:")
         unpadded = "self._unpaddedBodySize()"
+        # SV records carry their own 6-byte header in marshalledSize; PDU
+        # bodies do not (Pdu.marshalledSize adds the 12-byte header), and
+        # plain records are header-less
         prefix = f"{wire_header} + " if rec.is_sv else ""
+        pad_base = f"{wire_header} + {unpadded}" if wire_header else unpadded
         lines.append(
-            f"        return {prefix}{unpadded} + "
-            f"{pad_fn}({wire_header} + {unpadded})"
+            f"        return {prefix}{unpadded} + " f"{pad_fn}({pad_base})"
         )
     else:
         lines.append("")

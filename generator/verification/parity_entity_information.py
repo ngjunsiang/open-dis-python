@@ -25,6 +25,7 @@ sys.path.insert(0, str(REPO))
 
 import opendis.record.common as common  # noqa: E402
 import opendis.record.entity_information as ref  # noqa: E402
+from opendis.bitfields import MunitionAppearance  # noqa: E402
 from opendis.stream import DataInputStream, DataOutputStream  # noqa: E402
 from opendis.timestamp import Timestamp  # noqa: E402
 
@@ -156,8 +157,16 @@ def main() -> int:
     if not isinstance(air_pdu.entityAppearance, AirPlatformAppearance):
         failures.append("air platform appearance not wrapped")
 
+    # kind 2 (munition) wraps per the Phase 5 view extension [UID 36] —
+    # domain is irrelevant for munitions; the no-table case is kind 0
+    munition = sample(ref)
+    munition.entityType = common.EntityType(2, 5, 830, 1, 0, 0, 0)
+    munition_parsed = parse_into(gen, to_bytes(munition))
+    if not isinstance(munition_parsed.entityAppearance, MunitionAppearance):
+        failures.append("munition appearance not wrapped")
+
     unknown = sample(ref)
-    unknown.entityType = common.EntityType(2, 5, 830, 1, 0, 0, 0)
+    unknown.entityType = common.EntityType(0, 0, 830, 1, 0, 0, 0)
     unknown_bytes = to_bytes(unknown)
     unknown_parsed = parse_into(gen, unknown_bytes)
     if type(unknown_parsed.entityAppearance) is not int:

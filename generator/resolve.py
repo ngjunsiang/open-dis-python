@@ -122,6 +122,12 @@ class Resolver:
         elif xml_owner in self.ov.RECORD_BASES:
             parent = self.ov.RECORD_BASES[xml_owner]
         attributes = self._mark_pads(attributes)
+        if name in self.ov.FROZEN_RECORDS and any(a.pad for a in attributes):
+            raise SpecError(
+                f"frozen record {name!r} carries a named pad: pads are "
+                "field(init=False) wire state and cannot cross a frozen "
+                "constructor — make the record mutable"
+            )
         return ir.RecordClass(
             name=name,
             comment=el.get("comment"),
@@ -268,6 +274,11 @@ class Resolver:
         if canonical in self.ov.KERNEL_BASES:
             base, _module = self.ov.KERNEL_BASES[canonical]
             return base, True
+        if canonical in self.ov.PARENT_DROPS:
+            # Java-side abstraction (AbstractIFFPduLayerData, GridData…):
+            # never emitted, never a Python base — the subclass flattens
+            # its fields and stands alone
+            return None, False
         parent_el = self.xml_classes.get(self.by_canonical.get(canonical, canonical))
         if parent_el is None:
             raise SpecError(f"{el.get('name')!r} inherits unknown class {parent!r}")
@@ -416,7 +427,10 @@ class Resolver:
                 f"attribute {name!r} mixes type tags "
                 f"{sorted(by_tag)} — not a legal variant group"
             )
-        hidden = attr_el.get("hidden") == "true"
+        hidden = attr_el.get("hidden") == "true" or (
+            owner,
+            attr_el.get("name"),
+        ) in self.ov.FIELD_HIDDEN
         count_bits = False
         # a bit-counted payload pulls its length field out of instance state
         if isinstance(shape, ir.BytesPayload):

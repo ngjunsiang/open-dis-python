@@ -14,9 +14,17 @@ from os import PathLike
 from opendis.record.distributed_emissions import (
     DesignatorPdu,
     ElectromagneticEmissionPdu,
+    IdentificationFriendOrFoePdu,
+    SupplementalEmissionEntityStatePdu,
     UnderwaterAcousticPdu,
 )
-from opendis.record.entity_information import EntityStatePdu
+from opendis.record.entity_information import (
+    AttributePdu,
+    CollisionElasticPdu,
+    CollisionPdu,
+    EntityStatePdu,
+    EntityStateUpdatePdu,
+)
 from opendis.record.information_operations import (
     InformationOperationsActionPdu,
     InformationOperationsReportPdu,
@@ -76,6 +84,7 @@ from opendis.record.simulation_management_with_reliability import (
 from opendis.record.synthetic_environment import (
     ArealObjectStatePdu,
     EnvironmentalProcessPdu,
+    GriddedDataPdu,
     LinearObjectStatePdu,
     PointObjectStatePdu,
 )
@@ -116,6 +125,9 @@ _logger = logging.getLogger(__name__)
 # equivalent once the generator emits the full set).
 PduTypeDecoders: dict[int, type[Pdu]] = {
     1: EntityStatePdu,
+    4: CollisionPdu,
+    28: IdentificationFriendOrFoePdu,
+    30: SupplementalEmissionEntityStatePdu,
     2: FirePdu,
     3: DetonationPdu,
     5: ServiceRequestPdu,
@@ -148,6 +160,7 @@ PduTypeDecoders: dict[int, type[Pdu]] = {
     39: MinefieldDataPdu,
     40: MinefieldResponseNACKPdu,
     41: EnvironmentalProcessPdu,
+    42: GriddedDataPdu,
     43: PointObjectStatePdu,
     44: LinearObjectStatePdu,
     45: ArealObjectStatePdu,
@@ -176,6 +189,9 @@ PduTypeDecoders: dict[int, type[Pdu]] = {
     27: ReceiverPdu,
     31: IntercomSignalPdu,
     32: IntercomControlPdu,
+    66: CollisionElasticPdu,
+    67: EntityStateUpdatePdu,
+    72: AttributePdu,
     68: DirectedEnergyFirePdu,
     69: EntityDamageStatusPdu,
     70: InformationOperationsActionPdu,
@@ -186,6 +202,9 @@ PduTypeDecoders: dict[int, type[Pdu]] = {
 # middleware that should not have to import PDU classes.
 PDU_FAMILIES: dict[int, int] = {
     1: EntityStatePdu.protocolFamily,
+    4: CollisionPdu.protocolFamily,
+    28: IdentificationFriendOrFoePdu.protocolFamily,
+    30: SupplementalEmissionEntityStatePdu.protocolFamily,
     2: FirePdu.protocolFamily,
     3: DetonationPdu.protocolFamily,
     5: ServiceRequestPdu.protocolFamily,
@@ -218,6 +237,7 @@ PDU_FAMILIES: dict[int, int] = {
     39: MinefieldDataPdu.protocolFamily,
     40: MinefieldResponseNACKPdu.protocolFamily,
     41: EnvironmentalProcessPdu.protocolFamily,
+    42: GriddedDataPdu.protocolFamily,
     43: PointObjectStatePdu.protocolFamily,
     44: LinearObjectStatePdu.protocolFamily,
     45: ArealObjectStatePdu.protocolFamily,
@@ -246,6 +266,9 @@ PDU_FAMILIES: dict[int, int] = {
     27: ReceiverPdu.protocolFamily,
     31: IntercomSignalPdu.protocolFamily,
     32: IntercomControlPdu.protocolFamily,
+    66: CollisionElasticPdu.protocolFamily,
+    67: EntityStateUpdatePdu.protocolFamily,
+    72: AttributePdu.protocolFamily,
     68: DirectedEnergyFirePdu.protocolFamily,
     69: EntityDamageStatusPdu.protocolFamily,
     70: InformationOperationsActionPdu.protocolFamily,

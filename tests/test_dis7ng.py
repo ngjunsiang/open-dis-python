@@ -22,6 +22,7 @@ from opendis.bitfields import (
     DEFireFlags,
     LandPlatformAppearance,
     LandPlatformCapabilities,
+    SupplyAppearance,
 )
 from opendis.enum_registry import (
     register_enum_factory,
@@ -48,6 +49,7 @@ from opendis.record.entity_management import (
     IsPartOfPdu,
     NamedLocationIdentification,
     Relationship,
+    SilentEntitySystem,
     TransferOwnershipPdu,
 )
 from opendis.record.minefield import (
@@ -95,8 +97,20 @@ from opendis.record.distributed_emissions import (
     ElectronicEmitter,
     EmitterBeam,
     EmitterSystem,
+    FundamentalOperationalData,
+    IFFData,
+    IFFFundamentalParameterData,
+    IFFPduLayer2Data,
+    IFFPduLayer3InterrogatorFormatData,
+    IFFPduLayer3TransponderFormatData,
+    IFFPduLayer5Data,
+    IdentificationFriendOrFoePdu,
     JammingTechnique,
+    LayerHeader,
+    PropulsionSystemData,
     ShaftRPM,
+    SupplementalEmissionEntityStatePdu,
+    SystemIdentifier,
     TrackJamData,
     UABeam,
     UAEmitter,
@@ -104,8 +118,14 @@ from opendis.record.distributed_emissions import (
     UnderwaterAcousticPdu,
 )
 from opendis.record.entity_information import (
+    Attribute,
+    AttributePdu,
+    AttributeRecordSet,
+    CollisionElasticPdu,
+    CollisionPdu,
     DeadReckoningParameters,
     EntityStatePdu,
+    EntityStateUpdatePdu,
     VariableParameter,
 )
 from opendis.record.pdu import Pdu, PduHeader, UnrecognizedPdu
@@ -121,6 +141,12 @@ from opendis.record.synthetic_environment import (
     ArealObjectStatePdu,
     EnvironmentRecord,
     EnvironmentalProcessPdu,
+    GriddedDataPdu,
+    GridAxisDescriptorFixed,
+    GridAxisDescriptorVariable,
+    GridDataType0,
+    GridDataType1,
+    GridDataType2,
     LinearObjectStatePdu,
     LinearSegmentParameter,
     ObjectIdentifier,
@@ -388,12 +414,23 @@ class TestEntityStatePdu(unittest.TestCase):
         self.assertIsInstance(parsed.capabilities, AirPlatformCapabilities)
 
     def test_unknown_kind_keeps_plain_int(self):
+        # Phase 5 view extension: every kind 1-9 has a REF-010 appearance
+        # table (kinds 2-9 wrap regardless of domain); the only no-table
+        # case is kind 0 (Other)
         pdu = EntityStatePdu()
-        pdu.entityType = EntityType(6, 0, 0)  # supply, other domain
+        pdu.entityType = EntityType(6, 0, 0)  # supply now wraps
         pdu.entityAppearance = 0xDEADBEEF
         parsed = createPdu(pdu.to_bytes())
-        self.assertEqual(parsed.entityAppearance, 0xDEADBEEF)
+        self.assertIsInstance(parsed.entityAppearance, SupplyAppearance)
+        self.assertEqual(int(parsed.entityAppearance), 0xDEADBEEF)
         self.assertEqual(parsed.to_bytes(), pdu.to_bytes())
+
+        plain = EntityStatePdu()
+        plain.entityType = EntityType(0, 0, 0)  # kind 0: no table
+        plain.entityAppearance = 0xDEADBEEF
+        plain_parsed = createPdu(plain.to_bytes())
+        self.assertIs(type(plain_parsed.entityAppearance), int)
+        self.assertEqual(plain_parsed.to_bytes(), plain.to_bytes())
 
     def test_variable_parameters(self):
         pdu = EntityStatePdu()
@@ -1070,7 +1107,10 @@ class TestEntityManagementFamily(unittest.TestCase):
         pdu.aggregateType = AggregateType(1, 1, 39, 2)
         pdu.aggregateMarking.string = "1BN"
         pdu.entityIDList.append(EntityIdentifier(SimulationAddress(1, 2), 5))
-        pdu.silentEntitySystemList.append(EntityType(1, 1, 39, 3))
+        silent = SilentEntitySystem(numberOfEntities=3)
+        silent.entityType = EntityType(1, 1, 39, 3)
+        silent.appearanceRecordList = [7]
+        pdu.silentEntitySystemList.append(silent)
         pdu.variableDatumList.append(VariableDatum(1, b"agg data"))
         raw = pdu.to_bytes()
         parsed = createPdu(raw)
@@ -1141,6 +1181,325 @@ class TestEntityManagementFamily(unittest.TestCase):
         self.assertEqual(parsed.to_bytes(), raw)
 
 
+class TestEntityInformationSurface(unittest.TestCase):
+    """The §7.2.3-§7.2.6 PDUs (Phase 5): Collision, Collision-Elastic,
+    Entity State Update, Attribute."""
+
+    def test_collision_round_trip(self):
+        pdu = CollisionPdu()
+        pdu.issuingEntityID = EntityIdentifier(SimulationAddress(1, 2), 3)
+        pdu.collidingEntityID = EntityIdentifier(SimulationAddress(1, 2), 4)
+        pdu.collisionType = 1  # [UID 189] inelastic
+        raw = pdu.to_bytes()
+        # 60 bytes (Table 135): header + two IDs + event + type + pad
+        # + velocity + mass + location
+        self.assertEqual(len(raw), 60)
+        parsed = createPdu(raw)
+        self.assertIsInstance(parsed, CollisionPdu)
+        self.assertEqual(parsed.collidingEntityID.entityNumber, 4)
+        self.assertEqual(parsed.collisionType, 1)
+        self.assertEqual(parsed.to_bytes(), raw)
+
+    def test_collision_elastic_round_trip(self):
+        pdu = CollisionElasticPdu()
+        pdu.issuingEntityID = EntityIdentifier(SimulationAddress(1, 2), 3)
+        pdu.collisionEventID = EventIdentifier(SimulationAddress(1, 2), 9)
+        pdu.mass = 1200.0
+        pdu.collisionIntermediateResultXX = 1.5
+        pdu.coefficientOfRestitution = 0.75
+        raw = pdu.to_bytes()
+        # 100 bytes (800 bits, Table 136): the XML's six tail fields
+        # (intermediate results XX-YY, unit surface normal, coefficient
+        # of restitution) are declared — pduType 66 per §5.2.4
+        self.assertEqual(len(raw), 100)
+        self.assertEqual(CollisionElasticPdu.pduType, 66)
+        parsed = createPdu(raw)
+        self.assertIsInstance(parsed, CollisionElasticPdu)
+        self.assertEqual(parsed.collisionEventID.eventNumber, 9)
+        self.assertAlmostEqual(parsed.mass, 1200.0, places=5)
+        self.assertAlmostEqual(
+            parsed.collisionIntermediateResultXX, 1.5, places=5)
+        self.assertAlmostEqual(parsed.coefficientOfRestitution, 0.75, places=5)
+        self.assertEqual(parsed.to_bytes(), raw)
+
+    def test_entity_state_update_round_trip(self):
+        pdu = EntityStateUpdatePdu()
+        pdu.entityID = EntityIdentifier(SimulationAddress(5, 6), 7)
+        pdu.entityAppearance = 0x0040C000
+        pdu.variableParameters.append(VariableParameter())
+        raw = pdu.to_bytes()
+        # 576 + 128N bits (Table 137): 72 bytes at N=1
+        self.assertEqual(len(raw), 72 + 16)
+        self.assertEqual(EntityStateUpdatePdu.pduType, 67)
+        parsed = createPdu(raw)
+        self.assertIsInstance(parsed, EntityStateUpdatePdu)
+        self.assertEqual(parsed.entityID.entityNumber, 7)
+        self.assertEqual(parsed.numberOfVariableParameters, 1)
+        self.assertEqual(parsed.entityAppearance, 0x0040C000)
+        self.assertEqual(parsed.to_bytes(), raw)
+
+    def test_entity_state_update_appearance_stays_raw(self):
+        # the ES-Update carries no entityType, so the appearance uint32
+        # cannot resolve to a bitfield view locally (the receiver resolves
+        # it from its cached entity type) — it must stay a plain int
+        pdu = EntityStateUpdatePdu()
+        pdu.entityID = EntityIdentifier(SimulationAddress(1, 1), 1)
+        pdu.entityAppearance = 0xDEADBEEF
+        parsed = createPdu(pdu.to_bytes())
+        self.assertIs(type(parsed.entityAppearance), int)
+
+    def test_attribute_pdu_round_trip(self):
+        pdu = AttributePdu()
+        pdu.attributeRecordPduType = 1
+        pdu.masterAttributeRecordType = 4444
+        pdu.actionCode = 1
+        record = Attribute(
+            recordType=4444,
+            recordLength=8,
+            recordSpecificFields=b"\x01\x02",  # K+P as received
+        )
+        recordSet = AttributeRecordSet()
+        recordSet.entityId = EntityIdentifier(SimulationAddress(2, 3), 4)
+        recordSet.attributeRecords = [record]
+        pdu.attributeRecordSets = [recordSet]
+        raw = pdu.to_bytes()
+        parsed = createPdu(raw)
+        self.assertIsInstance(parsed, AttributePdu)
+        self.assertEqual(AttributePdu.pduType, 72)
+        self.assertEqual(parsed.numberAttributeRecordSet, 1)
+        got = parsed.attributeRecordSets[0].attributeRecords[0]
+        self.assertEqual(got.recordType, 4444)
+        self.assertEqual(got.recordSpecificFields, b"\x01\x02")
+        self.assertEqual(parsed.to_bytes(), raw)
+
+    def test_attribute_record_64_bit_pad(self):
+        # §6.2.10/Table 138: recordLength = 6 + K + P with the record
+        # padded to the 64-bit boundary; a K=2 payload carries 2 pad
+        # bytes inside recordSpecificFields (recordLength 8)
+        record = Attribute(recordType=1, recordLength=8,
+                           recordSpecificFields=b"\xAA\xBB")
+        self.assertEqual(record.marshalledSize(), 8)
+        raw = record.to_bytes() if hasattr(record, "to_bytes") else None
+        buf = io.BytesIO()
+        record.serialize(DataOutputStream(buf))
+        wire = buf.getvalue()
+        self.assertEqual(len(wire), 8)
+        again = Attribute()
+        again.parse(DataInputStream(io.BytesIO(wire)))
+        self.assertEqual(again.recordSpecificFields, b"\xAA\xBB")
+        self.assertEqual(again.recordLength, 8)
+
+
+class TestIFFPdu(unittest.TestCase):
+    """§7.6.5 IFF PDU: the length-driven layer mechanism."""
+
+    @staticmethod
+    def _layer1(systemType):
+        pdu = IdentificationFriendOrFoePdu()
+        pdu.systemID = SystemIdentifier(
+            systemType=systemType, systemName=1, systemMode=1,
+            changeOptions=0,
+        )
+        return pdu
+
+    def test_layer1_only_round_trip(self):
+        pdu = self._layer1(1)
+        pdu.emittingEntityId = EntityIdentifier(SimulationAddress(1, 2), 3)
+        raw = pdu.to_bytes()
+        # Layer 1 is 480 bits (Tables 165/167): header + entity + event
+        # + antenna location + 48-bit System Identifier + designator +
+        # system data + 128-bit Fundamental Operational Data
+        self.assertEqual(len(raw), 60)
+        self.assertEqual(IdentificationFriendOrFoePdu.pduType, 28)
+        self.assertEqual(SystemIdentifier(1, 1, 1, 0).marshalledSize(), 6)
+        parsed = createPdu(raw)
+        self.assertIsInstance(parsed, IdentificationFriendOrFoePdu)
+        self.assertEqual(parsed.emittingEntityId.entityNumber, 3)
+        self.assertEqual(parsed.systemID.systemType, 1)
+        self.assertIsNone(parsed.iFFPduLayer2Data)
+        self.assertEqual(parsed.to_bytes(), raw)
+
+    def test_iff_layers_round_trip(self):
+        pdu = self._layer1(7)  # Mode 5 Interrogator -> Layer 3 interrogator
+        layer2 = IFFPduLayer2Data()
+        layer2.layerHeader = LayerHeader(layerNumber=2)
+        layer2.IFFFundamentalParameterDataRecord = [
+            IFFFundamentalParameterData() for _ in range(2)
+        ]
+        pdu.iFFPduLayer2Data = layer2
+        layer3 = IFFPduLayer3InterrogatorFormatData()
+        layer3.layerHeader = LayerHeader(layerNumber=3)
+        layer3.IFFFundamentalParameterDataRecord = [
+            IFFData(recordType=1, recordLength=8,
+                    recordSpecificFields=b"\x01\x02")
+        ]
+        pdu.iFFPduLayer3InterrogatorFormatData = layer3
+        raw = pdu.to_bytes()
+        # layer lengths include their own headers (§6.2.51)
+        self.assertEqual(layer2.layerHeader.length, layer2.marshalledSize())
+        self.assertEqual(layer3.layerHeader.length, layer3.marshalledSize())
+        parsed = createPdu(raw)
+        self.assertIsInstance(parsed.iFFPduLayer2Data, IFFPduLayer2Data)
+        self.assertIsInstance(
+            parsed.iFFPduLayer3InterrogatorFormatData,
+            IFFPduLayer3InterrogatorFormatData,
+        )
+        self.assertIsNone(parsed.iFFPduLayer3TransponderFormatData)
+        got = parsed.iFFPduLayer3InterrogatorFormatData \
+            .IFFFundamentalParameterDataRecord[0]
+        self.assertEqual(got.recordSpecificFields, b"\x01\x02")
+        self.assertEqual(parsed.to_bytes(), raw)
+
+    def test_iff_layer_format_dispatch(self):
+        # the Layer 1 System Type field [UID 82] picks the Layer 3/4
+        # format: 10 (Mode 5 Transponder) reads the transponder format
+        pdu = self._layer1(10)
+        layer3t = IFFPduLayer3TransponderFormatData()
+        layer3t.layerHeader = LayerHeader(layerNumber=3)
+        pdu.iFFPduLayer3TransponderFormatData = layer3t
+        raw = pdu.to_bytes()
+        parsed = createPdu(raw)
+        self.assertIsInstance(
+            parsed.iFFPduLayer3TransponderFormatData,
+            IFFPduLayer3TransponderFormatData,
+        )
+        self.assertIsNone(parsed.iFFPduLayer3InterrogatorFormatData)
+        self.assertEqual(parsed.to_bytes(), raw)
+
+    def test_iff_layer5_round_trip(self):
+        pdu = self._layer1(1)
+        layer5 = IFFPduLayer5Data()
+        layer5.layerHeader = LayerHeader(layerNumber=5)
+        layer5.applicableLayers = 0x01
+        layer5.IFFFundamentalParameterDataRecord = [
+            IFFData(recordType=2, recordLength=6, recordSpecificFields=b"")
+        ]
+        pdu.iFFPduLayer5Data = layer5
+        raw = pdu.to_bytes()
+        parsed = createPdu(raw)
+        self.assertIsInstance(parsed.iFFPduLayer5Data, IFFPduLayer5Data)
+        self.assertEqual(parsed.iFFPduLayer5Data.applicableLayers, 0x01)
+        self.assertEqual(len(parsed.iFFPduLayer5Data \
+                            .IFFFundamentalParameterDataRecord), 1)
+        self.assertEqual(parsed.to_bytes(), raw)
+
+    def test_iff_alias(self):
+        from opendis.record.distributed_emissions import IFFPdu
+        self.assertIs(IFFPdu, IdentificationFriendOrFoePdu)
+
+
+class TestSEESPdu(unittest.TestCase):
+    """§7.6.6 Supplemental Emission/Entity State PDU (Phase 5)."""
+
+    def test_sees_round_trip(self):
+        pdu = SupplementalEmissionEntityStatePdu()
+        pdu.originatingEntityID = EntityIdentifier(SimulationAddress(1, 2), 3)
+        pdu.propulsionSystemData = [
+            PropulsionSystemData() for _ in range(2)
+        ]
+        raw = pdu.to_bytes()
+        # Table 174 base 28 bytes + 8 per propulsion record
+        self.assertEqual(len(raw), 28 + 16)
+        self.assertEqual(SupplementalEmissionEntityStatePdu.pduType, 30)
+        parsed = createPdu(raw)
+        self.assertIsInstance(parsed, SupplementalEmissionEntityStatePdu)
+        self.assertEqual(parsed.numberOfPropulsionSystems, 2)
+        self.assertEqual(parsed.to_bytes(), raw)
+
+    def test_sees_alias(self):
+        from opendis.record.distributed_emissions import SEESPdu
+        self.assertIs(SEESPdu, SupplementalEmissionEntityStatePdu)
+
+
+class TestGriddedDataPduWire(unittest.TestCase):
+    """§7.10.3 Gridded Data PDU: axis/data dispatch and the derived
+    grid-data record count (Table 192)."""
+
+    def test_empty_round_trip(self):
+        pdu = GriddedDataPdu()
+        raw = pdu.to_bytes()
+        # 512 bits (Table 192 base): no axes, no data records
+        self.assertEqual(len(raw), 64)
+        self.assertEqual(GriddedDataPdu.pduType, 42)
+        parsed = createPdu(raw)
+        self.assertIsInstance(parsed, GriddedDataPdu)
+        self.assertEqual(parsed.to_bytes(), raw)
+
+    def test_axis_dispatch_and_derived_count(self):
+        pdu = GriddedDataPdu()
+        pdu.vectorDimension = 2
+        fixed = GridAxisDescriptorFixed()
+        fixed.numberOfPointsOnXiAxis = 4
+        variable = GridAxisDescriptorVariable()
+        variable.axisType = 1  # [UID 377] irregular axis
+        variable.xiValues = [1, 2, 3]
+        pdu.gridAxisDescriptors = [fixed, variable]
+        records = []
+        for i in range(2 * 4 * 3):  # G = V x prod(Ni) = 24
+            record = GridDataType0(sampleType=1, dataRepresentation=0)
+            record.dataValues = [i % 256, (i + 1) % 256]
+            records.append(record)
+        pdu.gridDataRecords = records
+        raw = pdu.to_bytes()
+        parsed = createPdu(raw)
+        self.assertEqual(len(parsed.gridAxisDescriptors), 2)
+        self.assertIsInstance(
+            parsed.gridAxisDescriptors[1], GridAxisDescriptorVariable)
+        self.assertEqual(parsed.gridAxisDescriptors[1].xiValues, [1, 2, 3])
+        # the grid-data count is derived (V x prod Ni), not stored — the
+        # XML's countFieldName="numberOfGridAxes" is an upstream bug
+        self.assertEqual(len(parsed.gridDataRecords), 24)
+        self.assertEqual(parsed.to_bytes(), raw)
+
+    def test_grid_data_type_dispatch(self):
+        pdu = GriddedDataPdu()
+        pdu.vectorDimension = 1
+        axis = GridAxisDescriptorFixed()
+        axis.numberOfPointsOnXiAxis = 3
+        pdu.gridAxisDescriptors = [axis]
+        type0 = GridDataType0(sampleType=1, dataRepresentation=0)
+        type0.dataValues = [0xAA]  # odd count -> 16-bit pad byte
+        type1 = GridDataType1(sampleType=2, dataRepresentation=1)
+        type1.fieldScale = 1.5
+        type1.dataValues = [10, 20, 30]
+        type2 = GridDataType2(sampleType=3, dataRepresentation=2)
+        type2.dataValues = [1.5, 2.5, 3.5]
+        pdu.gridDataRecords = [type0, type1, type2]
+        raw = pdu.to_bytes()
+        parsed = createPdu(raw)
+        self.assertEqual(len(parsed.gridDataRecords), 3)
+        got0, got1, got2 = parsed.gridDataRecords
+        self.assertIsInstance(got0, GridDataType0)
+        self.assertIsInstance(got1, GridDataType1)
+        self.assertIsInstance(got2, GridDataType2)
+        self.assertEqual(list(got0.dataValues), [0xAA])
+        self.assertAlmostEqual(got1.fieldScale, 1.5, places=6)
+        self.assertEqual(list(got1.dataValues), [10, 20, 30])
+        self.assertAlmostEqual(got2.dataValues[2], 3.5, places=6)
+        self.assertEqual(parsed.to_bytes(), raw)
+
+
+class TestSilentEntitySystem(unittest.TestCase):
+    """§6.2.79 Silent Entity System record (Table 183's silent entity
+    system list element — the exemplar's bare-EntityType list was a wire
+    bug corrected in Phase 5)."""
+
+    def test_silent_entity_system_round_trip(self):
+        pdu = AggregateStatePdu()
+        silent = SilentEntitySystem(numberOfEntities=4)
+        silent.entityType = EntityType(1, 1, 39, 3)
+        silent.appearanceRecordList = [7, 8]
+        pdu.silentEntitySystemList = [silent]
+        raw = pdu.to_bytes()
+        # 96 + 32A bits per record (Table 183): 12 + 4*2 = 20 bytes
+        parsed = createPdu(raw)
+        got = parsed.silentEntitySystemList[0]
+        self.assertEqual(got.numberOfEntities, 4)
+        self.assertEqual(got.entityType, EntityType(1, 1, 39, 3))
+        self.assertEqual(got.appearanceRecordList, [7, 8])
+        self.assertEqual(parsed.to_bytes(), raw)
+
+
 class TestDistributedEmissionsFamily(unittest.TestCase):
     """Distributed Emissions family (§7.6): EEE, Designator, UA."""
 
@@ -1207,14 +1566,14 @@ class TestDistributedEmissionsFamily(unittest.TestCase):
         self.assertEqual(parsed.emitterSystems[0].beams[0].beamDataLength, 6)
         self.assertEqual(parsed.to_bytes(), raw)
 
-    def test_iff_pdu_stays_unrecognized(self):
-        # IFF (28) / SEE (30) not implemented in this pass: lossless
-        # fallback, byte-exact re-serialization
-        header = bytes([7, 1, 28, 6]) + b"\x00\x11\x22\x33" + b"\x00\x00\x00\x20"
-        raw = header + b"iff-payload"
+    def test_iff_type_28_registered(self):
+        # Phase 5 withdrew the IFF/SEE deferral: type 28 decodes through
+        # the layer machinery now (the old UnrecognizedPdu expectation is
+        # retired with it)
+        header = bytes([7, 1, 28, 6]) + b"\x00\x11\x22\x33" + b"\x00\x3c\x00\x00"
+        raw = header + bytes(48)
         pdu = createPdu(raw)
-        self.assertIsInstance(pdu, UnrecognizedPdu)
-        self.assertEqual(pdu.header.pduType, 28)
+        self.assertIsInstance(pdu, IdentificationFriendOrFoePdu)
         self.assertEqual(pdu.to_bytes(), raw)
 
 

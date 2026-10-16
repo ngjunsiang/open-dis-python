@@ -2,15 +2,19 @@
 — target-state PDUs.
 
 Wire ground truth: submodules/open-dis-spec-xml/xml/DistributedEmissionsFamilyPdus.xml.
-Electromagnetic Emission, Designator, and Underwater Acoustic PDUs with
-their emitter-system / beam record trees. The beam and system "data
-length" fields count 32-bit words (§7.6.2) and are always derived
+Electromagnetic Emission, Designator, Underwater Acoustic, IFF, and SEES
+PDUs with their emitter-system / beam record trees. The beam and system
+"data length" fields count 32-bit words (§7.6.2) and are always derived
 (``marshalledSize() // 4``; zero means the section is "large").
 
-Scope note: the IFF PDU (type 28) and SEE PDU (type 30) with their
-Annex-B layer structures are NOT implemented in this pass — their
-pduTypes stay unregistered, so datagrams degrade to the lossless
-``UnrecognizedPdu`` fallback (see docs/design/sample-review.md).
+The IFF PDU (type 28) implements the §7.6.5 layer mechanism: Layer 1 is
+always present; layers 2-5 are length-driven optionals dispatched by
+Layer Header layer number (Table 165), with the Layer 3/4 format picked
+by the Layer 1 System Type field. The layer lists hold flat §6.2.43 IFF
+Data records (the XML's IFFDataSpecification wrapper adds a count the
+layer already carries). SystemIdentifier's Change/Options is 8 bits
+(Table B.5, Table 118 total 48 bits — the XML's 16-bit binding made
+every IFF PDU one byte long; upstream candidate).
 """
 
 from dataclasses import dataclass, field
@@ -25,7 +29,17 @@ from opendis.record.common import (
 )
 from opendis.record.pdu import Pdu
 from opendis.stream import DataInputStream, DataOutputStream
-from opendis.types import enum8, enum16, float32, uint8, uint16, int32
+from opendis.types import (
+    enum8,
+    enum16,
+    enum32,
+    float32,
+    uint8,
+    uint16,
+    uint32,
+    uint64,
+    int32,
+)
 
 __all__ = [
     "APA",
@@ -39,13 +53,34 @@ __all__ = [
     "ElectronicEmitter",
     "EmitterBeam",
     "EmitterSystem",
+    "FundamentalOperationalData",
+    "IFFData",
+    "IFFFundamentalParameterData",
+    "IFFPdu",
+    "IFFPduLayer2Data",
+    "IFFPduLayer3InterrogatorFormatData",
+    "IFFPduLayer3TransponderFormatData",
+    "IFFPduLayer4InterrogatorFormatData",
+    "IFFPduLayer4TransponderFormatData",
+    "IFFPduLayer5Data",
+    "IdentificationFriendOrFoePdu",
     "JammingTechnique",
+    "LayerHeader",
+    "Mode5InterrogatorBasicData",
+    "Mode5TransponderBasicData",
+    "ModeSInterrogatorBasicData",
+    "ModeSTransponderBasicData",
+    "PropulsionSystemData",
+    "SEESPdu",
     "ShaftRPM",
+    "SupplementalEmissionEntityStatePdu",
+    "SystemIdentifier",
     "TrackJamData",
     "UABeam",
     "UAEmitter",
     "UAFundamentalParameter",
     "UnderwaterAcousticPdu",
+    "VectoringNozzleSystem",
 ]
 
 
@@ -878,3 +913,1156 @@ class UnderwaterAcousticPdu(DistributedEmissionsRegenerationFamilyPdu):
         self.emitterSystems = [
             UAEmitter.parseFrom(inputStream) for _ in range(numberOfUAEmitterSystems)
         ]
+
+
+@dataclass(frozen=True, slots=True)
+class SystemIdentifier:
+    """§6.2.87 System Identifier record
+
+    The ID of the IFF emitting system.
+    """
+
+    FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
+        "systemType": 82,
+        "systemName": 83,
+        "systemMode": 84,
+    }
+
+    systemType: enum16 = 0  # [UID 82]
+    systemName: enum16 = 0  # [UID 83]
+    systemMode: enum8 = 0  # [UID 84]
+    changeOptions: uint8 = (
+        0  # 8-bit Change/Options (Table B.5); Table 118 totals the record at 48 bits — the §6.2.87 prose cites the 16-bit-looking §6.2.13 shape
+    )
+
+    def marshalledSize(self) -> int:
+        return 6
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        outputStream.write_uint16(self.systemType)
+        outputStream.write_uint16(self.systemName)
+        outputStream.write_uint8(self.systemMode)
+        outputStream.write_uint8(int(self.changeOptions))
+
+    @classmethod
+    def parse(cls, inputStream: DataInputStream) -> "SystemIdentifier":
+        systemType = rich_or_int(82, inputStream.read_uint16())
+        systemName = rich_or_int(83, inputStream.read_uint16())
+        systemMode = rich_or_int(84, inputStream.read_uint8())
+        changeOptions = inputStream.read_uint8()
+        return cls(systemType, systemName, systemMode, changeOptions)
+
+
+@dataclass(slots=True)
+class FundamentalOperationalData:
+    """§6.2.39 Fundamental Operational Data record
+
+    Basic operational data for IFF.
+    """
+
+    systemStatus: uint8 = 0
+    dataField1: uint8 = 0
+    informationLayers: uint8 = 0
+    dataField2: uint8 = 0
+    parameter1: uint16 = 0
+    parameter2: uint16 = 0
+    parameter3: uint16 = 0
+    parameter4: uint16 = 0
+    parameter5: uint16 = 0
+    parameter6: uint16 = 0
+
+    def marshalledSize(self) -> int:
+        return 16
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        outputStream.write_uint8(self.systemStatus)
+        outputStream.write_uint8(self.dataField1)
+        outputStream.write_uint8(self.informationLayers)
+        outputStream.write_uint8(self.dataField2)
+        outputStream.write_uint16(self.parameter1)
+        outputStream.write_uint16(self.parameter2)
+        outputStream.write_uint16(self.parameter3)
+        outputStream.write_uint16(self.parameter4)
+        outputStream.write_uint16(self.parameter5)
+        outputStream.write_uint16(self.parameter6)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        self.systemStatus = inputStream.read_uint8()
+        self.dataField1 = inputStream.read_uint8()
+        self.informationLayers = inputStream.read_uint8()
+        self.dataField2 = inputStream.read_uint8()
+        self.parameter1 = inputStream.read_uint16()
+        self.parameter2 = inputStream.read_uint16()
+        self.parameter3 = inputStream.read_uint16()
+        self.parameter4 = inputStream.read_uint16()
+        self.parameter5 = inputStream.read_uint16()
+        self.parameter6 = inputStream.read_uint16()
+
+
+@dataclass(slots=True)
+class LayerHeader:
+    """§6.2.51 Layer Header record
+
+    The identification of the additional information layer number, layer-
+    specific information, and the length of the layer.
+    """
+
+    layerNumber: uint8 = 0
+    layerSpecificInformation: uint8 = 0
+    length: uint16 = 0
+
+    def marshalledSize(self) -> int:
+        return 4
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        outputStream.write_uint8(self.layerNumber)
+        outputStream.write_uint8(self.layerSpecificInformation)
+        outputStream.write_uint16(self.length)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        self.layerNumber = inputStream.read_uint8()
+        self.layerSpecificInformation = inputStream.read_uint8()
+        self.length = inputStream.read_uint16()
+
+
+@dataclass(frozen=True, slots=True)
+class IFFFundamentalParameterData:
+    """§6.2.44 IFF Fundamental Parameter Data record
+
+    Fundamental IFF atc data.
+    """
+
+    FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
+        "applicableModes": 339,
+    }
+
+    erp: float32 = 0.0
+    frequency: float32 = 0.0
+    pgrf: float32 = 0.0
+    pulseWidth: float32 = 0.0
+    burstLength: uint32 = 0
+    applicableModes: enum8 = 0  # [UID 339]
+    systemSpecificData: bytes = b"\x00" * 3
+
+    def marshalledSize(self) -> int:
+        return 24
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        outputStream.write_float32(self.erp)
+        outputStream.write_float32(self.frequency)
+        outputStream.write_float32(self.pgrf)
+        outputStream.write_float32(self.pulseWidth)
+        outputStream.write_uint32(self.burstLength)
+        outputStream.write_uint8(self.applicableModes)
+        outputStream.write_bytes(self.systemSpecificData[:3].ljust(3, b"\x00"))
+
+    @classmethod
+    def parse(cls, inputStream: DataInputStream) -> "IFFFundamentalParameterData":
+        erp = inputStream.read_float32()
+        frequency = inputStream.read_float32()
+        pgrf = inputStream.read_float32()
+        pulseWidth = inputStream.read_float32()
+        burstLength = inputStream.read_uint32()
+        applicableModes = rich_or_int(339, inputStream.read_uint8())
+        systemSpecificData = inputStream.read_bytes(3)
+        return cls(
+            erp,
+            frequency,
+            pgrf,
+            pulseWidth,
+            burstLength,
+            applicableModes,
+            systemSpecificData,
+        )
+
+
+@dataclass(slots=True)
+class IFFData:
+    """§6.2.43 IFF Data record
+
+    repeating element (IFF Data record) in the IFF Data Specification
+    record,.
+
+    Generic §6.2.43 Standard-Variable-format record:
+    ``recordSpecificFields`` carries the K data octets plus the trailing
+    32-bit alignment pad (Table 169) exactly as received, and
+    ``recordLength`` (= 6 + K + P) stays caller-settable wire state. Typed
+    decodes of the B.2.1.1 record types ride the registry separately.
+    """
+
+    FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
+        "recordType": 66,
+    }
+
+    recordType: enum32 = 0  # [UID 66]
+    recordLength: uint16 = 0
+    recordSpecificFields: bytes = b""
+
+    def marshalledSize(self):
+        return 6 + len(self.recordSpecificFields)
+
+    def serialize(self, outputStream: DataOutputStream):
+        outputStream.write_uint32(self.recordType)
+        outputStream.write_uint16(self.recordLength)
+        outputStream.write_bytes(self.recordSpecificFields)
+
+    def parse(self, inputStream: DataInputStream):
+        self.recordType = rich_or_int(66, inputStream.read_uint32())
+        self.recordLength = inputStream.read_uint16()
+        self.recordSpecificFields = inputStream.read_bytes(self.recordLength - 6)
+
+    @classmethod
+    def parseFrom(cls, inputStream: DataInputStream) -> "IFFData":
+        """Construct a new record from the stream (list-parse helper; the
+        mutating ``parse`` above satisfies the Record protocol)."""
+        item = cls()
+        item.parse(inputStream)
+        return item
+
+
+@dataclass(slots=True)
+class Mode5InterrogatorBasicData:
+    """B.2.26. Mode 5 interrogator basic data."""
+
+    mode5InterrogatorStatus: uint8 = 0
+    mode5MessageFormatsPresent: uint32 = 0
+    entityID: EntityIdentifier = field(default_factory=EntityIdentifier)
+    padding: uint8 = field(init=False, default=0)
+    padding2: uint16 = field(init=False, default=0)
+    padding3: uint16 = field(init=False, default=0)
+
+    def marshalledSize(self) -> int:
+        return 1 + 1 + 2 + 4 + self.entityID.marshalledSize() + 2
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        outputStream.write_uint8(self.mode5InterrogatorStatus)
+        outputStream.write_uint8(self.padding)
+        outputStream.write_uint16(self.padding2)
+        outputStream.write_uint32(self.mode5MessageFormatsPresent)
+        self.entityID.serialize(outputStream)
+        outputStream.write_uint16(self.padding3)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        self.mode5InterrogatorStatus = inputStream.read_uint8()
+        self.padding = inputStream.read_uint8()
+        self.padding2 = inputStream.read_uint16()
+        self.mode5MessageFormatsPresent = inputStream.read_uint32()
+        self.entityID = EntityIdentifier.parse(inputStream)
+        self.padding3 = inputStream.read_uint16()
+
+
+@dataclass(slots=True)
+class Mode5TransponderBasicData:
+    """B.2.29. Mode 5 transponder basic data."""
+
+    FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
+        "navigationSource": 359,
+    }
+
+    mode5Status: uint16 = 0
+    personalIdentificationNumber: uint16 = 0
+    mode5MessageFormatsPresent: uint32 = 0
+    enhancedMode1: uint16 = 0
+    nationalOrigin: uint16 = 0
+    supplementalData: uint8 = 0
+    navigationSource: enum8 = 0  # [UID 359]
+    figureOfMerit: uint8 = 0
+    padding: uint8 = field(init=False, default=0)
+
+    def marshalledSize(self) -> int:
+        return 16
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        outputStream.write_uint16(self.mode5Status)
+        outputStream.write_uint16(self.personalIdentificationNumber)
+        outputStream.write_uint32(self.mode5MessageFormatsPresent)
+        outputStream.write_uint16(self.enhancedMode1)
+        outputStream.write_uint16(self.nationalOrigin)
+        outputStream.write_uint8(self.supplementalData)
+        outputStream.write_uint8(self.navigationSource)
+        outputStream.write_uint8(self.figureOfMerit)
+        outputStream.write_uint8(self.padding)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        self.mode5Status = inputStream.read_uint16()
+        self.personalIdentificationNumber = inputStream.read_uint16()
+        self.mode5MessageFormatsPresent = inputStream.read_uint32()
+        self.enhancedMode1 = inputStream.read_uint16()
+        self.nationalOrigin = inputStream.read_uint16()
+        self.supplementalData = inputStream.read_uint8()
+        self.navigationSource = rich_or_int(359, inputStream.read_uint8())
+        self.figureOfMerit = inputStream.read_uint8()
+        self.padding = inputStream.read_uint8()
+
+
+@dataclass(slots=True)
+class ModeSInterrogatorBasicData:
+    """B.2.37. Mode S interrogator basic data."""
+
+    modeSInterrogatorStatus: uint8 = 0
+    modeSLevelsPresent: uint8 = 0
+    padding: uint8 = field(init=False, default=0)
+    padding2: uint8 = field(init=False, default=0)
+    padding3: uint32 = field(init=False, default=0)
+    padding4: uint32 = field(init=False, default=0)
+    padding5: uint32 = field(init=False, default=0)
+    padding6: uint32 = field(init=False, default=0)
+    padding7: uint32 = field(init=False, default=0)
+
+    def marshalledSize(self) -> int:
+        return 24
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        outputStream.write_uint8(self.modeSInterrogatorStatus)
+        outputStream.write_uint8(self.padding)
+        outputStream.write_uint8(self.modeSLevelsPresent)
+        outputStream.write_uint8(self.padding2)
+        outputStream.write_uint32(self.padding3)
+        outputStream.write_uint32(self.padding4)
+        outputStream.write_uint32(self.padding5)
+        outputStream.write_uint32(self.padding6)
+        outputStream.write_uint32(self.padding7)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        self.modeSInterrogatorStatus = inputStream.read_uint8()
+        self.padding = inputStream.read_uint8()
+        self.modeSLevelsPresent = inputStream.read_uint8()
+        self.padding2 = inputStream.read_uint8()
+        self.padding3 = inputStream.read_uint32()
+        self.padding4 = inputStream.read_uint32()
+        self.padding5 = inputStream.read_uint32()
+        self.padding6 = inputStream.read_uint32()
+        self.padding7 = inputStream.read_uint32()
+
+
+@dataclass(slots=True)
+class ModeSTransponderBasicData:
+    """B.2.41. Mode S transponder basic data."""
+
+    FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
+        "aircraftPresentDomain": 356,
+        "aircraftIdentificationType": 357,
+        "capabilityReport": 358,
+    }
+
+    modeSTransponderStatus: uint16 = 0
+    modeSLevelsPresent: uint8 = 0
+    aircraftPresentDomain: enum8 = 0  # [UID 356]
+    aircraftIdentification: uint64 = 0
+    aircraftAddress: uint32 = 0
+    aircraftIdentificationType: enum8 = 0  # [UID 357]
+    dapSource: uint8 = 0
+    modeSAltitude: uint16 = 0
+    capabilityReport: enum8 = 0  # [UID 358]
+    padding: uint8 = field(init=False, default=0)
+    padding2: uint16 = field(init=False, default=0)
+
+    def marshalledSize(self) -> int:
+        return 24
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        outputStream.write_uint16(self.modeSTransponderStatus)
+        outputStream.write_uint8(self.modeSLevelsPresent)
+        outputStream.write_uint8(self.aircraftPresentDomain)
+        outputStream.write_uint64(self.aircraftIdentification)
+        outputStream.write_uint32(self.aircraftAddress)
+        outputStream.write_uint8(self.aircraftIdentificationType)
+        outputStream.write_uint8(self.dapSource)
+        outputStream.write_uint16(self.modeSAltitude)
+        outputStream.write_uint8(self.capabilityReport)
+        outputStream.write_uint8(self.padding)
+        outputStream.write_uint16(self.padding2)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        self.modeSTransponderStatus = inputStream.read_uint16()
+        self.modeSLevelsPresent = inputStream.read_uint8()
+        self.aircraftPresentDomain = rich_or_int(356, inputStream.read_uint8())
+        self.aircraftIdentification = inputStream.read_uint64()
+        self.aircraftAddress = inputStream.read_uint32()
+        self.aircraftIdentificationType = rich_or_int(357, inputStream.read_uint8())
+        self.dapSource = inputStream.read_uint8()
+        self.modeSAltitude = inputStream.read_uint16()
+        self.capabilityReport = rich_or_int(358, inputStream.read_uint8())
+        self.padding = inputStream.read_uint8()
+        self.padding2 = inputStream.read_uint16()
+
+
+@dataclass(slots=True)
+class IFFPduLayer2Data:
+    """§7.6.5.3 IFF PDU Layer 2 Emissions Data
+
+    Layer 2 emissions data.
+    """
+
+    layerHeader: LayerHeader = field(default_factory=LayerHeader)
+    beamData: BeamData = field(default_factory=BeamData)
+    secondaryOpParameter1: uint8 = 0
+    secondaryOpParameter2: uint8 = 0
+    IFFFundamentalParameterDataRecord: list[IFFFundamentalParameterData] = field(
+        default_factory=list
+    )
+
+    @property
+    def numberOfIFFFundamentalParameterDataRecords(self) -> uint16:
+        """numberOfIFFFundamentalParameterDataRecords"""
+        return len(self.IFFFundamentalParameterDataRecord)
+
+    def marshalledSize(self) -> int:
+        return (
+            self.layerHeader.marshalledSize()
+            + self.beamData.marshalledSize()
+            + 1
+            + 1
+            + 2
+            + sum(
+                item.marshalledSize() for item in self.IFFFundamentalParameterDataRecord
+            )
+        )
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        self.layerHeader.serialize(outputStream)
+        self.beamData.serialize(outputStream)
+        outputStream.write_uint8(self.secondaryOpParameter1)
+        outputStream.write_uint8(self.secondaryOpParameter2)
+        outputStream.write_uint16(self.numberOfIFFFundamentalParameterDataRecords)
+        for item in self.IFFFundamentalParameterDataRecord:
+            item.serialize(outputStream)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        self.layerHeader.parse(inputStream)
+        self.beamData.parse(inputStream)
+        self.secondaryOpParameter1 = inputStream.read_uint8()
+        self.secondaryOpParameter2 = inputStream.read_uint8()
+        numberOfIFFFundamentalParameterDataRecords = inputStream.read_uint16()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.IFFFundamentalParameterDataRecord = [
+            IFFFundamentalParameterData.parse(inputStream)
+            for _ in range(numberOfIFFFundamentalParameterDataRecords)
+        ]
+
+    @classmethod
+    def parseLayer(
+        cls,
+        inputStream: DataInputStream,
+        layerNumber: int,
+        layerSpecificInformation: int,
+        length: int,
+    ) -> "IFFPduLayer2Data":
+        """Construct the layer from its payload; the dispatching
+        PDU has already read the four Layer Header bytes
+        (layerNumber included)."""
+        layer = cls()
+        layer.layerHeader = LayerHeader(layerNumber, layerSpecificInformation, length)
+        layer.beamData.parse(inputStream)
+        layer.secondaryOpParameter1 = inputStream.read_uint8()
+        layer.secondaryOpParameter2 = inputStream.read_uint8()
+        numberOfIFFFundamentalParameterDataRecords = inputStream.read_uint16()
+        layer.IFFFundamentalParameterDataRecord = [
+            IFFFundamentalParameterData.parse(inputStream)
+            for _ in range(numberOfIFFFundamentalParameterDataRecords)
+        ]
+        return layer
+
+
+@dataclass(slots=True)
+class IFFPduLayer3TransponderFormatData:
+    """§7.6.5.4.3 IFF PDU Layer 3 Mode 5 Transponder Format
+
+    Layer 3 Mode 5 transponder format.
+    """
+
+    layerHeader: LayerHeader = field(default_factory=LayerHeader)
+    siteNumber: uint16 = 0
+    applicationNumber: uint16 = 0
+    mode5TransponderBasicData: Mode5TransponderBasicData = field(
+        default_factory=Mode5TransponderBasicData
+    )
+    IFFFundamentalParameterDataRecord: list[IFFData] = field(default_factory=list)
+    padding: uint16 = field(init=False, default=0)
+
+    @property
+    def numberOfIFFDataRecords(self) -> uint16:
+        """numberOfIFFDataRecords"""
+        return len(self.IFFFundamentalParameterDataRecord)
+
+    def marshalledSize(self) -> int:
+        return (
+            self.layerHeader.marshalledSize()
+            + 2
+            + 2
+            + self.mode5TransponderBasicData.marshalledSize()
+            + 2
+            + 2
+            + sum(
+                item.marshalledSize() for item in self.IFFFundamentalParameterDataRecord
+            )
+        )
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        self.layerHeader.serialize(outputStream)
+        outputStream.write_uint16(self.siteNumber)
+        outputStream.write_uint16(self.applicationNumber)
+        self.mode5TransponderBasicData.serialize(outputStream)
+        outputStream.write_uint16(self.padding)
+        outputStream.write_uint16(self.numberOfIFFDataRecords)
+        for item in self.IFFFundamentalParameterDataRecord:
+            item.serialize(outputStream)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        self.layerHeader.parse(inputStream)
+        self.siteNumber = inputStream.read_uint16()
+        self.applicationNumber = inputStream.read_uint16()
+        self.mode5TransponderBasicData.parse(inputStream)
+        self.padding = inputStream.read_uint16()
+        numberOfIFFDataRecords = inputStream.read_uint16()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.IFFFundamentalParameterDataRecord = [
+            IFFData.parseFrom(inputStream) for _ in range(numberOfIFFDataRecords)
+        ]
+
+    @classmethod
+    def parseLayer(
+        cls,
+        inputStream: DataInputStream,
+        layerNumber: int,
+        layerSpecificInformation: int,
+        length: int,
+    ) -> "IFFPduLayer3TransponderFormatData":
+        """Construct the layer from its payload; the dispatching
+        PDU has already read the four Layer Header bytes
+        (layerNumber included)."""
+        layer = cls()
+        layer.layerHeader = LayerHeader(layerNumber, layerSpecificInformation, length)
+        layer.siteNumber = inputStream.read_uint16()
+        layer.applicationNumber = inputStream.read_uint16()
+        mode5TransponderBasicData = Mode5TransponderBasicData()
+        mode5TransponderBasicData.parse(inputStream)
+        layer.mode5TransponderBasicData = mode5TransponderBasicData
+        layer.padding = inputStream.read_uint16()
+        numberOfIFFDataRecords = inputStream.read_uint16()
+        layer.IFFFundamentalParameterDataRecord = [
+            IFFData.parseFrom(inputStream) for _ in range(numberOfIFFDataRecords)
+        ]
+        return layer
+
+
+@dataclass(slots=True)
+class IFFPduLayer3InterrogatorFormatData:
+    """§7.6.5.4.2 IFF PDU Layer 3 Mode 5 Interrogator Format
+
+    Layer 3 Mode 5 interrogator format.
+    """
+
+    layerHeader: LayerHeader = field(default_factory=LayerHeader)
+    siteNumber: uint16 = 0
+    applicationNumber: uint16 = 0
+    mode5InterrogatorBasicData: Mode5InterrogatorBasicData = field(
+        default_factory=Mode5InterrogatorBasicData
+    )
+    IFFFundamentalParameterDataRecord: list[IFFData] = field(default_factory=list)
+    padding: uint16 = field(init=False, default=0)
+
+    @property
+    def numberOfIFFDataRecords(self) -> uint16:
+        """numberOfIFFDataRecords"""
+        return len(self.IFFFundamentalParameterDataRecord)
+
+    def marshalledSize(self) -> int:
+        return (
+            self.layerHeader.marshalledSize()
+            + 2
+            + 2
+            + self.mode5InterrogatorBasicData.marshalledSize()
+            + 2
+            + 2
+            + sum(
+                item.marshalledSize() for item in self.IFFFundamentalParameterDataRecord
+            )
+        )
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        self.layerHeader.serialize(outputStream)
+        outputStream.write_uint16(self.siteNumber)
+        outputStream.write_uint16(self.applicationNumber)
+        self.mode5InterrogatorBasicData.serialize(outputStream)
+        outputStream.write_uint16(self.padding)
+        outputStream.write_uint16(self.numberOfIFFDataRecords)
+        for item in self.IFFFundamentalParameterDataRecord:
+            item.serialize(outputStream)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        self.layerHeader.parse(inputStream)
+        self.siteNumber = inputStream.read_uint16()
+        self.applicationNumber = inputStream.read_uint16()
+        self.mode5InterrogatorBasicData.parse(inputStream)
+        self.padding = inputStream.read_uint16()
+        numberOfIFFDataRecords = inputStream.read_uint16()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.IFFFundamentalParameterDataRecord = [
+            IFFData.parseFrom(inputStream) for _ in range(numberOfIFFDataRecords)
+        ]
+
+    @classmethod
+    def parseLayer(
+        cls,
+        inputStream: DataInputStream,
+        layerNumber: int,
+        layerSpecificInformation: int,
+        length: int,
+    ) -> "IFFPduLayer3InterrogatorFormatData":
+        """Construct the layer from its payload; the dispatching
+        PDU has already read the four Layer Header bytes
+        (layerNumber included)."""
+        layer = cls()
+        layer.layerHeader = LayerHeader(layerNumber, layerSpecificInformation, length)
+        layer.siteNumber = inputStream.read_uint16()
+        layer.applicationNumber = inputStream.read_uint16()
+        mode5InterrogatorBasicData = Mode5InterrogatorBasicData()
+        mode5InterrogatorBasicData.parse(inputStream)
+        layer.mode5InterrogatorBasicData = mode5InterrogatorBasicData
+        layer.padding = inputStream.read_uint16()
+        numberOfIFFDataRecords = inputStream.read_uint16()
+        layer.IFFFundamentalParameterDataRecord = [
+            IFFData.parseFrom(inputStream) for _ in range(numberOfIFFDataRecords)
+        ]
+        return layer
+
+
+@dataclass(slots=True)
+class IFFPduLayer4InterrogatorFormatData:
+    """§7.6.5.5.2 IFF PDU Layer 4 Mode S Interrogator Format
+
+    Layer 4 Mode S interrogator format.
+    """
+
+    layerHeader: LayerHeader = field(default_factory=LayerHeader)
+    siteNumber: uint16 = 0
+    applicationNumber: uint16 = 0
+    modeSInterrogatorBasicData: ModeSInterrogatorBasicData = field(
+        default_factory=ModeSInterrogatorBasicData
+    )
+    IFFFundamentalParameterDataRecord: list[IFFData] = field(default_factory=list)
+    padding: uint16 = field(init=False, default=0)
+
+    @property
+    def numberOfIFFDataRecords(self) -> uint16:
+        """numberOfIFFDataRecords"""
+        return len(self.IFFFundamentalParameterDataRecord)
+
+    def marshalledSize(self) -> int:
+        return (
+            self.layerHeader.marshalledSize()
+            + 2
+            + 2
+            + self.modeSInterrogatorBasicData.marshalledSize()
+            + 2
+            + 2
+            + sum(
+                item.marshalledSize() for item in self.IFFFundamentalParameterDataRecord
+            )
+        )
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        self.layerHeader.serialize(outputStream)
+        outputStream.write_uint16(self.siteNumber)
+        outputStream.write_uint16(self.applicationNumber)
+        self.modeSInterrogatorBasicData.serialize(outputStream)
+        outputStream.write_uint16(self.padding)
+        outputStream.write_uint16(self.numberOfIFFDataRecords)
+        for item in self.IFFFundamentalParameterDataRecord:
+            item.serialize(outputStream)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        self.layerHeader.parse(inputStream)
+        self.siteNumber = inputStream.read_uint16()
+        self.applicationNumber = inputStream.read_uint16()
+        self.modeSInterrogatorBasicData.parse(inputStream)
+        self.padding = inputStream.read_uint16()
+        numberOfIFFDataRecords = inputStream.read_uint16()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.IFFFundamentalParameterDataRecord = [
+            IFFData.parseFrom(inputStream) for _ in range(numberOfIFFDataRecords)
+        ]
+
+    @classmethod
+    def parseLayer(
+        cls,
+        inputStream: DataInputStream,
+        layerNumber: int,
+        layerSpecificInformation: int,
+        length: int,
+    ) -> "IFFPduLayer4InterrogatorFormatData":
+        """Construct the layer from its payload; the dispatching
+        PDU has already read the four Layer Header bytes
+        (layerNumber included)."""
+        layer = cls()
+        layer.layerHeader = LayerHeader(layerNumber, layerSpecificInformation, length)
+        layer.siteNumber = inputStream.read_uint16()
+        layer.applicationNumber = inputStream.read_uint16()
+        modeSInterrogatorBasicData = ModeSInterrogatorBasicData()
+        modeSInterrogatorBasicData.parse(inputStream)
+        layer.modeSInterrogatorBasicData = modeSInterrogatorBasicData
+        layer.padding = inputStream.read_uint16()
+        numberOfIFFDataRecords = inputStream.read_uint16()
+        layer.IFFFundamentalParameterDataRecord = [
+            IFFData.parseFrom(inputStream) for _ in range(numberOfIFFDataRecords)
+        ]
+        return layer
+
+
+@dataclass(slots=True)
+class IFFPduLayer4TransponderFormatData:
+    """§7.6.5.5.3 IFF PDU Layer 4 Mode S Transponder Format
+
+    Layer 4 Mode S transponder format.
+    """
+
+    layerHeader: LayerHeader = field(default_factory=LayerHeader)
+    siteNumber: uint16 = 0
+    applicationNumber: uint16 = 0
+    modeSTransponderBasicData: ModeSTransponderBasicData = field(
+        default_factory=ModeSTransponderBasicData
+    )
+    IFFFundamentalParameterDataRecord: list[IFFData] = field(default_factory=list)
+    padding: uint16 = field(init=False, default=0)
+
+    @property
+    def numberOfIFFDataRecords(self) -> uint16:
+        """numberOfIFFDataRecords"""
+        return len(self.IFFFundamentalParameterDataRecord)
+
+    def marshalledSize(self) -> int:
+        return (
+            self.layerHeader.marshalledSize()
+            + 2
+            + 2
+            + self.modeSTransponderBasicData.marshalledSize()
+            + 2
+            + 2
+            + sum(
+                item.marshalledSize() for item in self.IFFFundamentalParameterDataRecord
+            )
+        )
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        self.layerHeader.serialize(outputStream)
+        outputStream.write_uint16(self.siteNumber)
+        outputStream.write_uint16(self.applicationNumber)
+        self.modeSTransponderBasicData.serialize(outputStream)
+        outputStream.write_uint16(self.padding)
+        outputStream.write_uint16(self.numberOfIFFDataRecords)
+        for item in self.IFFFundamentalParameterDataRecord:
+            item.serialize(outputStream)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        self.layerHeader.parse(inputStream)
+        self.siteNumber = inputStream.read_uint16()
+        self.applicationNumber = inputStream.read_uint16()
+        self.modeSTransponderBasicData.parse(inputStream)
+        self.padding = inputStream.read_uint16()
+        numberOfIFFDataRecords = inputStream.read_uint16()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.IFFFundamentalParameterDataRecord = [
+            IFFData.parseFrom(inputStream) for _ in range(numberOfIFFDataRecords)
+        ]
+
+    @classmethod
+    def parseLayer(
+        cls,
+        inputStream: DataInputStream,
+        layerNumber: int,
+        layerSpecificInformation: int,
+        length: int,
+    ) -> "IFFPduLayer4TransponderFormatData":
+        """Construct the layer from its payload; the dispatching
+        PDU has already read the four Layer Header bytes
+        (layerNumber included)."""
+        layer = cls()
+        layer.layerHeader = LayerHeader(layerNumber, layerSpecificInformation, length)
+        layer.siteNumber = inputStream.read_uint16()
+        layer.applicationNumber = inputStream.read_uint16()
+        modeSTransponderBasicData = ModeSTransponderBasicData()
+        modeSTransponderBasicData.parse(inputStream)
+        layer.modeSTransponderBasicData = modeSTransponderBasicData
+        layer.padding = inputStream.read_uint16()
+        numberOfIFFDataRecords = inputStream.read_uint16()
+        layer.IFFFundamentalParameterDataRecord = [
+            IFFData.parseFrom(inputStream) for _ in range(numberOfIFFDataRecords)
+        ]
+        return layer
+
+
+@dataclass(slots=True)
+class IFFPduLayer5Data:
+    """§7.6.5.6 IFF PDU Layer 5 Data Communications
+
+    Layer 5 data communications.
+    """
+
+    FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
+        "dataCategory": 369,
+    }
+
+    layerHeader: LayerHeader = field(default_factory=LayerHeader)
+    siteNumber: uint16 = 0
+    applicationNumber: uint16 = 0
+    applicableLayers: uint8 = 0
+    dataCategory: enum8 = 0  # [UID 369]
+    IFFFundamentalParameterDataRecord: list[IFFData] = field(default_factory=list)
+    padding: uint16 = field(init=False, default=0)
+    padding2: uint16 = field(init=False, default=0)
+
+    @property
+    def numberOfIFFDataRecords(self) -> uint16:
+        """numberOfIFFDataRecords"""
+        return len(self.IFFFundamentalParameterDataRecord)
+
+    def marshalledSize(self) -> int:
+        return (
+            self.layerHeader.marshalledSize()
+            + 2
+            + 2
+            + 2
+            + 1
+            + 1
+            + 2
+            + 2
+            + sum(
+                item.marshalledSize() for item in self.IFFFundamentalParameterDataRecord
+            )
+        )
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        self.layerHeader.serialize(outputStream)
+        outputStream.write_uint16(self.siteNumber)
+        outputStream.write_uint16(self.applicationNumber)
+        outputStream.write_uint16(self.padding)
+        outputStream.write_uint8(self.applicableLayers)
+        outputStream.write_uint8(self.dataCategory)
+        outputStream.write_uint16(self.padding2)
+        outputStream.write_uint16(self.numberOfIFFDataRecords)
+        for item in self.IFFFundamentalParameterDataRecord:
+            item.serialize(outputStream)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        self.layerHeader.parse(inputStream)
+        self.siteNumber = inputStream.read_uint16()
+        self.applicationNumber = inputStream.read_uint16()
+        self.padding = inputStream.read_uint16()
+        self.applicableLayers = inputStream.read_uint8()
+        self.dataCategory = rich_or_int(369, inputStream.read_uint8())
+        self.padding2 = inputStream.read_uint16()
+        numberOfIFFDataRecords = inputStream.read_uint16()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.IFFFundamentalParameterDataRecord = [
+            IFFData.parseFrom(inputStream) for _ in range(numberOfIFFDataRecords)
+        ]
+
+    @classmethod
+    def parseLayer(
+        cls,
+        inputStream: DataInputStream,
+        layerNumber: int,
+        layerSpecificInformation: int,
+        length: int,
+    ) -> "IFFPduLayer5Data":
+        """Construct the layer from its payload; the dispatching
+        PDU has already read the four Layer Header bytes
+        (layerNumber included)."""
+        layer = cls()
+        layer.layerHeader = LayerHeader(layerNumber, layerSpecificInformation, length)
+        layer.siteNumber = inputStream.read_uint16()
+        layer.applicationNumber = inputStream.read_uint16()
+        layer.padding = inputStream.read_uint16()
+        layer.applicableLayers = inputStream.read_uint8()
+        layer.dataCategory = rich_or_int(369, inputStream.read_uint8())
+        layer.padding2 = inputStream.read_uint16()
+        numberOfIFFDataRecords = inputStream.read_uint16()
+        layer.IFFFundamentalParameterDataRecord = [
+            IFFData.parseFrom(inputStream) for _ in range(numberOfIFFDataRecords)
+        ]
+        return layer
+
+
+@dataclass(slots=True)
+class IdentificationFriendOrFoePdu(DistributedEmissionsRegenerationFamilyPdu):
+    """§7.6.5 Identification Friend or Foe (IFF) PDU
+
+    Information about military and civilian interrogators, transponders, and
+    specific other electronic systems. See §5.7.6. Canonical descriptive
+    name; IFFPdu is an alias.
+
+    Layer 1 is always present; layers 2-5 are length-driven optionals — each
+    begins with a Layer Header whose Length includes the header (Table 165),
+    so parse consumes layers until the PDU length is exhausted. Layers 3 and
+    4 each have interrogator and transponder formats; the Layer 1 System
+    Type field [UID 82] picks the format.
+    """
+
+    pduType: ClassVar[int] = 28  # [UID 4]
+
+    emittingEntityId: EntityIdentifier = field(default_factory=EntityIdentifier)
+    eventID: EventIdentifier = field(default_factory=EventIdentifier)
+    location: Vector3Float = field(default_factory=Vector3Float)
+    systemID: SystemIdentifier = field(default_factory=SystemIdentifier)
+    systemDesignator: uint8 = 0
+    systemSpecificData: uint8 = 0
+    fundamentalParameters: FundamentalOperationalData = field(
+        default_factory=FundamentalOperationalData
+    )
+    iFFPduLayer2Data: IFFPduLayer2Data | None = None
+    iFFPduLayer3TransponderFormatData: IFFPduLayer3TransponderFormatData | None = None
+    iFFPduLayer3InterrogatorFormatData: IFFPduLayer3InterrogatorFormatData | None = None
+    iFFPduLayer4InterrogatorFormatData: IFFPduLayer4InterrogatorFormatData | None = None
+    iFFPduLayer4TransponderFormatData: IFFPduLayer4TransponderFormatData | None = None
+    iFFPduLayer5Data: IFFPduLayer5Data | None = None
+
+    def _layersInOrder(self) -> list:
+        """Present layers in numeric wire order (2, 3, 4, 5; one format
+        per layer — Table 165 allows no duplicate layer numbers)."""
+        return [
+            layer
+            for layer in (
+                self.iFFPduLayer2Data,
+                self.iFFPduLayer3TransponderFormatData,
+                self.iFFPduLayer3InterrogatorFormatData,
+                self.iFFPduLayer4TransponderFormatData,
+                self.iFFPduLayer4InterrogatorFormatData,
+                self.iFFPduLayer5Data,
+            )
+            if layer is not None
+        ]
+
+    def _marshalledBodySize(self):
+        size = (
+            self.emittingEntityId.marshalledSize()
+            + self.eventID.marshalledSize()
+            + self.location.marshalledSize()
+            + self.systemID.marshalledSize()
+            + 1
+            + 1
+            + self.fundamentalParameters.marshalledSize()
+        )
+        size += sum(layer.marshalledSize() for layer in self._layersInOrder())
+        return size
+
+    def _serializeBody(self, outputStream: DataOutputStream):
+        self.emittingEntityId.serialize(outputStream)
+        self.eventID.serialize(outputStream)
+        self.location.serialize(outputStream)
+        self.systemID.serialize(outputStream)
+        outputStream.write_uint8(self.systemDesignator)
+        outputStream.write_uint8(self.systemSpecificData)
+        self.fundamentalParameters.serialize(outputStream)
+        for layer in self._layersInOrder():
+            layer.layerHeader.length = layer.marshalledSize()
+            layer.serialize(outputStream)
+
+    def _parseBody(self, inputStream: DataInputStream):
+        self.emittingEntityId = EntityIdentifier.parse(inputStream)
+        self.eventID = EventIdentifier.parse(inputStream)
+        self.location.parse(inputStream)
+        self.systemID = SystemIdentifier.parse(inputStream)
+        self.systemDesignator = inputStream.read_uint8()
+        self.systemSpecificData = inputStream.read_uint8()
+        self.fundamentalParameters.parse(inputStream)
+        # generator: layers 2-5 are length-driven — each begins with a Layer
+        # Header whose Length includes the header (Table 165), so the loop runs
+        # on the remaining wire length, not a flag; the Layer 1 System Type
+        # field picks the Layer 3/4 format ([UID 82]: interrogator sides are
+        # Mark XIIA Interrogator 6, Mode 5 Interrogator 7, Mode S Interrogator
+        # 8, and the Combined Interrogator/Transponders 12-13); parseLayer
+        # takes the header fields the dispatch already consumed
+        remaining = self.header._wireLength - 12 - 48
+        while remaining >= 4:
+            layerNumber = inputStream.read_uint8()
+            layerSpecificInformation = inputStream.read_uint8()
+            length = inputStream.read_uint16()
+            if layerNumber == 2:
+                self.iFFPduLayer2Data = IFFPduLayer2Data.parseLayer(
+                    inputStream, layerNumber, layerSpecificInformation, length
+                )
+            elif layerNumber == 3:
+                if int(self.systemID.systemType) in (6, 7, 12, 13):
+                    self.iFFPduLayer3InterrogatorFormatData = (
+                        IFFPduLayer3InterrogatorFormatData.parseLayer(
+                            inputStream, layerNumber, layerSpecificInformation, length
+                        )
+                    )
+                else:
+                    self.iFFPduLayer3TransponderFormatData = (
+                        IFFPduLayer3TransponderFormatData.parseLayer(
+                            inputStream, layerNumber, layerSpecificInformation, length
+                        )
+                    )
+            elif layerNumber == 4:
+                if int(self.systemID.systemType) in (6, 8, 12, 13):
+                    self.iFFPduLayer4InterrogatorFormatData = (
+                        IFFPduLayer4InterrogatorFormatData.parseLayer(
+                            inputStream, layerNumber, layerSpecificInformation, length
+                        )
+                    )
+                else:
+                    self.iFFPduLayer4TransponderFormatData = (
+                        IFFPduLayer4TransponderFormatData.parseLayer(
+                            inputStream, layerNumber, layerSpecificInformation, length
+                        )
+                    )
+            elif layerNumber == 5:
+                self.iFFPduLayer5Data = IFFPduLayer5Data.parseLayer(
+                    inputStream, layerNumber, layerSpecificInformation, length
+                )
+            else:
+                break  # layers 6-7 are not defined; stop before misparsing
+            remaining -= length
+
+
+# generator: aliasFor elements — one class plus a name assignment;
+# descriptive name canonical, abbreviation aliased
+IFFPdu = IdentificationFriendOrFoePdu
+
+
+@dataclass(slots=True)
+class PropulsionSystemData:
+    """§6.2.68 Propulsion System Data record
+
+    contains information describing the propulsion systems of the entity.
+    This information shall be provided for each active propulsion system
+    defined.
+    """
+
+    powerSetting: float32 = 0.0
+    engineRpm: float32 = 0.0
+
+    def marshalledSize(self) -> int:
+        return 8
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        outputStream.write_float32(self.powerSetting)
+        outputStream.write_float32(self.engineRpm)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        self.powerSetting = inputStream.read_float32()
+        self.engineRpm = inputStream.read_float32()
+
+    @classmethod
+    def parseFrom(cls, inputStream: DataInputStream) -> "PropulsionSystemData":
+        """Construct a new record from the stream (list-parse helper; the
+        mutating ``parse`` above satisfies the Record protocol)."""
+        item = cls()
+        item.parse(inputStream)
+        return item
+
+
+@dataclass(slots=True)
+class VectoringNozzleSystem:
+    """§6.2.97 Vectoring Nozzle System Data record
+
+    Operational data for describing the vectoring nozzle systems.
+    """
+
+    horizontalDeflectionAngle: float32 = 0.0
+    verticalDeflectionAngle: float32 = 0.0
+
+    def marshalledSize(self) -> int:
+        return 8
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        outputStream.write_float32(self.horizontalDeflectionAngle)
+        outputStream.write_float32(self.verticalDeflectionAngle)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        self.horizontalDeflectionAngle = inputStream.read_float32()
+        self.verticalDeflectionAngle = inputStream.read_float32()
+
+    @classmethod
+    def parseFrom(cls, inputStream: DataInputStream) -> "VectoringNozzleSystem":
+        """Construct a new record from the stream (list-parse helper; the
+        mutating ``parse`` above satisfies the Record protocol)."""
+        item = cls()
+        item.parse(inputStream)
+        return item
+
+
+@dataclass(slots=True)
+class SupplementalEmissionEntityStatePdu(DistributedEmissionsRegenerationFamilyPdu):
+    """§7.6.6 Supplemental Emission/Entity State (SEES) PDU
+
+    Certain supplemental information on an entity’s physical state and
+    emissions. See §5.7.7. Canonical descriptive name; SEESPdu is an alias.
+
+    Signature representation indexes are handles into the receiving
+    application's signature tables, not physical values (§5.7.7).
+    """
+
+    pduType: ClassVar[int] = 30  # [UID 4]
+
+    originatingEntityID: EntityIdentifier = field(default_factory=EntityIdentifier)
+    infraredSignatureRepresentationIndex: uint16 = 0
+    acousticSignatureRepresentationIndex: uint16 = 0
+    radarCrossSectionSignatureRepresentationIndex: uint16 = 0
+    propulsionSystemData: list[PropulsionSystemData] = field(default_factory=list)
+    vectoringSystemData: list[VectoringNozzleSystem] = field(default_factory=list)
+
+    @property
+    def numberOfPropulsionSystems(self) -> uint16:
+        """how many propulsion systems."""
+        return len(self.propulsionSystemData)
+
+    @property
+    def numberOfVectoringNozzleSystems(self) -> uint16:
+        """how many vectoring nozzle systems."""
+        return len(self.vectoringSystemData)
+
+    def _marshalledBodySize(self) -> int:
+        return (
+            self.originatingEntityID.marshalledSize()
+            + 2
+            + 2
+            + 2
+            + 2
+            + 2
+            + sum(item.marshalledSize() for item in self.propulsionSystemData)
+            + sum(item.marshalledSize() for item in self.vectoringSystemData)
+        )
+
+    def _serializeBody(self, outputStream: DataOutputStream) -> None:
+        self.originatingEntityID.serialize(outputStream)
+        outputStream.write_uint16(self.infraredSignatureRepresentationIndex)
+        outputStream.write_uint16(self.acousticSignatureRepresentationIndex)
+        outputStream.write_uint16(self.radarCrossSectionSignatureRepresentationIndex)
+        outputStream.write_uint16(self.numberOfPropulsionSystems)
+        outputStream.write_uint16(self.numberOfVectoringNozzleSystems)
+        for item in self.propulsionSystemData:
+            item.serialize(outputStream)
+        for item in self.vectoringSystemData:
+            item.serialize(outputStream)
+
+    def _parseBody(self, inputStream: DataInputStream) -> None:
+        self.originatingEntityID = EntityIdentifier.parse(inputStream)
+        self.infraredSignatureRepresentationIndex = inputStream.read_uint16()
+        self.acousticSignatureRepresentationIndex = inputStream.read_uint16()
+        self.radarCrossSectionSignatureRepresentationIndex = inputStream.read_uint16()
+        numberOfPropulsionSystems = inputStream.read_uint16()
+        numberOfVectoringNozzleSystems = inputStream.read_uint16()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.propulsionSystemData = [
+            PropulsionSystemData.parseFrom(inputStream)
+            for _ in range(numberOfPropulsionSystems)
+        ]
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.vectoringSystemData = [
+            VectoringNozzleSystem.parseFrom(inputStream)
+            for _ in range(numberOfVectoringNozzleSystems)
+        ]
+
+
+SEESPdu = SupplementalEmissionEntityStatePdu

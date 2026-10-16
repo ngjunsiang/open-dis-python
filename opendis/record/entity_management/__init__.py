@@ -47,6 +47,7 @@ __all__ = [
     "IsPartOfPdu",
     "NamedLocationIdentification",
     "Relationship",
+    "SilentEntitySystem",
     "TransferOwnershipPdu",
 ]
 
@@ -223,6 +224,60 @@ class NamedLocationIdentification:
 
 
 @dataclass(slots=True)
+class SilentEntitySystem:
+    """§6.2.79 Silent Entity System record
+
+    information abou an enitity not producing espdus.
+
+    One Silent Entity System record stands for a number of same-typed silent
+    entities; the appearance-record list carries one raw uint32 appearance
+    per entity (§6.2.79, Table 183).
+    """
+
+    numberOfEntities: uint16 = 0
+    entityType: EntityType = field(default_factory=EntityType)
+    appearanceRecordList: list[uint32] = field(default_factory=list)
+
+    @property
+    def numberOfAppearanceRecords(self) -> uint16:
+        """number of entity appearance records that follow."""
+        return len(self.appearanceRecordList)
+
+    def marshalledSize(self) -> int:
+        return (
+            2
+            + 2
+            + self.entityType.marshalledSize()
+            + 4 * len(self.appearanceRecordList)
+        )
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        outputStream.write_uint16(self.numberOfEntities)
+        outputStream.write_uint16(self.numberOfAppearanceRecords)
+        self.entityType.serialize(outputStream)
+        for item in self.appearanceRecordList:
+            outputStream.write_uint32(item)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        self.numberOfEntities = inputStream.read_uint16()
+        numberOfAppearanceRecords = inputStream.read_uint16()
+        self.entityType = EntityType.parse(inputStream)
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.appearanceRecordList = [
+            inputStream.read_uint32() for _ in range(numberOfAppearanceRecords)
+        ]
+
+    @classmethod
+    def parseFrom(cls, inputStream: DataInputStream) -> "SilentEntitySystem":
+        """Construct a new record from the stream (list-parse helper; the
+        mutating ``parse`` above satisfies the Record protocol)."""
+        item = cls()
+        item.parse(inputStream)
+        return item
+
+
+@dataclass(slots=True)
 class EntityManagementFamilyPdu(Pdu):
     """§7.8 Entity Management family PDU
 
@@ -266,7 +321,7 @@ class AggregateStatePdu(EntityManagementFamilyPdu):
     aggregateIDList: list[AggregateIdentifier] = field(default_factory=list)
     entityIDList: list[EntityIdentifier] = field(default_factory=list)
     silentAggregateSystemList: list[EntityType] = field(default_factory=list)
-    silentEntitySystemList: list[EntityType] = field(default_factory=list)
+    silentEntitySystemList: list[SilentEntitySystem] = field(default_factory=list)
     variableDatumList: list[VariableDatum] = field(default_factory=list)
 
     @property
@@ -394,7 +449,8 @@ class AggregateStatePdu(EntityManagementFamilyPdu):
             EntityType.parse(inputStream) for _ in range(numberOfSilentAggregateTypes)
         ]
         self.silentEntitySystemList = [
-            EntityType.parse(inputStream) for _ in range(numberOfSilentEntityTypes)
+            SilentEntitySystem.parseFrom(inputStream)
+            for _ in range(numberOfSilentEntityTypes)
         ]
         numberOfVariableDatumRecords = inputStream.read_uint32()
         self.variableDatumList = [

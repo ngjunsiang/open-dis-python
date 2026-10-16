@@ -26,7 +26,9 @@ sys.path.insert(0, str(REPO))
 from opendis.record.factory import PDU_FAMILIES, PduTypeDecoders, createPdu  # noqa: E402
 from opendis.stream import DataInputStream, DataOutputStream  # noqa: E402
 
-# (module, class, pduType, family) — one representative per new family
+# (module, class, pduType, family) — one representative per new family,
+# plus the Phase 5 additions (Collision/ESU/Attribute §7.2.3-§7.2.6, IFF,
+# SEES, Gridded Data)
 REPRESENTATIVE = [
     ("record.warfare", "DetonationPdu", 3, 2),
     ("record.logistics", "RepairResponsePdu", 10, 3),
@@ -39,6 +41,13 @@ REPRESENTATIVE = [
     ("record.synthetic_environment", "ArealObjectStatePdu", 45, 9),
     ("record.distributed_emissions", "DesignatorPdu", 24, 6),
     ("record.live_entity", "ArticulatedPartsPdu", 48, 11),
+    ("record.entity_information", "CollisionPdu", 4, 1),
+    ("record.entity_information", "CollisionElasticPdu", 66, 1),
+    ("record.entity_information", "EntityStateUpdatePdu", 67, 1),
+    ("record.entity_information", "AttributePdu", 72, 1),
+    ("record.distributed_emissions", "IdentificationFriendOrFoePdu", 28, 6),
+    ("record.distributed_emissions", "SupplementalEmissionEntityStatePdu", 30, 6),
+    ("record.synthetic_environment", "GriddedDataPdu", 42, 9),
 ]
 
 # The standard's fixed-size totals for populated-shape checks (bytes);
@@ -55,6 +64,13 @@ FIXED_SIZES = {
     45: None,  # Areal Object State: 48 + 24n
     24: 88,  # Designator
     48: None,  # Articulated Parts: 17 + 16N
+    4: 60,  # Collision (Table 135)
+    66: 100,  # Collision-Elastic (Table 136, incl. the seven tail fields)
+    67: 72,  # Entity State Update, N=0 (576 bits + 128N)
+    72: 32,  # Attribute, S=0 (256 bits + record sets)
+    28: 60,  # IFF Layer 1 only (480 bits, Tables 165/167)
+    30: 28,  # SEES (Table 174 base)
+    42: 64,  # Gridded Data, N=0 G=0 (512 bits, Table 192)
 }
 
 

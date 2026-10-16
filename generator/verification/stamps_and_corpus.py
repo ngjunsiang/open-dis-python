@@ -56,6 +56,13 @@ STANDARD_FIXED_SIZES = {
     54: 40,  # Stop/Freeze-R (320 bits)
     55: 32,  # Acknowledge-R (256 bits)
     71: 40,  # IO Report base (320 bits)
+    4: 60,  # Collision (Table 135)
+    28: 60,  # IFF Layer 1 only (480 bits)
+    30: 28,  # SEES (Table 174 base)
+    42: 64,  # Gridded Data, empty grid (512 bits)
+    66: 100,  # Collision-Elastic (Table 136)
+    67: 72,  # Entity State Update, N=0 (Table 137)
+    72: 32,  # Attribute, S=0 (Table 138)
 }
 
 

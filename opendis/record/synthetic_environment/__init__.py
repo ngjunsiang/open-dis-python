@@ -1,18 +1,18 @@
 """Synthetic Environment family (IEEE 1278.1-2012 §7.10) — target-state PDUs.
 
 Wire ground truth: submodules/open-dis-spec-xml/xml/SyntheticEnvironmentFamilyPdus.xml.
-Environmental Process, Point/Linear/Areal Object State, plus the Object
-Type/Identifier records, Linear Segment Parameter, and the generic
-Environment record (opaque geometry, typed decoders deferred).
-
-Scope note: GriddedDataPdu (type 42) — grid-axis descriptors × grid
-data representation types 0–6 — is NOT implemented in this pass; its
-pduType stays unregistered, so datagrams degrade to the lossless
-``UnrecognizedPdu`` fallback (see docs/design/sample-review.md).
+Environmental Process, Gridded Data, Point/Linear/Areal Object State,
+plus the Object Type/Identifier records, Linear Segment Parameter, and
+the generic Environment record (opaque geometry, typed decoders
+deferred). The Gridded Data PDU (type 42) carries the §6.2.40 grid-axis
+descriptors (fixed/variable dispatch) and the §6.2.41 Grid Data records
+(representation types 0-2; the XML declares exactly those three).
 
 Python-side deltas from the XML (sample-review rulings): the bitfield-
 mapped appearance/modification fields (uids 229, 240, 242, 249) stay raw
-integers in this pass (views deferred, PduStatus precedent).
+integers (the 2026-10-16 viewable-primitive ruling: rich presentation
+belongs to the optional plugin layer); the grid-data record count is
+derived per Table 192 (the XML's countFieldName is an upstream bug).
 """
 
 from dataclasses import dataclass, field
@@ -20,6 +20,7 @@ from typing import ClassVar
 
 from opendis.enum_registry import rich_or_int
 from opendis.record.common import (
+    ClockTime,
     EntityIdentifier,
     EntityType,
     EulerAngles,
@@ -28,12 +29,18 @@ from opendis.record.common import (
 )
 from opendis.record.pdu import Pdu
 from opendis.stream import DataInputStream, DataOutputStream
-from opendis.types import enum8, enum32, float32, uint8, uint16, uint32
+from opendis.types import enum8, enum16, enum32, float32, float64, uint8, uint16, uint32
 
 __all__ = [
     "ArealObjectStatePdu",
     "EnvironmentRecord",
     "EnvironmentalProcessPdu",
+    "GridAxisDescriptorFixed",
+    "GridAxisDescriptorVariable",
+    "GridDataType0",
+    "GridDataType1",
+    "GridDataType2",
+    "GriddedDataPdu",
     "LinearObjectStatePdu",
     "LinearSegmentParameter",
     "ObjectIdentifier",
@@ -41,6 +48,16 @@ __all__ = [
     "PointObjectStatePdu",
     "SyntheticEnvironmentFamilyPdu",
 ]
+
+
+def _padTo16(byteCount: int) -> int:
+    """Pad bytes needed to bring a datagram to a 16-bit boundary."""
+    return (2 - byteCount % 2) % 2
+
+
+def _padTo32(byteCount: int) -> int:
+    """Pad bytes needed to bring a datagram to a 32-bit boundary."""
+    return (4 - byteCount % 4) % 4
 
 
 def _padTo64(byteCount: int) -> int:
@@ -307,6 +324,445 @@ class EnvironmentalProcessPdu(SyntheticEnvironmentFamilyPdu):
             EnvironmentRecord.parseFrom(inputStream)
             for _ in range(numberOfEnvironmentRecords)
         ]
+
+
+@dataclass(slots=True)
+class GridAxisDescriptorFixed:
+    """§6.2.40
+
+    Grid axis record for fixed data.
+    """
+
+    FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
+        "axisType": 377,
+    }
+
+    domainInitialXi: float64 = 0.0
+    domainFinalXi: float64 = 0.0
+    domainPointsXi: uint16 = 0
+    interleafFactor: uint8 = 0
+    axisType: enum8 = 0  # [UID 377]
+    numberOfPointsOnXiAxis: uint16 = 0
+    initialIndex: uint16 = 0
+
+    def marshalledSize(self) -> int:
+        return 24
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        outputStream.write_float64(self.domainInitialXi)
+        outputStream.write_float64(self.domainFinalXi)
+        outputStream.write_uint16(self.domainPointsXi)
+        outputStream.write_uint8(self.interleafFactor)
+        outputStream.write_uint8(self.axisType)
+        outputStream.write_uint16(self.numberOfPointsOnXiAxis)
+        outputStream.write_uint16(self.initialIndex)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        self.domainInitialXi = inputStream.read_float64()
+        self.domainFinalXi = inputStream.read_float64()
+        self.domainPointsXi = inputStream.read_uint16()
+        self.interleafFactor = inputStream.read_uint8()
+        self.axisType = rich_or_int(377, inputStream.read_uint8())
+        self.numberOfPointsOnXiAxis = inputStream.read_uint16()
+        self.initialIndex = inputStream.read_uint16()
+
+    @classmethod
+    def parseFrom(cls, inputStream: DataInputStream) -> "GridAxisDescriptorFixed":
+        """Construct a new record from the stream (list-parse helper; the
+        mutating ``parse`` above satisfies the Record protocol)."""
+        item = cls()
+        item.parse(inputStream)
+        return item
+
+
+@dataclass(slots=True)
+class GridAxisDescriptorVariable:
+    """§6.2.40
+
+    Grid axis descriptor for variable spacing axis data.
+    """
+
+    FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
+        "axisType": 377,
+    }
+
+    domainInitialXi: float64 = 0.0
+    domainFinalXi: float64 = 0.0
+    domainPointsXi: uint16 = 0
+    interleafFactor: uint8 = 0
+    axisType: enum8 = 0  # [UID 377]
+    initialIndex: uint16 = 0
+    coordinateScaleXi: float64 = 0.0
+    coordinateOffsetXi: float64 = 0.0
+    xiValues: list[uint16] = field(default_factory=list)
+
+    @property
+    def numberOfPointsOnXiAxis(self) -> uint16:
+        """Number of grid locations along Xi axis."""
+        return len(self.xiValues)
+
+    def _unpaddedBodySize(self) -> int:
+        return 8 + 8 + 2 + 1 + 1 + 2 + 2 + 8 + 8 + 2 * len(self.xiValues)
+
+    def marshalledSize(self) -> int:
+        return self._unpaddedBodySize() + _padTo64(self._unpaddedBodySize())
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        outputStream.write_float64(self.domainInitialXi)
+        outputStream.write_float64(self.domainFinalXi)
+        outputStream.write_uint16(self.domainPointsXi)
+        outputStream.write_uint8(self.interleafFactor)
+        outputStream.write_uint8(self.axisType)
+        outputStream.write_uint16(self.numberOfPointsOnXiAxis)
+        outputStream.write_uint16(self.initialIndex)
+        outputStream.write_float64(self.coordinateScaleXi)
+        outputStream.write_float64(self.coordinateOffsetXi)
+        for item in self.xiValues:
+            outputStream.write_uint16(item)
+        padding = _padTo64(0 + self._unpaddedBodySize())
+        if padding:
+            outputStream.write_bytes(b"\x00" * padding)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        self.domainInitialXi = inputStream.read_float64()
+        self.domainFinalXi = inputStream.read_float64()
+        self.domainPointsXi = inputStream.read_uint16()
+        self.interleafFactor = inputStream.read_uint8()
+        self.axisType = rich_or_int(377, inputStream.read_uint8())
+        numberOfPointsOnXiAxis = inputStream.read_uint16()
+        self.initialIndex = inputStream.read_uint16()
+        self.coordinateScaleXi = inputStream.read_float64()
+        self.coordinateOffsetXi = inputStream.read_float64()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.xiValues = [
+            inputStream.read_uint16() for _ in range(numberOfPointsOnXiAxis)
+        ]
+        padding = _padTo64(0 + self._unpaddedBodySize())
+        if padding:
+            inputStream.read_bytes(padding)
+
+
+@dataclass(slots=True)
+class GridDataType0:
+    """6.2.41, table 68."""
+
+    FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
+        "sampleType": 246,
+        "dataRepresentation": 247,
+    }
+
+    sampleType: enum16 = 0  # [UID 246]
+    dataRepresentation: enum16 = 0  # [UID 247]
+    dataValues: list[uint8] = field(default_factory=list)
+
+    @property
+    def numberOfBytes(self) -> uint16:
+        """numberOfBytes"""
+        return len(self.dataValues)
+
+    def _unpaddedBodySize(self) -> int:
+        return 2 + 2 + 2 + len(self.dataValues)
+
+    def marshalledSize(self) -> int:
+        return self._unpaddedBodySize() + _padTo16(self._unpaddedBodySize())
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        outputStream.write_uint16(self.sampleType)
+        outputStream.write_uint16(self.dataRepresentation)
+        outputStream.write_uint16(self.numberOfBytes)
+        for item in self.dataValues:
+            outputStream.write_uint8(item)
+        padding = _padTo16(0 + self._unpaddedBodySize())
+        if padding:
+            outputStream.write_bytes(b"\x00" * padding)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        self.sampleType = rich_or_int(246, inputStream.read_uint16())
+        self.dataRepresentation = rich_or_int(247, inputStream.read_uint16())
+        numberOfBytes = inputStream.read_uint16()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.dataValues = [inputStream.read_uint8() for _ in range(numberOfBytes)]
+        padding = _padTo16(0 + self._unpaddedBodySize())
+        if padding:
+            inputStream.read_bytes(padding)
+
+
+@dataclass(slots=True)
+class GridDataType1:
+    """6.2.41, table 69."""
+
+    FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
+        "sampleType": 246,
+        "dataRepresentation": 247,
+    }
+
+    sampleType: enum16 = 0  # [UID 246]
+    dataRepresentation: enum16 = 0  # [UID 247]
+    fieldScale: float32 = 0.0
+    fieldOffset: float32 = 0.0
+    dataValues: list[uint16] = field(default_factory=list)
+
+    @property
+    def numberOfValues(self) -> uint16:
+        """numberOfValues"""
+        return len(self.dataValues)
+
+    def _unpaddedBodySize(self) -> int:
+        return 2 + 2 + 4 + 4 + 2 + 2 * len(self.dataValues)
+
+    def marshalledSize(self) -> int:
+        return self._unpaddedBodySize() + _padTo32(self._unpaddedBodySize())
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        outputStream.write_uint16(self.sampleType)
+        outputStream.write_uint16(self.dataRepresentation)
+        outputStream.write_float32(self.fieldScale)
+        outputStream.write_float32(self.fieldOffset)
+        outputStream.write_uint16(self.numberOfValues)
+        for item in self.dataValues:
+            outputStream.write_uint16(item)
+        padding = _padTo32(0 + self._unpaddedBodySize())
+        if padding:
+            outputStream.write_bytes(b"\x00" * padding)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        self.sampleType = rich_or_int(246, inputStream.read_uint16())
+        self.dataRepresentation = rich_or_int(247, inputStream.read_uint16())
+        self.fieldScale = inputStream.read_float32()
+        self.fieldOffset = inputStream.read_float32()
+        numberOfValues = inputStream.read_uint16()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.dataValues = [inputStream.read_uint16() for _ in range(numberOfValues)]
+        padding = _padTo32(0 + self._unpaddedBodySize())
+        if padding:
+            inputStream.read_bytes(padding)
+
+
+@dataclass(slots=True)
+class GridDataType2:
+    """6.2.41, table 70."""
+
+    FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
+        "sampleType": 246,
+        "dataRepresentation": 247,
+    }
+
+    sampleType: enum16 = 0  # [UID 246]
+    dataRepresentation: enum16 = 0  # [UID 247]
+    dataValues: list[float32] = field(default_factory=list)
+    padding: uint16 = field(init=False, default=0)
+
+    @property
+    def numberOfValues(self) -> uint16:
+        """numberOfValues"""
+        return len(self.dataValues)
+
+    def marshalledSize(self) -> int:
+        return 2 + 2 + 2 + 2 + 4 * len(self.dataValues)
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        outputStream.write_uint16(self.sampleType)
+        outputStream.write_uint16(self.dataRepresentation)
+        outputStream.write_uint16(self.numberOfValues)
+        outputStream.write_uint16(self.padding)
+        for item in self.dataValues:
+            outputStream.write_float32(item)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        self.sampleType = rich_or_int(246, inputStream.read_uint16())
+        self.dataRepresentation = rich_or_int(247, inputStream.read_uint16())
+        numberOfValues = inputStream.read_uint16()
+        self.padding = inputStream.read_uint16()
+        # Never append to a pre-existing list (instance-reuse corruption,
+        # PR #49): the list is replaced wholesale.
+        self.dataValues = [inputStream.read_float32() for _ in range(numberOfValues)]
+
+
+@dataclass(slots=True)
+class GriddedDataPdu(SyntheticEnvironmentFamilyPdu):
+    """§7.10.3 Gridded Data PDU
+
+    Used to communicate information about global, spatially varying
+    environmental effects.
+
+    The grid-data record count is derived: G = vectorDimension x the product
+    of the per-axis point counts (Table 192) — the XML's
+    countFieldName="numberOfGridAxes" on the list is an upstream bug. Axis
+    descriptors dispatch on their trailing axisType byte ([UID 377]); grid
+    data records on dataRepresentation ([UID 247], formats 0-2 per §6.2.41).
+    """
+
+    pduType: ClassVar[int] = 42  # [UID 4]
+
+    FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
+        "coordinateSystem": 244,
+        "constantGrid": 245,
+    }
+
+    environmentalSimulationApplicationID: EntityIdentifier = field(
+        default_factory=EntityIdentifier
+    )
+    fieldNumber: uint16 = 0
+    pduNumber: uint16 = 0
+    pduTotal: uint16 = 0
+    coordinateSystem: enum16 = 0  # [UID 244]
+    constantGrid: enum8 = 0  # [UID 245]
+    environmentType: EntityType = field(default_factory=EntityType)
+    orientation: EulerAngles = field(default_factory=EulerAngles)
+    sampleTime: ClockTime = field(default_factory=ClockTime)
+    totalValues: uint32 = 0
+    vectorDimension: uint8 = 0
+    gridAxisDescriptors: list[GridAxisDescriptorFixed] = field(default_factory=list)
+    gridDataRecords: list[GridDataType0 | GridDataType1 | GridDataType2] = field(
+        default_factory=list
+    )
+    padding1: uint8 = field(init=False, default=0)
+    padding2: uint16 = field(init=False, default=0)
+
+    @property
+    def numberOfGridAxes(self) -> uint8:
+        """number of grid axes for the environmental data."""
+        return len(self.gridAxisDescriptors)
+
+    def _marshalledBodySize(self):
+        return (
+            6
+            + 2
+            + 2
+            + 2
+            + 2
+            + 1
+            + 1
+            + self.environmentType.marshalledSize()
+            + self.orientation.marshalledSize()
+            + self.sampleTime.marshalledSize()
+            + 4
+            + 1
+            + 1
+            + 2
+            + sum(axis.marshalledSize() for axis in self.gridAxisDescriptors)
+            + sum(record.marshalledSize() for record in self.gridDataRecords)
+        )
+
+    def _serializeBody(self, outputStream: DataOutputStream):
+        self.environmentalSimulationApplicationID.serialize(outputStream)
+        outputStream.write_uint16(self.fieldNumber)
+        outputStream.write_uint16(self.pduNumber)
+        outputStream.write_uint16(self.pduTotal)
+        outputStream.write_uint16(self.coordinateSystem)
+        outputStream.write_uint8(self.numberOfGridAxes)
+        outputStream.write_uint8(self.constantGrid)
+        self.environmentType.serialize(outputStream)
+        self.orientation.serialize(outputStream)
+        self.sampleTime.serialize(outputStream)
+        outputStream.write_uint32(self.totalValues)
+        outputStream.write_uint8(self.vectorDimension)
+        outputStream.write_uint8(self.padding1)
+        outputStream.write_uint16(self.padding2)
+        for axis in self.gridAxisDescriptors:
+            axis.serialize(outputStream)
+        for record in self.gridDataRecords:
+            record.serialize(outputStream)
+
+    def _parseBody(self, inputStream: DataInputStream):
+        self.environmentalSimulationApplicationID = EntityIdentifier.parse(inputStream)
+        self.fieldNumber = inputStream.read_uint16()
+        self.pduNumber = inputStream.read_uint16()
+        self.pduTotal = inputStream.read_uint16()
+        self.coordinateSystem = rich_or_int(244, inputStream.read_uint16())
+        numberOfGridAxes = inputStream.read_uint8()
+        self.constantGrid = rich_or_int(245, inputStream.read_uint8())
+        self.environmentType = EntityType.parse(inputStream)
+        self.orientation.parse(inputStream)
+        self.sampleTime.parse(inputStream)
+        self.totalValues = inputStream.read_uint32()
+        self.vectorDimension = inputStream.read_uint8()
+        self.padding1 = inputStream.read_uint8()
+        self.padding2 = inputStream.read_uint16()
+        # generator: axis descriptors dispatch on their trailing axisType byte
+        # ([UID 377]: 0 = regular/fixed, 1 = irregular/variable) — the XML's
+        # initialClass hint carries no wire semantics
+        self.gridAxisDescriptors = []
+        for _ in range(numberOfGridAxes):
+            domainInitialXi = inputStream.read_float64()
+            domainFinalXi = inputStream.read_float64()
+            domainPointsXi = inputStream.read_uint16()
+            interleafFactor = inputStream.read_uint8()
+            axisType = inputStream.read_uint8()
+            if int(axisType) == 1:
+                axis = GridAxisDescriptorVariable(
+                    domainInitialXi,
+                    domainFinalXi,
+                    domainPointsXi,
+                    interleafFactor,
+                    axisType,
+                )
+                numberOfPointsOnXiAxis = inputStream.read_uint16()
+                axis.initialIndex = inputStream.read_uint16()
+                axis.coordinateScaleXi = inputStream.read_float64()
+                axis.coordinateOffsetXi = inputStream.read_float64()
+                axis.xiValues = [
+                    inputStream.read_uint16() for _ in range(numberOfPointsOnXiAxis)
+                ]
+                padding = _padTo64(40 + 2 * len(axis.xiValues))
+                if padding:
+                    inputStream.read_bytes(padding)
+            else:
+                axis = GridAxisDescriptorFixed(
+                    domainInitialXi,
+                    domainFinalXi,
+                    domainPointsXi,
+                    interleafFactor,
+                    axisType,
+                )
+                axis.numberOfPointsOnXiAxis = inputStream.read_uint16()
+                axis.initialIndex = inputStream.read_uint16()
+            self.gridAxisDescriptors.append(axis)
+        # generator: Table 192's G = V x product of the per-axis point counts —
+        # the record count is derived, not stored (the XML's
+        # countFieldName="numberOfGridAxes" is an upstream bug)
+        dataCount = self.vectorDimension
+        for axis in self.gridAxisDescriptors:
+            dataCount *= axis.numberOfPointsOnXiAxis
+        self.gridDataRecords = []
+        for _ in range(dataCount):
+            sampleType = inputStream.read_uint16()
+            dataRepresentation = inputStream.read_uint16()
+            # generator: representation types 3-6 have no record format
+            # (§6.2.41 defines 0-2 only); stop before misparsing the rest
+            if int(dataRepresentation) == 0:
+                record = GridDataType0(sampleType, dataRepresentation)
+                numberOfBytes = inputStream.read_uint16()
+                record.dataValues = [
+                    inputStream.read_uint8() for _ in range(numberOfBytes)
+                ]
+                padding = _padTo16(6 + len(record.dataValues))
+                if padding:
+                    inputStream.read_bytes(padding)
+            elif int(dataRepresentation) == 1:
+                record = GridDataType1(sampleType, dataRepresentation)
+                record.fieldScale = inputStream.read_float32()
+                record.fieldOffset = inputStream.read_float32()
+                numberOfValues = inputStream.read_uint16()
+                record.dataValues = [
+                    inputStream.read_uint16() for _ in range(numberOfValues)
+                ]
+                padding = _padTo32(10 + 2 * len(record.dataValues))
+                if padding:
+                    inputStream.read_bytes(padding)
+            elif int(dataRepresentation) == 2:
+                record = GridDataType2(sampleType, dataRepresentation)
+                numberOfValues = inputStream.read_uint16()
+                record.padding = inputStream.read_uint16()
+                record.dataValues = [
+                    inputStream.read_float32() for _ in range(numberOfValues)
+                ]
+            else:
+                break
+            self.gridDataRecords.append(record)
 
 
 @dataclass(slots=True)
