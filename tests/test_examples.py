@@ -1,62 +1,85 @@
-import subprocess
-from opendis import root
-import os
-import time
-import sys
-from pathlib import Path
+"""The example pair, tested in process.
+
+The upstream test spawned both example scripts as subprocesses, slept in
+a wall-clock loop for three seconds, terminated them, and asserted on
+captured stdout. The spirit is kept — an ESPDU must survive the
+sender → UDP → receiver trip with its identity and geodetic position
+intact — while the letter (subprocess orchestration, the hardcoded port,
+sleeps, os.chdir, stdout scraping) is dropped: the examples expose
+importable single-shot units, and this test drives a real loopback UDP
+socket on an ephemeral port with a hard recv timeout.
+"""
+
+import socket
+
+import pytest
+
+from examples.dis_receiver import describe_datagram
+from examples.dis_sender import build_espdu, serialize
+from opendis.RangeCoordinates import GPS, deg2rad, rad2deg
+from opendis.record.factory import createPdu
 
 
-def test_dis_sender_and_receiver():
-    os.chdir(Path(root).parent)
+@pytest.fixture()
+def loopback():
+    """One UDP socket talking to itself on an ephemeral port."""
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        sock.settimeout(5.0)
+        yield sock
 
-    # Need -u so the stdout is immediately sent to pipe
-    receive_proc = subprocess.Popen(
-        [sys.executable, "-u", "examples/dis_receiver.py"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
+
+def test_example_pair_round_trip(loopback):
+    pdu = build_espdu()
+    wire = serialize(pdu)
+
+    loopback.sendto(wire, loopback.getsockname())
+    received, _ = loopback.recvfrom(4096)
+
+    assert received == wire  # byte-exact through the UDP hop
+
+    parsed = createPdu(received)
+    assert type(parsed).__name__ == "EntityStatePdu"
+    assert parsed.header.pduType == 1  # Entity State [UID 4]
+    assert parsed.entityID.simulationAddress.site == 17
+    assert parsed.entityID.simulationAddress.application == 23
+    assert parsed.entityID.entityNumber == 42
+    assert parsed.marking.string == "Igor3d"
+    assert parsed.to_bytes() == wire
+
+
+def test_example_receiver_geodetic_decode(loopback):
+    """The receiver side of the demo: the Monterey position survives the
+    ECEF round trip the way describe_datagram renders it."""
+    pdu = build_espdu()
+    loopback.sendto(serialize(pdu), loopback.getsockname())
+    received, _ = loopback.recvfrom(4096)
+
+    report = describe_datagram(received)
+    assert "Received EntityStatePdu" in report
+    assert "Id        : 42" in report
+
+    parsed = createPdu(received)
+    body = GPS().ecef2llarpy(
+        parsed.entityLocation.x,
+        parsed.entityLocation.y,
+        parsed.entityLocation.z,
+        parsed.entityOrientation.psi,
+        parsed.entityOrientation.theta,
+        parsed.entityOrientation.phi,
     )
-    send_proc = subprocess.Popen(
-        [sys.executable, "-u", "examples/dis_sender.py"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-
-    # Run for about 3 seconds
-    for i in range(3):
-        print(f"Iteration {i+1}: Waiting for processes to complete...")
-
-        if receive_proc.poll() is not None:
-            if receive_proc.returncode != 0:
-                print("Receive failure! ", receive_proc.returncode)
-                stdout, stderr = receive_proc.communicate()
-                raise ValueError(
-                    f"Receive process failed. \n STDOUT: {stdout} \n STDERR: {stderr}"
-                )
-        if send_proc.poll() is not None:
-            if send_proc.returncode != 0:
-                print("Send failure!", send_proc.returncode)
-                stdout, stderr = send_proc.communicate()
-                raise ValueError(
-                    f"Send process failed. \n STDOUT: {stdout} \n STDERR: {stderr}"
-                )
-
-        time.sleep(1)
-
-    receive_proc.terminate()
-    send_proc.terminate()
-
-    receive_stdout, _ = receive_proc.communicate()
-    print("Reciver stdout is:", receive_stdout)
-
-    send_stdout, _ = send_proc.communicate()
-    print("Sender stdout is:", send_stdout)
-
-    assert (
-        receive_stdout.find("Received EntityStatePdu") != -1
-    ), "Did not receive expected PDU type in receiver output"
+    assert rad2deg(body[0]) == pytest.approx(36.6, abs=1e-4)  # latitude
+    assert rad2deg(body[1]) == pytest.approx(-121.9, abs=1e-4)  # longitude
+    assert body[2] == pytest.approx(1.0, abs=0.5)  # altitude, meters
 
 
-if __name__ == "__main__":
-    test_dis_sender_and_receiver()
+def test_example_receiver_reports_unknown_types(loopback):
+    """A non-ESPDU datagram still parses and gets the one-line summary."""
+    from opendis.record.warfare import FirePdu
+
+    wire = FirePdu().to_bytes()
+    loopback.sendto(wire, loopback.getsockname())
+    received, _ = loopback.recvfrom(4096)
+
+    assert received == wire
+    assert "Received FirePdu, 96 bytes" in describe_datagram(received)

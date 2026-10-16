@@ -13,24 +13,16 @@ from opendis.record.factory import createPdu
 
 UDP_PORT = 3001
 
-udpSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-udpSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-udpSocket.bind(("", UDP_PORT))
-
-print("Listening for DIS on UDP socket {}".format(UDP_PORT))
-
 gps = GPS()
 
 
-def recv():
-    print("Reading from socket...")
-
-    data = udpSocket.recv(1024)  # buffer size in bytes
+def describe_datagram(data: bytes) -> str:
+    """Parse one datagram via the factory and render a human-readable
+    report; ESPDUs get the full geodetic decode, anything else a
+    one-line summary."""
     pdu = createPdu(data)
 
-    pduTypeName = pdu.__class__.__name__
-
-    if pdu.pduType == 1:  # PduTypeDecoders.EntityStatePdu:
+    if pdu.pduType == 1:  # Entity State [UID 4]
         pdu = cast(EntityStatePdu, pdu)  # for static checkers
         loc = (
             pdu.entityLocation.x,
@@ -43,8 +35,8 @@ def recv():
 
         body = gps.ecef2llarpy(*loc)
 
-        print(
-            "Received {}\n".format(pduTypeName)
+        return (
+            "Received {}\n".format(pdu.__class__.__name__)
             + " Id        : {}\n".format(pdu.entityID.entityNumber)
             + " Latitude  : {:.2f} degrees\n".format(rad2deg(body[0]))
             + " Longitude : {:.2f} degrees\n".format(rad2deg(body[1]))
@@ -53,11 +45,25 @@ def recv():
             + " Pitch     : {:.2f} degrees\n".format(rad2deg(body[4]))
             + " Roll      : {:.2f} degrees\n".format(rad2deg(body[5]))
         )
-    else:
-        print("Received {}, {} bytes".format(pduTypeName, len(data)), flush=True)
+
+    return "Received {}, {} bytes".format(pdu.__class__.__name__, len(data))
+
+
+def recv(udpSocket: socket.socket):
+    print("Reading from socket...")
+    data = udpSocket.recv(1024)  # buffer size in bytes
+    print(describe_datagram(data), flush=True)
+
+
+def main():
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udpSocket:
+        udpSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        udpSocket.bind(("", UDP_PORT))
+        print("Listening for DIS on UDP socket {}".format(UDP_PORT))
+        while True:
+            recv(udpSocket)
+            time.sleep(0.5)
 
 
 if __name__ == "__main__":
-    while True:
-        recv()
-        time.sleep(0.5)
+    main()
