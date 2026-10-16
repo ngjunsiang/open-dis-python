@@ -23,7 +23,11 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
-from opendis.record.factory import PDU_FAMILIES, PduTypeDecoders, createPdu  # noqa: E402
+from opendis.record.factory import (
+    PDU_FAMILIES,
+    PduTypeDecoders,
+    createPdu,
+)  # noqa: E402
 from opendis.stream import DataInputStream, DataOutputStream  # noqa: E402
 
 # (module, class, pduType, family) — one representative per new family,

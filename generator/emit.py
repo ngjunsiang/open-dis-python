@@ -245,7 +245,8 @@ class _ModuleInfo:
                 # local names ending in ``View`` are aliased imports
                 canonical = view[:-4] if view.endswith("View") else view
                 self.add_import(
-                    "opendis.bitfields", f"{canonical} as {view}" if canonical != view else view
+                    "opendis.bitfields",
+                    f"{canonical} as {view}" if canonical != view else view,
                 )
         elif isinstance(shape, ir.ObjectList):
             self.uses_dataclass_field = True
@@ -258,9 +259,7 @@ class _ModuleInfo:
             self.uses_dataclass_field = True
             if shape.element_uid is not None:
                 self.uses_rich_or_int = True
-                self.type_names.add(
-                    ir.ENUM_ANN[ir.PRIM_BITS[shape.element]]
-                )
+                self.type_names.add(ir.ENUM_ANN[ir.PRIM_BITS[shape.element]])
             else:
                 self.type_names.add(shape.element)
         elif isinstance(shape, ir.CuratedField):
@@ -384,11 +383,7 @@ def emit_module(
     insertions = dict(overrides.MODULE_SOURCES.get(module, []))
     # the padding ruling comment rides the first pad field of the module
     pad_owner = next(
-        (
-            name
-            for name in order
-            if any(a.pad for a in records[name].attributes)
-        ),
+        (name for name in order if any(a.pad for a in records[name].attributes)),
         None,
     )
     # trailing whole-datagram alignment pads need the shared helpers, one
@@ -412,9 +407,7 @@ def emit_module(
     for name in order:
         lines.append("")
         lines.append("")
-        _emit_record(
-            records[name], records, lines, list_elements, name == pad_owner
-        )
+        _emit_record(records[name], records, lines, list_elements, name == pad_owner)
         tail = overrides.CLASS_TAILS.get(name)
         if tail:
             lines.append("")
@@ -541,11 +534,7 @@ def _emit_record(
     # §6.2.40/.41)
     pad_bits = wire[-1].shape.length if trailing_pad else 32
     pad_fn = f"_padTo{pad_bits}"
-    wire_header = (
-        SV_HEADER_BYTES
-        if rec.is_sv
-        else (HEADER_BYTES if rec.is_pdu else 0)
-    )
+    wire_header = SV_HEADER_BYTES if rec.is_sv else (HEADER_BYTES if rec.is_pdu else 0)
     mid_body_pads = [
         a
         for a in (wire[:-1] if trailing_pad else wire)
@@ -573,9 +562,7 @@ def _emit_record(
         # plain records are header-less
         prefix = f"{wire_header} + " if rec.is_sv else ""
         pad_base = f"{wire_header} + {unpadded}" if wire_header else unpadded
-        lines.append(
-            f"        return {prefix}{unpadded} + " f"{pad_fn}({pad_base})"
-        )
+        lines.append(f"        return {prefix}{unpadded} + " f"{pad_fn}({pad_base})")
     else:
         lines.append("")
         lines.append(f"    def {size_name}(self) -> int:")
@@ -587,7 +574,9 @@ def _emit_record(
         )
     else:
         lines.append("")
-        lines.append(f"    def {ser_name}(self, outputStream: DataOutputStream) -> None:")
+        lines.append(
+            f"    def {ser_name}(self, outputStream: DataOutputStream) -> None:"
+        )
         if rec.is_sv:
             # §6.2.83 SV header: the class writes recordType (the curated
             # registry ClassVar) + recordLength (the derived total length)
@@ -628,9 +617,7 @@ def _emit_record(
                 ret=f'"{rec.name}"',
             )
         else:
-            _emit_method(
-                lines, parse_name, ["self", parse_header], body[parse_name]
-            )
+            _emit_method(lines, parse_name, ["self", parse_header], body[parse_name])
     else:
         if rec.frozen:
             lines.append("    @classmethod")
@@ -655,9 +642,7 @@ def _emit_record(
                 1 if super_base else 0,
                 "        from opendis.record import parseStandardVariableRecord",
             )
-            stmts.insert(
-                2 if super_base else 1, ""
-            )
+            stmts.insert(2 if super_base else 1, "")
         if trailing_pad:
             stmts.append(
                 f"        padding = {pad_fn}({wire_header} + self._unpaddedBodySize())"
@@ -695,9 +680,7 @@ def _emit_record(
         lines.append("        return item")
 
 
-def _super_base(
-    rec: ir.RecordClass, records: dict[str, ir.RecordClass]
-) -> str | None:
+def _super_base(rec: ir.RecordClass, records: dict[str, ir.RecordClass]) -> str | None:
     """Parent whose generated body methods this class extends (two-arg
     super, ruled for slots dataclasses)."""
     if not rec.is_pdu or rec.parent is None:
@@ -888,9 +871,7 @@ def _marshalled_expr(
         elif isinstance(shape, (ir.ObjectList, ir.PrimitiveList)):
             has_ref = True
             if isinstance(shape, ir.ObjectList):
-                parts.append(
-                    f"sum(item.marshalledSize() for item in self.{attr.name})"
-                )
+                parts.append(f"sum(item.marshalledSize() for item in self.{attr.name})")
             else:
                 width = ir.PRIM_BITS[shape.element] // 8
                 size_expr = (
@@ -1015,11 +996,7 @@ def _parse_pieces(
             expr = f"rich_or_int({shape.uid}, inputStream.read_{io}())"
             _emit_value(rec, attr.name, expr, stmts, args)
         elif isinstance(shape, ir.ClassRef):
-            target = (
-                records[shape.target]
-                if records is not None
-                else None
-            )
+            target = records[shape.target] if records is not None else None
             if target is not None and target.frozen:
                 expr = f"{shape.target}.parse(inputStream)"
                 _emit_value(rec, attr.name, expr, stmts, args)
@@ -1058,15 +1035,11 @@ def _parse_pieces(
                 )
                 stmts.append("        # PR #49): the list is replaced wholesale.")
                 stmts.append(f"        self.{attr.name} = [")
-                stmts.append(
-                    "            parseStandardVariableRecord(inputStream)"
-                )
+                stmts.append("            parseStandardVariableRecord(inputStream)")
                 stmts.append(f"            for _ in range({shape.count_field})")
                 stmts.append("        ]")
                 continue
-            element_target = (
-                records.get(shape.element) if records is not None else None
-            )
+            element_target = records.get(shape.element) if records is not None else None
             # frozen elements have no mutating parse: construct per item
             construct = element_target is not None and element_target.frozen
             stmts.extend(
@@ -1121,9 +1094,13 @@ def _parse_pieces(
     return stmts, args
 
 
-def _list_parse(field: str, element: str, count: str, construct: bool = False) -> list[str]:
-    reader = f"{element}.parse(inputStream)" if construct else (
-        f"{element}.parseFrom(inputStream)"
+def _list_parse(
+    field: str, element: str, count: str, construct: bool = False
+) -> list[str]:
+    reader = (
+        f"{element}.parse(inputStream)"
+        if construct
+        else (f"{element}.parseFrom(inputStream)")
     )
     return [
         "        # Never append to a pre-existing list (instance-reuse corruption,",

@@ -65,6 +65,7 @@ class Resolver:
             if rec.parent and rec.parent in self.by_canonical and rec.parent not in out:
                 pending.append(rec.parent)
         return out
+
     def _classref_target(self, shape) -> str | None:
         if isinstance(shape, ir.ClassRef):
             return shape.target
@@ -85,9 +86,7 @@ class Resolver:
             raise SpecError(f"unknown class {name!r} (not in spec, not bound)")
         xml_owner = el.get("name")
         flat = self._flatten(el)
-        attributes = [
-            self._attribute(a, declarer) for a, declarer in flat
-        ]
+        attributes = [self._attribute(a, declarer) for a, declarer in flat]
         dropped = set(self.ov.FIELD_DROPS.get(xml_owner, []))
         attributes = [a for a in attributes if a.name not in dropped]
         extras = self.ov.EXTRA_FIELDS.get(xml_owner, [])
@@ -153,9 +152,8 @@ class Resolver:
         by_name = {a.name: a for a in attributes}
 
         def renamed_count(shape):
-            field = (
-                getattr(shape, "count_field", None)
-                or getattr(shape, "bit_count_field", None)
+            field = getattr(shape, "count_field", None) or getattr(
+                shape, "bit_count_field", None
             )
             if field is None:
                 return shape
@@ -167,8 +165,13 @@ class Resolver:
             return dataclasses.replace(shape, count_field=new)
 
         attributes = [
-            a if not isinstance(a.shape, (ir.ObjectList, ir.PrimitiveList, ir.BytesPayload))
-            else dataclasses.replace(a, shape=renamed_count(a.shape))
+            (
+                a
+                if not isinstance(
+                    a.shape, (ir.ObjectList, ir.PrimitiveList, ir.BytesPayload)
+                )
+                else dataclasses.replace(a, shape=renamed_count(a.shape))
+            )
             for a in attributes
         ]
         by_name = {a.name: a for a in attributes}
@@ -201,9 +204,7 @@ class Resolver:
                     sized[a.name] = shape
         out = []
         overridden = {
-            xml_name
-            for (cls, xml_name) in self.ov.FIELD_SHAPES
-            if cls == xml_owner
+            xml_name for (cls, xml_name) in self.ov.FIELD_SHAPES if cls == xml_owner
         }
         extra_names = {name for name, *_rest in (extras or [])}
         count_override = self.ov.COUNT_FOR_OVERRIDES.get(xml_owner, {})
@@ -227,8 +228,10 @@ class Resolver:
                 )
                 count = by_name.get(count_name)
                 if (
-                    count is None or not count.hidden
-                ) and count_name not in overridden and a.name not in overridden:
+                    (count is None or not count.hidden)
+                    and count_name not in overridden
+                    and a.name not in overridden
+                ):
                     if count is not None and count.name in hidden_forced:
                         pass  # payload count: hidden below
                     else:
@@ -316,7 +319,9 @@ class Resolver:
                 and self._PAD_NAME.match(a.name) is not None
             )
 
-        return [dataclasses.replace(a, pad=True) if is_pad(a) else a for a in attributes]
+        return [
+            dataclasses.replace(a, pad=True) if is_pad(a) else a for a in attributes
+        ]
 
     def _flatten(self, el):
         """Attributes in declaration order via MRO, base-first, deduped.
@@ -414,8 +419,7 @@ class Resolver:
         if override is not None:
             if len(shapes) != 1:
                 raise SpecError(
-                    f"field shape override on non-simple attribute "
-                    f"{owner}.{name!r}"
+                    f"field shape override on non-simple attribute " f"{owner}.{name!r}"
                 )
             shape = override
         elif len(shapes) == 1:
@@ -427,10 +431,14 @@ class Resolver:
                 f"attribute {name!r} mixes type tags "
                 f"{sorted(by_tag)} — not a legal variant group"
             )
-        hidden = attr_el.get("hidden") == "true" or (
-            owner,
-            attr_el.get("name"),
-        ) in self.ov.FIELD_HIDDEN
+        hidden = (
+            attr_el.get("hidden") == "true"
+            or (
+                owner,
+                attr_el.get("name"),
+            )
+            in self.ov.FIELD_HIDDEN
+        )
         count_bits = False
         # a bit-counted payload pulls its length field out of instance state
         if isinstance(shape, ir.BytesPayload):
@@ -550,7 +558,11 @@ class Resolver:
                     )
                 element = prim.get("type")
                 enum = kid.find("sisoenum")
-                uid = int(enum.get("uid")) if enum is not None and enum.get("uid") else None
+                uid = (
+                    int(enum.get("uid"))
+                    if enum is not None and enum.get("uid")
+                    else None
+                )
                 return ir.PrimitiveList(
                     element=element,
                     element_uid=uid,

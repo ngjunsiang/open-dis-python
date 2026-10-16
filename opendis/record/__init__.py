@@ -117,9 +117,7 @@ def parseStandardVariableRecord(
     recordType = inputStream.read_uint32()
     recordLength = inputStream.read_uint16()
     if recordLength % 8 != 0:
-        raise ValueError(
-            f"recordLength must be a multiple of 8, got {recordLength!r}"
-        )
+        raise ValueError(f"recordLength must be a multiple of 8, got {recordLength!r}")
     vrClass = getStandardVariableClass(recordType)
     record = vrClass()
     record.parse(inputStream, recordLength)

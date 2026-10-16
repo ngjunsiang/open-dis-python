@@ -20,24 +20,30 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 STAGING = REPO / "generated"
 
-MODULES = ["record/common.py"] + [
-    f"record/{family}/__init__.py"
-    for family in (
-        "entity_information",
-        "warfare",
-        "logistics",
-        "simulation_management",
-        "minefield",
-        "radio",
-        "information_operations",
-        "entity_management",
-        "synthetic_environment",
-        "distributed_emissions",
-        "live_entity",
-        "simulation_management_with_reliability",
-    )
-] + [f"bitfields/{name}.py" for name in
-     ("appearance", "minefield", "simulation_management", "warfare")]
+MODULES = (
+    ["record/common.py"]
+    + [
+        f"record/{family}/__init__.py"
+        for family in (
+            "entity_information",
+            "warfare",
+            "logistics",
+            "simulation_management",
+            "minefield",
+            "radio",
+            "information_operations",
+            "entity_management",
+            "synthetic_environment",
+            "distributed_emissions",
+            "live_entity",
+            "simulation_management_with_reliability",
+        )
+    ]
+    + [
+        f"bitfields/{name}.py"
+        for name in ("appearance", "minefield", "simulation_management", "warfare")
+    ]
+)
 
 
 def main() -> int:

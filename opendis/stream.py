@@ -3,7 +3,7 @@
 This module provides utilities for handling streams in the OpenDIS library.
 """
 
-__all__ = ['DataInputStream', 'DataOutputStream']
+__all__ = ["DataInputStream", "DataOutputStream"]
 
 from io import BufferedIOBase
 import struct
@@ -29,41 +29,41 @@ class DataInputStream:
         self.stream = stream
 
     def read_boolean(self) -> bool:
-        return struct.unpack('?', self.stream.read(1))[0]
+        return struct.unpack("?", self.stream.read(1))[0]
 
     def read_byte(self) -> int8:
-        return struct.unpack('b', self.stream.read(1))[0]
+        return struct.unpack("b", self.stream.read(1))[0]
 
     def read_unsigned_byte(self) -> uint8:
-        return struct.unpack('B', self.stream.read(1))[0]
+        return struct.unpack("B", self.stream.read(1))[0]
 
     def read_char(self) -> char16:
-        return chr(struct.unpack('>H', self.stream.read(2))[0])
+        return chr(struct.unpack(">H", self.stream.read(2))[0])
 
     def read_double(self) -> float64:
-        return struct.unpack('>d', self.stream.read(8))[0]
+        return struct.unpack(">d", self.stream.read(8))[0]
 
     def read_float(self) -> float32:
-        return struct.unpack('>f', self.stream.read(4))[0]
+        return struct.unpack(">f", self.stream.read(4))[0]
 
     def read_short(self) -> int16:
-        return struct.unpack('>h', self.stream.read(2))[0]
+        return struct.unpack(">h", self.stream.read(2))[0]
 
     def read_unsigned_short(self) -> uint16:
-        return struct.unpack('>H', self.stream.read(2))[0]
+        return struct.unpack(">H", self.stream.read(2))[0]
 
     def read_long(self) -> int64:
-        return struct.unpack('>q', self.stream.read(8))[0]
+        return struct.unpack(">q", self.stream.read(8))[0]
 
     def read_utf(self) -> bytes:
-        utf_length = struct.unpack('>H', self.stream.read(2))[0]
+        utf_length = struct.unpack(">H", self.stream.read(2))[0]
         return self.stream.read(utf_length)
 
     def read_int(self) -> int32:
-        return struct.unpack('>i', self.stream.read(4))[0]
+        return struct.unpack(">i", self.stream.read(4))[0]
 
     def read_unsigned_int(self) -> uint32:
-        return struct.unpack('>I', self.stream.read(4))[0]
+        return struct.unpack(">I", self.stream.read(4))[0]
 
     def read_bytes(self, n: int) -> bytes:
         """Read n bytes from the stream."""
@@ -109,41 +109,41 @@ class DataOutputStream:
         self.stream = stream
 
     def write_boolean(self, boolean: bool) -> None:
-        self.stream.write(struct.pack('?', boolean))
+        self.stream.write(struct.pack("?", boolean))
 
     def write_byte(self, val: int) -> None:
-        self.stream.write(struct.pack('b', val))
+        self.stream.write(struct.pack("b", val))
 
     def write_unsigned_byte(self, val: int) -> None:
-        self.stream.write(struct.pack('B', val))
-    
+        self.stream.write(struct.pack("B", val))
+
     def write_char(self, val: str) -> None:
-        self.stream.write(struct.pack('>H', ord(val)))
+        self.stream.write(struct.pack(">H", ord(val)))
 
     def write_double(self, val: float) -> None:
-        self.stream.write(struct.pack('>d', val))
+        self.stream.write(struct.pack(">d", val))
 
     def write_float(self, val: float) -> None:
-        self.stream.write(struct.pack('>f', val))
+        self.stream.write(struct.pack(">f", val))
 
     def write_short(self, val: int) -> None:
-        self.stream.write(struct.pack('>h', val))
+        self.stream.write(struct.pack(">h", val))
 
     def write_unsigned_short(self, val: int) -> None:
-        self.stream.write(struct.pack('>H', val))
+        self.stream.write(struct.pack(">H", val))
 
     def write_long(self, val: int) -> None:
-        self.stream.write(struct.pack('>q', val))
+        self.stream.write(struct.pack(">q", val))
 
     def write_utf(self, string: bytes) -> None:
-        self.stream.write(struct.pack('>H', len(string)))
+        self.stream.write(struct.pack(">H", len(string)))
         self.stream.write(string)
 
     def write_int(self, val: int) -> None:
-        self.stream.write(struct.pack('>i', val))
+        self.stream.write(struct.pack(">i", val))
 
     def write_unsigned_int(self, val: int) -> None:
-        self.stream.write(struct.pack('>I', val))
+        self.stream.write(struct.pack(">I", val))
 
     def write_bytes(self, val: bytes) -> None:
         """Write bytes to the stream."""
@@ -181,4 +181,4 @@ class DataOutputStream:
         self.write_unsigned_int(val)
 
     def write_uint64(self, val: uint64) -> None:
-        self.stream.write(struct.pack('>Q', val))
+        self.stream.write(struct.pack(">Q", val))

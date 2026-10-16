@@ -377,23 +377,47 @@ FIELD_RENAMES = {
     ("DataQueryPdu", "variableDatums"): "variableDatumIDs",
     ("DataQueryPdu", "numberOfFixedDatumRecords"): "numberOfFixedDatumIDs",
     ("DataQueryPdu", "numberOfVariableDatumRecords"): "numberOfVariableDatumIDs",
-    ("SimulationManagementWithReliabilityFamilyPdu", "originatingID"): "originatingEntityID",
-    ("SimulationManagementWithReliabilityFamilyPdu", "receivingID"): "receivingEntityID",
+    (
+        "SimulationManagementWithReliabilityFamilyPdu",
+        "originatingID",
+    ): "originatingEntityID",
+    (
+        "SimulationManagementWithReliabilityFamilyPdu",
+        "receivingID",
+    ): "receivingEntityID",
     ("DataQueryReliablePdu", "fixedDatumRecords"): "fixedDatumIDs",
     ("DataQueryReliablePdu", "variableDatumRecords"): "variableDatumIDs",
     ("DataQueryReliablePdu", "numberOfFixedDatumRecords"): "numberOfFixedDatumIDs",
-    ("DataQueryReliablePdu", "numberOfVariableDatumRecords"): "numberOfVariableDatumIDs",
+    (
+        "DataQueryReliablePdu",
+        "numberOfVariableDatumRecords",
+    ): "numberOfVariableDatumIDs",
     # the IFF layer classes carry a copy-pasted Layer 2 count name (the
     # 7.6.5.4/.5/.6 lists hold IFF Data records, not IFF Fundamental
     # Parameter Data); Layer 2 keeps the name, minus the tail
     ("IFFPduLayer2Data", "numberOfIFFFundamentalParameterDataRecordsParameters"): (
         "numberOfIFFFundamentalParameterDataRecords"
     ),
-    ("IFFPduLayer3TransponderFormatData", "numberOfIFFFundamentalParameterDataRecordsParameters"): "numberOfIFFDataRecords",
-    ("IFFPduLayer3InterrogatorFormatData", "numberOfIFFFundamentalParameterDataRecordsParameters"): "numberOfIFFDataRecords",
-    ("IFFPduLayer4InterrogatorFormatData", "numberOfIFFFundamentalParameterDataRecordsParameters"): "numberOfIFFDataRecords",
-    ("IFFPduLayer4TransponderFormatData", "numberOfIFFFundamentalParameterDataRecordsParameters"): "numberOfIFFDataRecords",
-    ("IFFPduLayer5Data", "numberOfIFFFundamentalParameterDataRecordsParameters"): "numberOfIFFDataRecords",
+    (
+        "IFFPduLayer3TransponderFormatData",
+        "numberOfIFFFundamentalParameterDataRecordsParameters",
+    ): "numberOfIFFDataRecords",
+    (
+        "IFFPduLayer3InterrogatorFormatData",
+        "numberOfIFFFundamentalParameterDataRecordsParameters",
+    ): "numberOfIFFDataRecords",
+    (
+        "IFFPduLayer4InterrogatorFormatData",
+        "numberOfIFFFundamentalParameterDataRecordsParameters",
+    ): "numberOfIFFDataRecords",
+    (
+        "IFFPduLayer4TransponderFormatData",
+        "numberOfIFFFundamentalParameterDataRecordsParameters",
+    ): "numberOfIFFDataRecords",
+    (
+        "IFFPduLayer5Data",
+        "numberOfIFFFundamentalParameterDataRecordsParameters",
+    ): "numberOfIFFDataRecords",
 }
 
 # name -> name across every record (uniform-spelling rulings).
@@ -419,7 +443,9 @@ EXTRA_FIELDS = {
     "CommentPdu": [
         (
             "fixedDatumRecords",
-            ir.ObjectList(element="FixedDatum", count_field="numberOfFixedDatumRecords"),
+            ir.ObjectList(
+                element="FixedDatum", count_field="numberOfFixedDatumRecords"
+            ),
             "Fixed datum records (shall be zero on this PDU; kept for "
             "malformed-but-parseable datagrams)",
         )
@@ -447,7 +473,9 @@ EXTRA_FIELDS = {
     "CommentReliablePdu": [
         (
             "fixedDatumRecords",
-            ir.ObjectList(element="FixedDatum", count_field="numberOfFixedDatumRecords"),
+            ir.ObjectList(
+                element="FixedDatum", count_field="numberOfFixedDatumRecords"
+            ),
             "Fixed datum records (shall be zero on this PDU; kept for "
             "malformed-but-parseable datagrams)",
         )
@@ -476,43 +504,89 @@ FIELD_OVERRIDES = {
     ("LEMunitionDescriptor", "quantity"): ("uint16 | None", "None", None),
     ("LEMunitionDescriptor", "rate"): ("uint16 | None", "None", None),
     ("LiveEntityFirePdu", "targetLiveEntityId"): (
-        "LiveEntityIdentifier | None", "None", None),
+        "LiveEntityIdentifier | None",
+        "None",
+        None,
+    ),
     ("LiveEntityFirePdu", "munitionLiveEntityId"): (
-        "LiveEntityIdentifierElided | LiveEntityIdentifier | None", "None", None),
+        "LiveEntityIdentifierElided | LiveEntityIdentifier | None",
+        "None",
+        None,
+    ),
     ("LiveEntityFirePdu", "eventId"): (
         "EventIdentifierLiveEntityElided | EventIdentifierLiveEntity",
-        "field(default_factory=EventIdentifierLiveEntityElided)", None),
+        "field(default_factory=EventIdentifierLiveEntityElided)",
+        None,
+    ),
     ("LiveEntityFirePdu", "location"): (
-        "LiveEntityRelativeWorldCoordinates | None", "None", None),
+        "LiveEntityRelativeWorldCoordinates | None",
+        "None",
+        None,
+    ),
     ("LiveEntityDetonationPdu", "detonationFlag2"): ("uint8 | None", "None", None),
     ("LiveEntityDetonationPdu", "targetLiveEntityId"): (
-        "LiveEntityIdentifier | None", "None", None),
+        "LiveEntityIdentifier | None",
+        "None",
+        None,
+    ),
     ("LiveEntityDetonationPdu", "munitionLiveEntityId"): (
-        "LiveEntityIdentifierElided | LiveEntityIdentifier | None", "None", None),
+        "LiveEntityIdentifierElided | LiveEntityIdentifier | None",
+        "None",
+        None,
+    ),
     ("LiveEntityDetonationPdu", "eventId"): (
         "EventIdentifierLiveEntityElided | EventIdentifierLiveEntity | None",
-        "None", None),
+        "None",
+        None,
+    ),
     ("LiveEntityDetonationPdu", "worldLocation"): (
-        "LiveEntityRelativeWorldCoordinates | None", "None", None),
+        "LiveEntityRelativeWorldCoordinates | None",
+        "None",
+        None,
+    ),
     ("LiveEntityDetonationPdu", "munitionOrientation"): (
-        "LiveEntityOrientation16 | None", "None", None),
+        "LiveEntityOrientation16 | None",
+        "None",
+        None,
+    ),
     ("LiveEntityDetonationPdu", "entityLocation"): (
-        "LiveEntityRelativeEntityCoordinates | None", "None", None),
+        "LiveEntityRelativeEntityCoordinates | None",
+        "None",
+        None,
+    ),
     # IFF layers 2-5: presence is length-driven (each begins with a
     # §6.2.51 Layer Header whose Length includes the header, Table 165) —
     # absent layers are None; the curated PDU wire methods dispatch.
     ("IdentificationFriendOrFoePdu", "iFFPduLayer2Data"): (
-        "IFFPduLayer2Data | None", "None", None),
+        "IFFPduLayer2Data | None",
+        "None",
+        None,
+    ),
     ("IdentificationFriendOrFoePdu", "iFFPduLayer3TransponderFormatData"): (
-        "IFFPduLayer3TransponderFormatData | None", "None", None),
+        "IFFPduLayer3TransponderFormatData | None",
+        "None",
+        None,
+    ),
     ("IdentificationFriendOrFoePdu", "iFFPduLayer3InterrogatorFormatData"): (
-        "IFFPduLayer3InterrogatorFormatData | None", "None", None),
+        "IFFPduLayer3InterrogatorFormatData | None",
+        "None",
+        None,
+    ),
     ("IdentificationFriendOrFoePdu", "iFFPduLayer4InterrogatorFormatData"): (
-        "IFFPduLayer4InterrogatorFormatData | None", "None", None),
+        "IFFPduLayer4InterrogatorFormatData | None",
+        "None",
+        None,
+    ),
     ("IdentificationFriendOrFoePdu", "iFFPduLayer4TransponderFormatData"): (
-        "IFFPduLayer4TransponderFormatData | None", "None", None),
+        "IFFPduLayer4TransponderFormatData | None",
+        "None",
+        None,
+    ),
     ("IdentificationFriendOrFoePdu", "iFFPduLayer5Data"): (
-        "IFFPduLayer5Data | None", "None", None),
+        "IFFPduLayer5Data | None",
+        "None",
+        None,
+    ),
     # the XML's countFieldName="numberOfGridAxes" on the grid-data list is
     # an upstream bug: Table 192's G = V x product of the per-axis point
     # counts — a derived count with no wire field (curated body owns it)
@@ -599,20 +673,37 @@ FIELD_SHAPES = {
     # the layer 3/4/5 lists hold flat §6.2.43 IFF Data records, not the
     # XML's IFFDataSpecification wrapper (Table 169-173; the wrapper adds
     # a count the layer already carries — Record-R flattening precedent)
-    ("IFFPduLayer3TransponderFormatData", "IFFFundamentalParameterDataRecord"): ir.ObjectList(
-        element="IFFData", count_field="numberOfIFFFundamentalParameterDataRecordsParameters"
+    (
+        "IFFPduLayer3TransponderFormatData",
+        "IFFFundamentalParameterDataRecord",
+    ): ir.ObjectList(
+        element="IFFData",
+        count_field="numberOfIFFFundamentalParameterDataRecordsParameters",
     ),
-    ("IFFPduLayer3InterrogatorFormatData", "IFFFundamentalParameterDataRecord"): ir.ObjectList(
-        element="IFFData", count_field="numberOfIFFFundamentalParameterDataRecordsParameters"
+    (
+        "IFFPduLayer3InterrogatorFormatData",
+        "IFFFundamentalParameterDataRecord",
+    ): ir.ObjectList(
+        element="IFFData",
+        count_field="numberOfIFFFundamentalParameterDataRecordsParameters",
     ),
-    ("IFFPduLayer4InterrogatorFormatData", "IFFFundamentalParameterDataRecord"): ir.ObjectList(
-        element="IFFData", count_field="numberOfIFFFundamentalParameterDataRecordsParameters"
+    (
+        "IFFPduLayer4InterrogatorFormatData",
+        "IFFFundamentalParameterDataRecord",
+    ): ir.ObjectList(
+        element="IFFData",
+        count_field="numberOfIFFFundamentalParameterDataRecordsParameters",
     ),
-    ("IFFPduLayer4TransponderFormatData", "IFFFundamentalParameterDataRecord"): ir.ObjectList(
-        element="IFFData", count_field="numberOfIFFFundamentalParameterDataRecordsParameters"
+    (
+        "IFFPduLayer4TransponderFormatData",
+        "IFFFundamentalParameterDataRecord",
+    ): ir.ObjectList(
+        element="IFFData",
+        count_field="numberOfIFFFundamentalParameterDataRecordsParameters",
     ),
     ("IFFPduLayer5Data", "IFFFundamentalParameterDataRecord"): ir.ObjectList(
-        element="IFFData", count_field="numberOfIFFFundamentalParameterDataRecordsParameters"
+        element="IFFData",
+        count_field="numberOfIFFFundamentalParameterDataRecordsParameters",
     ),
     # generic SV-format records: the payload is byte-granular wire state
     # sized by the STORED recordLength (K + alignment pad as received;
@@ -636,10 +727,22 @@ FIELD_SHAPES = {
 FIELD_HIDDEN = {
     ("GridAxisDescriptorVariable", "numberOfPointsOnXiAxis"),
     ("IFFPduLayer2Data", "numberOfIFFFundamentalParameterDataRecordsParameters"),
-    ("IFFPduLayer3TransponderFormatData", "numberOfIFFFundamentalParameterDataRecordsParameters"),
-    ("IFFPduLayer3InterrogatorFormatData", "numberOfIFFFundamentalParameterDataRecordsParameters"),
-    ("IFFPduLayer4InterrogatorFormatData", "numberOfIFFFundamentalParameterDataRecordsParameters"),
-    ("IFFPduLayer4TransponderFormatData", "numberOfIFFFundamentalParameterDataRecordsParameters"),
+    (
+        "IFFPduLayer3TransponderFormatData",
+        "numberOfIFFFundamentalParameterDataRecordsParameters",
+    ),
+    (
+        "IFFPduLayer3InterrogatorFormatData",
+        "numberOfIFFFundamentalParameterDataRecordsParameters",
+    ),
+    (
+        "IFFPduLayer4InterrogatorFormatData",
+        "numberOfIFFFundamentalParameterDataRecordsParameters",
+    ),
+    (
+        "IFFPduLayer4TransponderFormatData",
+        "numberOfIFFFundamentalParameterDataRecordsParameters",
+    ),
     ("IFFPduLayer5Data", "numberOfIFFFundamentalParameterDataRecordsParameters"),
 }
 
@@ -2341,7 +2444,9 @@ and constructive data.""",
 class MemberSource:
     """Verbatim member source injected into an emitted class body."""
 
-    def __init__(self, source: str, needs_logger: bool = False, after_methods: bool = False):
+    def __init__(
+        self, source: str, needs_logger: bool = False, after_methods: bool = False
+    ):
         self.source = source
         self.needs_logger = needs_logger
         self.after_methods = after_methods
@@ -2721,9 +2826,9 @@ _CAPABILITY_KIND_VIEWS: dict[int, type] = {
     "entity_management": [
         (
             "EntityManagementFamilyPdu",
-            '''def _padTo32(byteCount: int) -> int:
+            """def _padTo32(byteCount: int) -> int:
     \"\"\"Pad bytes needed to bring the PDU to a 32-bit boundary.\"\"\"
-    return (4 - byteCount % 4) % 4''',
+    return (4 - byteCount % 4) % 4""",
         )
     ],
     "simulation_management": [
@@ -3165,9 +3270,9 @@ def variableTransmitterParameterCount(self) -> uint16:
     ),
     "RecordSpecificationElement": MemberSource(
         after_methods=True,
-        source='''@staticmethod
+        source="""@staticmethod
 def _padTo64(byteCount: int) -> int:
-    return (8 - byteCount % 8) % 8''',
+    return (8 - byteCount % 8) % 8""",
     ),
     "IFFPduLayer2Data": MemberSource(
         after_methods=True,

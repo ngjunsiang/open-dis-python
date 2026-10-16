@@ -214,8 +214,7 @@ class TestTimestamp(unittest.TestCase):
     def test_wrap_across_hour_boundary(self):
         just_before = Timestamp.fromSeconds(3599.0)
         just_after = Timestamp.fromSeconds(0.5)  # next hour
-        self.assertAlmostEqual(just_after.deltaSince(just_before), 1.5,
-                               delta=1e-4)
+        self.assertAlmostEqual(just_after.deltaSince(just_before), 1.5, delta=1e-4)
         # naive subtraction would give -3598.5
         backwards = just_before.deltaSince(just_after)
         self.assertAlmostEqual(backwards, 3598.5, delta=1e-4)
@@ -244,8 +243,7 @@ class TestIdentityTypes(unittest.TestCase):
     def test_hash_eq_dict_key(self):
         e = EntityIdentifier(SimulationAddress(1, 2), 3)
         table = {e: "tank"}
-        self.assertEqual(table[EntityIdentifier(SimulationAddress(1, 2), 3)],
-                         "tank")
+        self.assertEqual(table[EntityIdentifier(SimulationAddress(1, 2), 3)], "tank")
 
     def test_same_shaped_types_do_not_collide(self):
         e = EntityIdentifier(SimulationAddress(1, 2), 3)
@@ -259,8 +257,7 @@ class TestIdentityTypes(unittest.TestCase):
         buffer = io.BytesIO()
         e.serialize(DataOutputStream(buffer))
         self.assertEqual(buffer.getvalue().hex(), "123456789abc")
-        parsed = EntityIdentifier.parse(
-            DataInputStream(io.BytesIO(buffer.getvalue())))
+        parsed = EntityIdentifier.parse(DataInputStream(io.BytesIO(buffer.getvalue())))
         self.assertEqual(parsed, e)
 
     def test_sentinels(self):
@@ -318,8 +315,8 @@ class TestBitfieldViews(unittest.TestCase):
 
     def test_multi_bit_properties(self):
         v = LandPlatformAppearance()
-        v.damage = 3          # [UID 379] destroyed
-        v.primaryHatch = 4    # [UID 382] open
+        v.damage = 3  # [UID 379] destroyed
+        v.primaryHatch = 4  # [UID 382] open
         v.camouflageType = 2  # [UID 384] forest
         self.assertEqual(v.damage, 3)
         self.assertEqual(v.primaryHatch, 4)
@@ -327,14 +324,17 @@ class TestBitfieldViews(unittest.TestCase):
         self.assertEqual(int(v), (3 << 3) | (4 << 9) | (2 << 17))
 
     def test_all_fields_round_trip(self):
-        for view in (LandPlatformAppearance, AirPlatformAppearance,
-                     LandPlatformCapabilities, AirPlatformCapabilities):
+        for view in (
+            LandPlatformAppearance,
+            AirPlatformAppearance,
+            LandPlatformCapabilities,
+            AirPlatformCapabilities,
+        ):
             v = view(0)
             for name, shift, width, _uid in view._FIELDS:
                 sample = (1 << width) - 1 if width > 1 else 1
                 setattr(v, name, sample)
-                self.assertEqual(getattr(v, name), sample,
-                                 f"{view.__name__}.{name}")
+                self.assertEqual(getattr(v, name), sample, f"{view.__name__}.{name}")
                 setattr(v, name, 0)
                 self.assertEqual(int(v), 0)
 
@@ -344,9 +344,7 @@ class TestBitfieldViews(unittest.TestCase):
         v = LandPlatformAppearance((1 << 4) | (1 << 8) | (1 << 11))
         v.damage = 2
         v.headLightsOn = True
-        self.assertEqual(
-            int(v),
-            (1 << 4) | (1 << 8) | (1 << 11) | (2 << 3) | (1 << 12))
+        self.assertEqual(int(v), (1 << 4) | (1 << 8) | (1 << 11) | (2 << 3) | (1 << 12))
         c = LandPlatformCapabilities(1 << 5)
         c.repair = True
         self.assertEqual(int(c), (1 << 5) | (1 << 3))
@@ -434,15 +432,15 @@ class TestEntityStatePdu(unittest.TestCase):
 
     def test_variable_parameters(self):
         pdu = EntityStatePdu()
-        pdu.variableParameters.append(
-            VariableParameter(1, bytes(range(15))))
+        pdu.variableParameters.append(VariableParameter(1, bytes(range(15))))
         self.assertEqual(pdu.numberOfVariableParameters, 1)
         self.assertEqual(pdu.marshalledSize(), 160)
         parsed = createPdu(pdu.to_bytes())
         self.assertEqual(parsed.numberOfVariableParameters, 1)
         self.assertEqual(parsed.variableParameters[0].recordType, 1)
-        self.assertEqual(parsed.variableParameters[0].recordSpecificFields,
-                         bytes(range(15)))
+        self.assertEqual(
+            parsed.variableParameters[0].recordSpecificFields, bytes(range(15))
+        )
 
     def test_parse_does_not_append(self):
         pdu = EntityStatePdu()
@@ -501,10 +499,8 @@ class TestDataPdu(unittest.TestCase):
         self.assertEqual(parsed.numberOfFixedDatumRecords, 2)
         self.assertEqual(parsed.numberOfVariableDatumRecords, 1)
         self.assertEqual(parsed.fixedDatumRecords[1].fixedDatumValue, 21)
-        self.assertEqual(parsed.variableDatumRecords[0].variableData,
-                         b"allunits")
-        self.assertEqual(parsed.variableDatumRecords[0].variableDatumLength,
-                         64)
+        self.assertEqual(parsed.variableDatumRecords[0].variableData, b"allunits")
+        self.assertEqual(parsed.variableDatumRecords[0].variableDatumLength, 64)
         self.assertEqual(parsed.to_bytes(), raw)
 
     def test_datum_padding_to_64_bits(self):
@@ -523,6 +519,7 @@ class TestDataPdu(unittest.TestCase):
 
     def test_typed_uid66_decoder(self):
         from opendis.record.warfare import DirectedEnergyDamage
+
         record = DirectedEnergyDamage()
         record.damageDiameter = 1.5
         buffer = io.BytesIO()
@@ -544,8 +541,7 @@ class TestDataPdu(unittest.TestCase):
         pdu.variableDatumRecords.append(VariableDatum(0xABCDEF, b"\x01\x02"))
         parsed = createPdu(pdu.to_bytes())
         self.assertIsNone(parsed.variableDatumRecords[0].decodedRecord)
-        self.assertEqual(parsed.variableDatumRecords[0].variableData,
-                         b"\x01\x02")
+        self.assertEqual(parsed.variableDatumRecords[0].variableData, b"\x01\x02")
         self.assertEqual(parsed.to_bytes(), pdu.to_bytes())
 
     def test_malformed_known_record_degrades_to_bytes(self):
@@ -596,8 +592,9 @@ class TestWarfareFamily(unittest.TestCase):
         pdu.eventID = EventIdentifier(SimulationAddress(1, 2), 77)
         pdu.fireMissionIndex = 0x01020304
         pdu.locationInWorldCoordinates = WorldCoordinates(1.0, 2.0, 3.0)
-        pdu.descriptor = MunitionDescriptor(EntityType(1, 1, 39, 3, 1), 1000,
-                                            2000, 5, 10)
+        pdu.descriptor = MunitionDescriptor(
+            EntityType(1, 1, 39, 3, 1), 1000, 2000, 5, 10
+        )
         pdu.velocity = Vector3Float(4.0, 5.0, 6.0)
         pdu.range = 1234.5
         raw = pdu.to_bytes()
@@ -624,8 +621,9 @@ class TestWarfareFamily(unittest.TestCase):
         parsed = createPdu(raw)
         self.assertIsInstance(parsed, DetonationPdu)
         self.assertEqual(parsed.numberOfVariableParameters, 1)
-        self.assertEqual(parsed.variableParameters[0].recordSpecificFields,
-                         bytes(range(15)))
+        self.assertEqual(
+            parsed.variableParameters[0].recordSpecificFields, bytes(range(15))
+        )
         self.assertEqual(parsed.to_bytes(), raw)
 
     def test_de_fire_default_size_and_flags_view(self):
@@ -644,6 +642,7 @@ class TestWarfareFamily(unittest.TestCase):
 
     def test_de_fire_sv_record_list_round_trip(self):
         from opendis.record.warfare import DirectedEnergyDamage
+
         pdu = DirectedEnergyFirePdu()
         record = DirectedEnergyDamage()
         record.damageDiameter = 2.5
@@ -653,8 +652,7 @@ class TestWarfareFamily(unittest.TestCase):
         raw = pdu.to_bytes()
         parsed = createPdu(raw)
         self.assertIsInstance(parsed.dERecords[0], DirectedEnergyDamage)
-        self.assertAlmostEqual(parsed.dERecords[0].damageDiameter, 2.5,
-                               places=6)
+        self.assertAlmostEqual(parsed.dERecords[0].damageDiameter, 2.5, places=6)
         self.assertEqual(parsed.to_bytes(), raw)
 
     def test_area_aimpoint_64_bit_pad_and_round_trip(self):
@@ -667,6 +665,7 @@ class TestWarfareFamily(unittest.TestCase):
             DirectedEnergyAreaAimpoint,
             DirectedEnergyTargetEnergyDeposition,
         )
+
         record = DirectedEnergyAreaAimpoint()
         self.assertEqual(record.marshalledSize(), 16)
         record.beamAntennaParameterList.append(BeamAntennaPattern())
@@ -683,19 +682,19 @@ class TestWarfareFamily(unittest.TestCase):
         )
         self.assertIsInstance(decoded, DirectedEnergyAreaAimpoint)
         self.assertEqual(len(decoded.beamAntennaParameterList), 1)
-        self.assertEqual(
-            len(decoded.directedEnergyTargetEnergyDepositionRecordList), 1
-        )
+        self.assertEqual(len(decoded.directedEnergyTargetEnergyDepositionRecordList), 1)
         self.assertEqual(decoded.marshalledSize(), 64)
 
     def test_entity_damage_status_unknown_sv_stays_raw(self):
         from opendis.record import getStandardVariableClass
+
         pdu = EntityDamageStatusPdu()
         self.assertEqual(pdu.marshalledSize(), 24)
         # an unregistered uid-66 record type parses as the opaque
         # placeholder and re-serializes byte-exact
         pdu.damageDescriptionRecords.append(
-            getStandardVariableClass(0xABCD)(b"\xEE" * 10))
+            getStandardVariableClass(0xABCD)(b"\xee" * 10)
+        )
         self.assertEqual(pdu.numberOfDamageDescription, 1)
         raw = pdu.to_bytes()
         self.assertEqual(len(raw), 24 + 16)
@@ -704,19 +703,21 @@ class TestWarfareFamily(unittest.TestCase):
         self.assertEqual(parsed.numberOfDamageDescription, 1)
         unknown = parsed.damageDescriptionRecords[0]
         self.assertEqual(int(unknown.recordType), 0xABCD)
-        self.assertEqual(unknown.data, b"\xEE" * 10)
+        self.assertEqual(unknown.data, b"\xee" * 10)
         self.assertEqual(parsed.to_bytes(), raw)
 
 
 class TestRadioFamily(unittest.TestCase):
     """Radio Communications family in the target-state style
-    (submodules/open-dis-spec-xml/xml/RadioCommunicationsFamilyPdus.xml ground truth)."""
+    (submodules/open-dis-spec-xml/xml/RadioCommunicationsFamilyPdus.xml ground truth).
+    """
 
     def test_transmitter_default_size(self):
         self.assertEqual(TransmitterPdu().marshalledSize(), 104)
 
     def test_transmitter_round_trip_with_havequick(self):
         from opendis.record.radio.annexc import BasicHaveQuickMP
+
         pdu = TransmitterPdu()
         pdu.radioReferenceID = EntityIdentifier(SimulationAddress(5, 6), 7)
         pdu.radioNumber = 2
@@ -735,6 +736,7 @@ class TestRadioFamily(unittest.TestCase):
 
     def test_transmitter_antenna_pattern(self):
         from opendis.record.radio import BeamAntennaPattern
+
         pdu = TransmitterPdu()
         pdu.antennaPatternType = 1
         pdu.antennaPattern = BeamAntennaPattern()
@@ -751,14 +753,15 @@ class TestRadioFamily(unittest.TestCase):
         # lock: the seam's ``bytelength - 6`` left 6 bytes unparsed and
         # desynchronized the PDU.
         from opendis.record.radio.annexc import UnknownAntennaPattern
+
         pdu = TransmitterPdu()
         pdu.antennaPatternType = 2
-        pdu.antennaPattern = UnknownAntennaPattern(b"\xAB" * 24)
+        pdu.antennaPattern = UnknownAntennaPattern(b"\xab" * 24)
         raw = pdu.to_bytes()
         self.assertEqual(pdu.antennaPatternCount, 24)
         parsed = createPdu(raw)
         self.assertIsInstance(parsed.antennaPattern, UnknownAntennaPattern)
-        self.assertEqual(parsed.antennaPattern.data, b"\xAB" * 24)
+        self.assertEqual(parsed.antennaPattern.data, b"\xab" * 24)
         self.assertEqual(parsed.to_bytes(), raw)
 
     def test_signal_bit_length_and_alignment(self):
@@ -800,20 +803,22 @@ class TestRadioFamily(unittest.TestCase):
 
     def test_intercom_signal_round_trip(self):
         from opendis.record.radio import IntercomReferenceID
+
         pdu = IntercomSignalPdu()
         pdu.intercomReferenceID = IntercomReferenceID(1, 2, 3)
         pdu.intercomNumber = 4
-        pdu.data = b"\xAA\xBB\xCC\xDD\xEE\xFF"  # 6 bytes -> 2 pad bytes
+        pdu.data = b"\xaa\xbb\xcc\xdd\xee\xff"  # 6 bytes -> 2 pad bytes
         self.assertEqual(pdu.dataLength, 48)
         raw = pdu.to_bytes()
         parsed = createPdu(raw)
         self.assertIsInstance(parsed, IntercomSignalPdu)
         self.assertEqual(parsed.intercomReferenceID.referenceNumber, 3)
-        self.assertEqual(parsed.data, b"\xAA\xBB\xCC\xDD\xEE\xFF")
+        self.assertEqual(parsed.data, b"\xaa\xbb\xcc\xdd\xee\xff")
         self.assertEqual(parsed.to_bytes(), raw)
 
     def test_intercom_control_round_trip(self):
         from opendis.record.radio import IntercomCommunicationsParameters
+
         pdu = IntercomControlPdu()
         pdu.controlType = 1
         pdu.command = 2
@@ -823,14 +828,14 @@ class TestRadioFamily(unittest.TestCase):
         parsed = createPdu(raw)
         self.assertIsInstance(parsed, IntercomControlPdu)
         self.assertEqual(parsed.intercomParametersLength, 1)
-        self.assertEqual(parsed.intercomParameters[0].recordSpecificField,
-                         b"\x07\x08")
+        self.assertEqual(parsed.intercomParameters[0].recordSpecificField, b"\x07\x08")
         self.assertEqual(parsed.to_bytes(), raw)
 
 
 class TestSimulationManagementFamily(unittest.TestCase):
     """Remaining §7.5 PDUs in the target-state style
-    (submodules/open-dis-spec-xml/xml/SimulationManagementFamilyPdus.xml ground truth)."""
+    (submodules/open-dis-spec-xml/xml/SimulationManagementFamilyPdus.xml ground truth).
+    """
 
     def test_create_remove_sizes(self):
         self.assertEqual(CreateEntityPdu().marshalledSize(), 28)
@@ -849,6 +854,7 @@ class TestSimulationManagementFamily(unittest.TestCase):
 
     def test_start_resume_round_trip(self):
         from opendis.record.common import ClockTime
+
         pdu = StartResumePdu()
         pdu.realWorldTime = ClockTime(3600, 120)
         pdu.simulationTime = ClockTime(0, 60)
@@ -872,8 +878,7 @@ class TestSimulationManagementFamily(unittest.TestCase):
         raw = pdu.to_bytes()
         parsed = createPdu(raw)
         self.assertIsInstance(parsed, StopFreezePdu)
-        self.assertIsInstance(parsed.frozenBehavior,
-                              StopFreezeFrozenBehavior)
+        self.assertIsInstance(parsed.frozenBehavior, StopFreezeFrozenBehavior)
         self.assertTrue(parsed.frozenBehavior.runSimulationClock)
         self.assertFalse(parsed.frozenBehavior.transmitUpdates)
         self.assertTrue(parsed.frozenBehavior.processUpdates)
@@ -903,8 +908,7 @@ class TestSimulationManagementFamily(unittest.TestCase):
         self.assertEqual(parsed.numberOfFixedDatumRecords, 1)
         self.assertEqual(parsed.numberOfVariableDatumRecords, 1)
         self.assertEqual(parsed.fixedDatumRecords[0].fixedDatumValue, 222)
-        self.assertEqual(parsed.variableDatumRecords[0].variableData,
-                         b"payload!")
+        self.assertEqual(parsed.variableDatumRecords[0].variableData, b"payload!")
         self.assertEqual(parsed.to_bytes(), raw)
 
     def test_action_response_round_trip(self):
@@ -949,8 +953,7 @@ class TestSimulationManagementFamily(unittest.TestCase):
         parsed = createPdu(raw)
         self.assertIsInstance(parsed, EventReportPdu)
         self.assertEqual(parsed.eventType, 3)
-        self.assertEqual(parsed.variableDatumRecords[0].variableData,
-                         b"abcde")
+        self.assertEqual(parsed.variableDatumRecords[0].variableData, b"abcde")
         self.assertEqual(parsed.to_bytes(), raw)
 
     def test_comment_round_trip(self):
@@ -961,8 +964,7 @@ class TestSimulationManagementFamily(unittest.TestCase):
         self.assertIsInstance(parsed, CommentPdu)
         self.assertEqual(parsed.numberOfFixedDatumRecords, 0)
         self.assertEqual(parsed.numberOfVariableDatumRecords, 1)
-        self.assertEqual(parsed.variableDatumRecords[0].variableData,
-                         b"hello msg")
+        self.assertEqual(parsed.variableDatumRecords[0].variableData, b"hello msg")
         self.assertEqual(parsed.to_bytes(), raw)
 
 
@@ -1007,8 +1009,7 @@ class TestSimulationManagementReliableFamily(unittest.TestCase):
     def test_record_reliable_record_sets(self):
         pdu = RecordReliablePdu()
         pdu.eventType = 1
-        recordSet = RecordSpecificationElement(3300, 1, 64, 2,
-                                               b"\x00" * 16)
+        recordSet = RecordSpecificationElement(3300, 1, 64, 2, b"\x00" * 16)
         pdu.recordSets.append(recordSet)
         self.assertEqual(recordSet.marshalledSize(), 14 + 16 + 2)  # padTo64
         raw = pdu.to_bytes()
@@ -1034,6 +1035,7 @@ class TestSimulationManagementReliableFamily(unittest.TestCase):
 
     def test_r_abbreviations_are_aliases(self):
         import opendis.record.simulation_management_with_reliability as smr
+
         self.assertIs(smr.CreateEntityRPdu, smr.CreateEntityReliablePdu)
         self.assertIs(smr.RecordRPdu, smr.RecordReliablePdu)
         self.assertIs(smr.CommentRPdu, smr.CommentReliablePdu)
@@ -1065,6 +1067,7 @@ class TestLogisticsFamily(unittest.TestCase):
         self.assertEqual(parsed.to_bytes(), raw)
 
         from opendis.record.logistics import ResupplyReceivedPdu
+
         received = ResupplyReceivedPdu()
         raw = received.to_bytes()
         self.assertEqual(len(raw), 28)
@@ -1119,8 +1122,7 @@ class TestEntityManagementFamily(unittest.TestCase):
         self.assertEqual(parsed.numberOfDisEntities, 1)
         self.assertEqual(parsed.numberOfSilentEntityTypes, 1)
         self.assertEqual(parsed.aggregateMarking.string, "1BN")
-        self.assertEqual(parsed.variableDatumList[0].variableData,
-                         b"agg data")
+        self.assertEqual(parsed.variableDatumList[0].variableData, b"agg data")
         self.assertEqual(parsed.to_bytes(), raw)
 
     def test_aggregate_state_id_list_alignment(self):
@@ -1141,7 +1143,8 @@ class TestEntityManagementFamily(unittest.TestCase):
         pdu.latitude = 51.5
         pdu.longitude = -0.12
         pdu.groupedEntityDescriptions.append(
-            EntityIdentifier(SimulationAddress(9, 9), 11))
+            EntityIdentifier(SimulationAddress(9, 9), 11)
+        )
         raw = pdu.to_bytes()
         self.assertEqual(len(raw), 40 + 6)
         parsed = createPdu(raw)
@@ -1152,12 +1155,13 @@ class TestEntityManagementFamily(unittest.TestCase):
 
     def test_transfer_ownership_round_trip(self):
         from opendis.record.simulation_management_with_reliability import (
-            RecordSpecificationElement)
+            RecordSpecificationElement,
+        )
+
         pdu = TransferOwnershipPdu()
         pdu.requestID = 4
         pdu.transferType = 1  # [UID 224] push transfer
-        pdu.recordSets.append(
-            RecordSpecificationElement(3300, 0, 32, 1, b"\xAB" * 4))
+        pdu.recordSets.append(RecordSpecificationElement(3300, 0, 32, 1, b"\xab" * 4))
         raw = pdu.to_bytes()
         parsed = createPdu(raw)
         self.assertIsInstance(parsed, TransferOwnershipPdu)
@@ -1217,8 +1221,7 @@ class TestEntityInformationSurface(unittest.TestCase):
         self.assertIsInstance(parsed, CollisionElasticPdu)
         self.assertEqual(parsed.collisionEventID.eventNumber, 9)
         self.assertAlmostEqual(parsed.mass, 1200.0, places=5)
-        self.assertAlmostEqual(
-            parsed.collisionIntermediateResultXX, 1.5, places=5)
+        self.assertAlmostEqual(parsed.collisionIntermediateResultXX, 1.5, places=5)
         self.assertAlmostEqual(parsed.coefficientOfRestitution, 0.75, places=5)
         self.assertEqual(parsed.to_bytes(), raw)
 
@@ -1276,8 +1279,9 @@ class TestEntityInformationSurface(unittest.TestCase):
         # §6.2.10/Table 138: recordLength = 6 + K + P with the record
         # padded to the 64-bit boundary; a K=2 payload carries 2 pad
         # bytes inside recordSpecificFields (recordLength 8)
-        record = Attribute(recordType=1, recordLength=8,
-                           recordSpecificFields=b"\xAA\xBB")
+        record = Attribute(
+            recordType=1, recordLength=8, recordSpecificFields=b"\xaa\xbb"
+        )
         self.assertEqual(record.marshalledSize(), 8)
         raw = record.to_bytes() if hasattr(record, "to_bytes") else None
         buf = io.BytesIO()
@@ -1286,7 +1290,7 @@ class TestEntityInformationSurface(unittest.TestCase):
         self.assertEqual(len(wire), 8)
         again = Attribute()
         again.parse(DataInputStream(io.BytesIO(wire)))
-        self.assertEqual(again.recordSpecificFields, b"\xAA\xBB")
+        self.assertEqual(again.recordSpecificFields, b"\xaa\xbb")
         self.assertEqual(again.recordLength, 8)
 
 
@@ -1297,7 +1301,9 @@ class TestIFFPdu(unittest.TestCase):
     def _layer1(systemType):
         pdu = IdentificationFriendOrFoePdu()
         pdu.systemID = SystemIdentifier(
-            systemType=systemType, systemName=1, systemMode=1,
+            systemType=systemType,
+            systemName=1,
+            systemMode=1,
             changeOptions=0,
         )
         return pdu
@@ -1330,8 +1336,7 @@ class TestIFFPdu(unittest.TestCase):
         layer3 = IFFPduLayer3InterrogatorFormatData()
         layer3.layerHeader = LayerHeader(layerNumber=3)
         layer3.IFFFundamentalParameterDataRecord = [
-            IFFData(recordType=1, recordLength=8,
-                    recordSpecificFields=b"\x01\x02")
+            IFFData(recordType=1, recordLength=8, recordSpecificFields=b"\x01\x02")
         ]
         pdu.iFFPduLayer3InterrogatorFormatData = layer3
         raw = pdu.to_bytes()
@@ -1345,8 +1350,11 @@ class TestIFFPdu(unittest.TestCase):
             IFFPduLayer3InterrogatorFormatData,
         )
         self.assertIsNone(parsed.iFFPduLayer3TransponderFormatData)
-        got = parsed.iFFPduLayer3InterrogatorFormatData \
-            .IFFFundamentalParameterDataRecord[0]
+        got = (
+            parsed.iFFPduLayer3InterrogatorFormatData.IFFFundamentalParameterDataRecord[
+                0
+            ]
+        )
         self.assertEqual(got.recordSpecificFields, b"\x01\x02")
         self.assertEqual(parsed.to_bytes(), raw)
 
@@ -1379,12 +1387,14 @@ class TestIFFPdu(unittest.TestCase):
         parsed = createPdu(raw)
         self.assertIsInstance(parsed.iFFPduLayer5Data, IFFPduLayer5Data)
         self.assertEqual(parsed.iFFPduLayer5Data.applicableLayers, 0x01)
-        self.assertEqual(len(parsed.iFFPduLayer5Data \
-                            .IFFFundamentalParameterDataRecord), 1)
+        self.assertEqual(
+            len(parsed.iFFPduLayer5Data.IFFFundamentalParameterDataRecord), 1
+        )
         self.assertEqual(parsed.to_bytes(), raw)
 
     def test_iff_alias(self):
         from opendis.record.distributed_emissions import IFFPdu
+
         self.assertIs(IFFPdu, IdentificationFriendOrFoePdu)
 
 
@@ -1394,9 +1404,7 @@ class TestSEESPdu(unittest.TestCase):
     def test_sees_round_trip(self):
         pdu = SupplementalEmissionEntityStatePdu()
         pdu.originatingEntityID = EntityIdentifier(SimulationAddress(1, 2), 3)
-        pdu.propulsionSystemData = [
-            PropulsionSystemData() for _ in range(2)
-        ]
+        pdu.propulsionSystemData = [PropulsionSystemData() for _ in range(2)]
         raw = pdu.to_bytes()
         # Table 174 base 28 bytes + 8 per propulsion record
         self.assertEqual(len(raw), 28 + 16)
@@ -1408,6 +1416,7 @@ class TestSEESPdu(unittest.TestCase):
 
     def test_sees_alias(self):
         from opendis.record.distributed_emissions import SEESPdu
+
         self.assertIs(SEESPdu, SupplementalEmissionEntityStatePdu)
 
 
@@ -1443,8 +1452,7 @@ class TestGriddedDataPduWire(unittest.TestCase):
         raw = pdu.to_bytes()
         parsed = createPdu(raw)
         self.assertEqual(len(parsed.gridAxisDescriptors), 2)
-        self.assertIsInstance(
-            parsed.gridAxisDescriptors[1], GridAxisDescriptorVariable)
+        self.assertIsInstance(parsed.gridAxisDescriptors[1], GridAxisDescriptorVariable)
         self.assertEqual(parsed.gridAxisDescriptors[1].xiValues, [1, 2, 3])
         # the grid-data count is derived (V x prod Ni), not stored — the
         # XML's countFieldName="numberOfGridAxes" is an upstream bug
@@ -1512,11 +1520,13 @@ class TestDistributedEmissionsFamily(unittest.TestCase):
         beam = EmitterBeam()
         beam.beamNumber = 1
         beam.fundamentalParameterData = EEFundamentalParameterData(
-            1e9, 2e6, 55.0, 1000.0, 1e-6)
+            1e9, 2e6, 55.0, 1000.0, 1e-6
+        )
         beam.beamStatus = BeamStatus(1)  # active
         beam.jammingTechnique = JammingTechnique(1, 2, 3, 4)
         beam.trackJamData.append(
-            TrackJamData(EntityIdentifier(SimulationAddress(2, 2), 5), 1, 1))
+            TrackJamData(EntityIdentifier(SimulationAddress(2, 2), 5), 1, 1)
+        )
         system.beams.append(beam)
         pdu.systems.append(system)
         raw = pdu.to_bytes()
@@ -1527,7 +1537,8 @@ class TestDistributedEmissionsFamily(unittest.TestCase):
         self.assertEqual(beamOut.beamDataLength, 13 + 2)
         self.assertEqual(beamOut.numberOfTargets, 1)
         self.assertAlmostEqual(
-            beamOut.fundamentalParameterData.frequency, 1e9, delta=1.0)
+            beamOut.fundamentalParameterData.frequency, 1e9, delta=1.0
+        )
         self.assertEqual(beamOut.trackJamData[0].entityID.entityNumber, 5)
         self.assertEqual(parsed.to_bytes(), raw)
 
@@ -1553,8 +1564,7 @@ class TestDistributedEmissionsFamily(unittest.TestCase):
         emitter = UAEmitter()
         emitter.acousticEmitter = AcousticEmitter(1, 2, 3)
         beam = UABeam()
-        beam.fundamentalParameterData = UAFundamentalParameter(
-            4, 5, 0.1, 0.2, 0.3, 0.4)
+        beam.fundamentalParameterData = UAFundamentalParameter(4, 5, 0.1, 0.2, 0.3, 0.4)
         emitter.beams.append(beam)
         pdu.emitterSystems.append(emitter)
         raw = pdu.to_bytes()
@@ -1628,16 +1638,19 @@ class TestMinefieldFamily(unittest.TestCase):
         pdu.dataFilter = 0x77F  # bits 0-6 + 8-10 (no wires)
         pdu.sensorTypes.append(1)
         pdu.mineLocation.extend(
-            (Vector3Float(1.0, 2.0, 3.0), Vector3Float(4.0, 5.0, 6.0)))
+            (Vector3Float(1.0, 2.0, 3.0), Vector3Float(4.0, 5.0, 6.0))
+        )
         pdu.groundBurialDepthOffset.extend((0.1, 0.2))
         pdu.waterBurialDepthOffset.extend((0.3, 0.4))
         pdu.snowBurialDepthOffset.extend((0.5, 0.6))
-        pdu.mineOrientation.extend((EulerAngles(0.1, 0.2, 0.3),
-                                    EulerAngles(0.4, 0.5, 0.6)))
+        pdu.mineOrientation.extend(
+            (EulerAngles(0.1, 0.2, 0.3), EulerAngles(0.4, 0.5, 0.6))
+        )
         pdu.thermalContrast.extend((0.7, 0.8))
         pdu.reflectance.extend((0.9, 1.0))
         pdu.mineEmplacementTime.extend(
-            (MineEmplacementTime(1, 2), MineEmplacementTime(3, 4)))
+            (MineEmplacementTime(1, 2), MineEmplacementTime(3, 4))
+        )
         pdu.mineEntityNumber.extend((101, 102))
         pdu.fusing.extend((0x0101, 0x0202))
         pdu.scalarDetectionCoefficient.extend((9, 8))  # 2 mines x 1 sensor
@@ -1651,15 +1664,15 @@ class TestMinefieldFamily(unittest.TestCase):
         self.assertEqual(parsed.numberOfMinesInThisPdu, 2)
         self.assertEqual(parsed.mineEntityNumber, [101, 102])
         self.assertEqual(parsed.scalarDetectionCoefficient, [9, 8])
-        self.assertAlmostEqual(parsed.groundBurialDepthOffset[1], 0.2,
-                               places=6)
+        self.assertAlmostEqual(parsed.groundBurialDepthOffset[1], 0.2, places=6)
         self.assertEqual(parsed.to_bytes(), raw)
 
     def test_minefield_data_wires_only(self):
         pdu = MinefieldDataPdu()
         pdu.dataFilter = 0x80  # bit 7: trip/detonation wires only
         pdu.mineLocation.extend(
-            (Vector3Float(0.0, 0.0, 0.0), Vector3Float(1.0, 1.0, 1.0)))
+            (Vector3Float(0.0, 0.0, 0.0), Vector3Float(1.0, 1.0, 1.0))
+        )
         pdu.mineEntityNumber.extend((7, 8))
         pdu.numberOfTripDetonationWires.extend((1, 2))
         pdu.numberOfVertices.extend((2, 3, 1))
@@ -1726,15 +1739,20 @@ class TestSyntheticEnvironmentFamily(unittest.TestCase):
         parsed = createPdu(raw)
         self.assertEqual(parsed.numberOfLinearSegments, 1)
         self.assertAlmostEqual(
-            parsed.linearSegmentParameters[0].segmentLength, 55.5, places=4)
+            parsed.linearSegmentParameters[0].segmentLength, 55.5, places=4
+        )
         self.assertEqual(parsed.to_bytes(), raw)
 
     def test_areal_object_state_round_trip(self):
         pdu = ArealObjectStatePdu()
         pdu.objectType = ObjectType(1, 3, 5)
-        pdu.objectLocation.extend((Vector3Double(0.0, 0.0, 0.0),
-                                   Vector3Double(1.0, 0.0, 0.0),
-                                   Vector3Double(1.0, 1.0, 0.0)))
+        pdu.objectLocation.extend(
+            (
+                Vector3Double(0.0, 0.0, 0.0),
+                Vector3Double(1.0, 0.0, 0.0),
+                Vector3Double(1.0, 1.0, 0.0),
+            )
+        )
         raw = pdu.to_bytes()
         # 48-byte base (12 header + 36 body) + 3 x 24-byte locations; the
         # hand-written "49" expectation was an arithmetic slip
@@ -1746,7 +1764,7 @@ class TestSyntheticEnvironmentFamily(unittest.TestCase):
     def test_environmental_process_round_trip(self):
         pdu = EnvironmentalProcessPdu()
         pdu.modelType = 1  # [UID 248]
-        record = EnvironmentRecord(4100, 1, b"\xAA" * 8)  # 16-byte record
+        record = EnvironmentRecord(4100, 1, b"\xaa" * 8)  # 16-byte record
         pdu.environmentRecords.append(record)
         self.assertEqual(record.marshalledSize(), 16)
         raw = pdu.to_bytes()
@@ -1754,7 +1772,7 @@ class TestSyntheticEnvironmentFamily(unittest.TestCase):
         self.assertIsInstance(parsed, EnvironmentalProcessPdu)
         self.assertEqual(parsed.numberOfEnvironmentRecords, 1)
         self.assertEqual(parsed.environmentRecords[0].environmentType, 4100)
-        self.assertEqual(parsed.environmentRecords[0].geometry, b"\xAA" * 8)
+        self.assertEqual(parsed.environmentRecords[0].geometry, b"\xaa" * 8)
         self.assertEqual(parsed.to_bytes(), raw)
 
 
@@ -1822,13 +1840,18 @@ class TestLiveEntityFamily(unittest.TestCase):
                 pdu.targetLiveEntityId = LiveEntityIdentifier()
             if F[2]:
                 pdu.munitionLiveEntityId = (
-                    LiveEntityIdentifier() if F[1]
-                    else LiveEntityIdentifierElided())
-            pdu.eventId = (EventIdentifierLiveEntity() if F[3]
-                           else EventIdentifierLiveEntityElided())
+                    LiveEntityIdentifier() if F[1] else LiveEntityIdentifierElided()
+                )
+            pdu.eventId = (
+                EventIdentifierLiveEntity()
+                if F[3]
+                else EventIdentifierLiveEntityElided()
+            )
             if F[6]:
                 from opendis.record.live_entity import (
-                    LiveEntityRelativeWorldCoordinates)
+                    LiveEntityRelativeWorldCoordinates,
+                )
+
                 pdu.location = LiveEntityRelativeWorldCoordinates()
             if F[4]:
                 pdu.munitionDescriptor.warhead = 1
@@ -1836,10 +1859,16 @@ class TestLiveEntityFamily(unittest.TestCase):
             if F[5]:
                 pdu.munitionDescriptor.quantity = 3
                 pdu.munitionDescriptor.rate = 4
-            want = (280 + 32 * F[0] + (16 * F[1] + 16) * F[2]
-                    + 16 * F[3] + 64 * F[6] + 32 * F[4] + 32 * F[5])
-            self.assertEqual(pdu.marshalledSize() * 8, want,
-                             f"fireFlag={flags:08b}")
+            want = (
+                280
+                + 32 * F[0]
+                + (16 * F[1] + 16) * F[2]
+                + 16 * F[3]
+                + 64 * F[6]
+                + 32 * F[4]
+                + 32 * F[5]
+            )
+            self.assertEqual(pdu.marshalledSize() * 8, want, f"fireFlag={flags:08b}")
             parsed = createPdu(pdu.to_bytes())
             self.assertEqual(parsed.to_bytes(), pdu.to_bytes())
 
@@ -1847,13 +1876,11 @@ class TestLiveEntityFamily(unittest.TestCase):
         pdu = LiveEntityFirePdu()
         # bits 2 (munition present) + 1 (full shape) + 3 (full event)
         pdu.fireFlag = (1 << 2) | (1 << 1) | (1 << 3)
-        pdu.munitionLiveEntityId = LiveEntityIdentifier(
-            LiveSimulationAddress(1, 2), 3)
+        pdu.munitionLiveEntityId = LiveEntityIdentifier(LiveSimulationAddress(1, 2), 3)
         pdu.eventId = EventIdentifierLiveEntity(1, 2, 42)
         raw = pdu.to_bytes()
         parsed = createPdu(raw)
-        self.assertIsInstance(parsed.munitionLiveEntityId,
-                              LiveEntityIdentifier)
+        self.assertIsInstance(parsed.munitionLiveEntityId, LiveEntityIdentifier)
         self.assertIsInstance(parsed.eventId, EventIdentifierLiveEntity)
         self.assertEqual(parsed.eventId.eventNumber, 42)
         self.assertEqual(parsed.to_bytes(), raw)
@@ -1861,11 +1888,20 @@ class TestLiveEntityFamily(unittest.TestCase):
     def test_le_detonation_table_229_parity(self):
         # 256 + 8F7 + 32F0 + (16F1+16)F2 + (16F3+16)G1 + 64(1-F6)
         #   + 48G0 + 32F4 + 32F5 + 48F6  (G* = F7 AND G)
-        cases = [(0, 0), (1, 0), (0b01000001, 0), (0b01001001, 0b10),
-                 (0b01001111, 0b11), (0b11001111, 0b11)]
+        cases = [
+            (0, 0),
+            (1, 0),
+            (0b01000001, 0),
+            (0b01001001, 0b10),
+            (0b01001111, 0b11),
+            (0b11001111, 0b11),
+        ]
         from opendis.record.live_entity import (
-            LiveEntityOrientation16, LiveEntityRelativeEntityCoordinates,
-            LiveEntityRelativeWorldCoordinates)
+            LiveEntityOrientation16,
+            LiveEntityRelativeEntityCoordinates,
+            LiveEntityRelativeWorldCoordinates,
+        )
+
         for f1, f2 in cases:
             pdu = LiveEntityDetonationPdu()
             pdu.detonationFlag1 = f1
@@ -1877,11 +1913,14 @@ class TestLiveEntityFamily(unittest.TestCase):
                 pdu.targetLiveEntityId = LiveEntityIdentifier()
             if F[2]:
                 pdu.munitionLiveEntityId = (
-                    LiveEntityIdentifier() if F[1]
-                    else LiveEntityIdentifierElided())
+                    LiveEntityIdentifier() if F[1] else LiveEntityIdentifierElided()
+                )
             if F[7] and G[1]:
-                pdu.eventId = (EventIdentifierLiveEntity() if F[3]
-                               else EventIdentifierLiveEntityElided())
+                pdu.eventId = (
+                    EventIdentifierLiveEntity()
+                    if F[3]
+                    else EventIdentifierLiveEntityElided()
+                )
                 # F3 selects the shape: elided when 0, full when 1
             if not F[6]:
                 pdu.worldLocation = LiveEntityRelativeWorldCoordinates()
@@ -1896,11 +1935,19 @@ class TestLiveEntityFamily(unittest.TestCase):
             if F[6]:
                 pdu.entityLocation = LiveEntityRelativeEntityCoordinates()
             Gs = [g and F[7] for g in G]
-            want = (256 + 8 * F[7] + 32 * F[0] + (16 * F[1] + 16) * F[2]
-                    + (16 * F[3] + 16) * Gs[1] + 64 * (1 - F[6])
-                    + 48 * Gs[0] + 32 * F[4] + 32 * F[5] + 48 * F[6])
-            self.assertEqual(pdu.marshalledSize() * 8, want,
-                             f"f1={f1:08b} f2={f2:08b}")
+            want = (
+                256
+                + 8 * F[7]
+                + 32 * F[0]
+                + (16 * F[1] + 16) * F[2]
+                + (16 * F[3] + 16) * Gs[1]
+                + 64 * (1 - F[6])
+                + 48 * Gs[0]
+                + 32 * F[4]
+                + 32 * F[5]
+                + 48 * F[6]
+            )
+            self.assertEqual(pdu.marshalledSize() * 8, want, f"f1={f1:08b} f2={f2:08b}")
             parsed = createPdu(pdu.to_bytes())
             self.assertEqual(parsed.to_bytes(), pdu.to_bytes())
 
@@ -1911,6 +1958,7 @@ class TestInformationOperationsFamily(unittest.TestCase):
 
     def test_io_action_round_trip_with_unknown_record(self):
         from opendis.record import getStandardVariableClass
+
         pdu = InformationOperationsActionPdu()
         pdu.requestID = 9
         pdu.IOWarfareType = 1  # [UID 285] EW
@@ -1941,10 +1989,12 @@ class TestInformationOperationsFamily(unittest.TestCase):
 class TestUnrecognizedPdu(unittest.TestCase):
 
     def test_unknown_pdu_type_captured_byte_exact(self):
-        header = (bytes([7, 3, 250, 1])      # version, exercise, type, family
-                  + b"\x11\x22\x33\x44"      # timestamp
-                  + bytes([0, 0])            # status, padding
-                  + b"\x00\x14")             # length = 20
+        header = (
+            bytes([7, 3, 250, 1])  # version, exercise, type, family
+            + b"\x11\x22\x33\x44"  # timestamp
+            + bytes([0, 0])  # status, padding
+            + b"\x00\x14"
+        )  # length = 20
         raw = header + b"rest-of-body"
         pdu = createPdu(raw)
         self.assertIsInstance(pdu, UnrecognizedPdu)
@@ -1965,8 +2015,7 @@ class TestUnrecognizedPdu(unittest.TestCase):
         self.assertIsInstance(pdu, EntityStatePdu)  # partial parse survives
 
     def test_from_file(self):
-        pdu = createPduFromFilePath(path.join(TEST_DIR,
-                                              "EntityStatePdu-26.raw"))
+        pdu = createPduFromFilePath(path.join(TEST_DIR, "EntityStatePdu-26.raw"))
         self.assertIsInstance(pdu, EntityStatePdu)
 
 
@@ -1980,19 +2029,16 @@ class TestEnumRegistry(unittest.TestCase):
         unregister_enum_factory()
 
     def test_degrades_to_int_without_provider(self):
-        self.assertIsInstance(createPdu(
-            self._espdu(forceId=1)).forceId, int)
+        self.assertIsInstance(createPdu(self._espdu(forceId=1)).forceId, int)
 
     def test_rich_enum_when_registered(self):
-        register_enum_factory(
-            lambda uid: self.ForceId if uid == 6 else None)
+        register_enum_factory(lambda uid: self.ForceId if uid == 6 else None)
         parsed = createPdu(self._espdu(forceId=1))
         self.assertIs(parsed.forceId, self.ForceId.FRIENDLY)
         self.assertEqual(parsed.forceId, 1)
 
     def test_unknown_value_degrades_to_int(self):
-        register_enum_factory(
-            lambda uid: self.ForceId if uid == 6 else None)
+        register_enum_factory(lambda uid: self.ForceId if uid == 6 else None)
         parsed = createPdu(self._espdu(forceId=200))
         self.assertNotIsInstance(parsed.forceId, self.ForceId)
         self.assertEqual(parsed.forceId, 200)
@@ -2000,8 +2046,7 @@ class TestEnumRegistry(unittest.TestCase):
     def test_round_trip_identical_with_and_without_provider(self):
         raw = self._espdu(forceId=2)
         without = createPdu(raw).to_bytes()
-        register_enum_factory(
-            lambda uid: self.ForceId if uid == 6 else None)
+        register_enum_factory(lambda uid: self.ForceId if uid == 6 else None)
         with_provider = createPdu(raw).to_bytes()
         self.assertEqual(without, with_provider)
         self.assertEqual(with_provider, raw)
@@ -2026,8 +2071,7 @@ class TestConstructCategories(unittest.TestCase):
     def test_objectlist(self):
         pdu = DataPdu()
         pdu.fixedDatumRecords.append(FixedDatum())
-        self.assertEqual(pdu.numberOfFixedDatumRecords,
-                         len(pdu.fixedDatumRecords))
+        self.assertEqual(pdu.numberOfFixedDatumRecords, len(pdu.fixedDatumRecords))
 
     def test_primitivelist(self):
         datum = VariableDatum(1, b"\x00\xff" * 4)
@@ -2038,12 +2082,12 @@ class TestConstructCategories(unittest.TestCase):
         self.assertEqual(datum.marshalledSize(), 16)
 
     def test_bitfield(self):
-        self.assertIsInstance(LandPlatformAppearance(0),
-                              LandPlatformAppearance)
+        self.assertIsInstance(LandPlatformAppearance(0), LandPlatformAppearance)
 
     def test_header(self):
-        header = PduHeader.parse(DataInputStream(io.BytesIO(
-            EntityStatePdu().to_bytes()[:12])))
+        header = PduHeader.parse(
+            DataInputStream(io.BytesIO(EntityStatePdu().to_bytes()[:12]))
+        )
         self.assertEqual(header.pduType, 1)
         self.assertEqual(header.marshalledSize(), 12)
 

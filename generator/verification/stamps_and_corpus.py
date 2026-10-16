@@ -109,7 +109,9 @@ def check_corpus(failures: list[str]) -> None:
             )
         wire_length = int.from_bytes(raw[8:10], "big")
         if wire_length != len(raw):
-            failures.append(f"pduType {pdu_type}: wire length {wire_length} != {len(raw)}")
+            failures.append(
+                f"pduType {pdu_type}: wire length {wire_length} != {len(raw)}"
+            )
         expected = STANDARD_FIXED_SIZES.get(pdu_type)
         if expected is not None and len(raw) != expected:
             failures.append(

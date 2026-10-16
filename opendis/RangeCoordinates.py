@@ -41,7 +41,7 @@ Classes:
     WGS84 - constant parameters for GPS class - includes function:
         g0
 """
-#Import required packages
+# Import required packages
 from math import sqrt, pi, sin, cos, tan, atan, atan2, asin
 from numpy import array, dot, identity
 
@@ -63,9 +63,9 @@ def euclideanDistance(data, dataRef=None):
     total = 0
     for index in range(len(data)):
         if dataRef is None:
-            total += data[index]**2
+            total += data[index] ** 2
         else:
-            total += (data[index] - dataRef[index])**2
+            total += (data[index] - dataRef[index]) ** 2
     return sqrt(total)
 
 
@@ -85,7 +85,7 @@ class WGS84:
     e = sqrt(f * (2 - f))
 
     # Speed of light (m/s)
-    c = 299792458.
+    c = 299792458.0
 
     # Relativistic constant
     F = -4.442807633e-10
@@ -99,12 +99,15 @@ class WGS84:
     def g0(self, L):
         """
         acceleration due to gravity at the ellipsoid surface at latitude L
-        
+
         Note: this is not the WGS84 models for gravity at latitude,
-              it is an approximation from another source.     
+              it is an approximation from another source.
         """
-        return 9.7803267715 * (1 + 0.001931851353 * sin(L)**2) / \
-                        sqrt(1 - 0.0066943800229 * sin(L)**2)
+        return (
+            9.7803267715
+            * (1 + 0.001931851353 * sin(L) ** 2)
+            / sqrt(1 - 0.0066943800229 * sin(L) ** 2)
+        )
 
 
 class GPS:
@@ -135,7 +138,7 @@ class GPS:
         previousLat = 90
 
         # Special case for poles (note: any longitude value is valid here)
-        if x == 0 and y == 0:   
+        if x == 0 and y == 0:
             if z > 0:
                 return (90.00, 69.00, round(z - self.wgs84.b, 2))
 
@@ -150,12 +153,11 @@ class GPS:
             previousLat = lat
             sinLat = z / (N * (1 - self.wgs84.e**2) + alt)
             lat = atan((z + self.wgs84.e**2 * N * sinLat) / p)
-            N = self.wgs84.a / sqrt(1 - (self.wgs84.e * sinLat)**2)
+            N = self.wgs84.a / sqrt(1 - (self.wgs84.e * sinLat) ** 2)
             alt = p / cos(lat) - N
 
         # Return the lla coordinates
         return (rad2deg(lat), rad2deg(lon), alt)
-
 
     def ecef2llarpy(self, X, Y, Z, psi, theta, phi):
         """
@@ -219,18 +221,16 @@ class GPS:
         Z0 = a0[2]
 
         # calculate yaw and pitch
-        yaw = atan2( dot(x3, Y0), dot(x3, X0) )
-        pitch = atan2( -dot(x3, Z0), sqrt( (dot(x3, X0)) ** 2 + (dot(x3, Y0)) **2 ) )
+        yaw = atan2(dot(x3, Y0), dot(x3, X0))
+        pitch = atan2(-dot(x3, Z0), sqrt((dot(x3, X0)) ** 2 + (dot(x3, Y0)) ** 2))
 
         # calculate roll
         Y2 = dot(self.rotate_3x3(yaw, Z0), Y0)
         Z2 = dot(self.rotate_3x3(pitch, Y2), Z0)
 
-        roll = atan2( dot(y3, Z2), dot(y3, Y2))
-
+        roll = atan2(dot(y3, Z2), dot(y3, Y2))
 
         return (deg2rad(lat), deg2rad(lon), alt, roll, pitch, yaw)
-
 
     def ecef2ned(self, ecef, origin):
         """Converts ecef coordinates into local tangent plane where the
@@ -242,11 +242,14 @@ class GPS:
         llaOrigin = self.ecef2lla(origin)
         lat = deg2rad(llaOrigin[0])
         lon = deg2rad(llaOrigin[1])
-        Re2t = array([[-sin(lat)*cos(lon), -sin(lat)*sin(lon), cos(lat)],
-                    [-sin(lon), cos(lon), 0],
-                    [-cos(lat)*cos(lon), -cos(lat)*sin(lon), -sin(lat)]])
+        Re2t = array(
+            [
+                [-sin(lat) * cos(lon), -sin(lat) * sin(lon), cos(lat)],
+                [-sin(lon), cos(lon), 0],
+                [-cos(lat) * cos(lon), -cos(lat) * sin(lon), -sin(lat)],
+            ]
+        )
         return list(dot(Re2t, array(ecef) - array(origin)))
-
 
     def ecef2pae(self, ecef, origin):
         """Converts the ecef coordinates into a tangent plane with the origin
@@ -259,18 +262,16 @@ class GPS:
         ned = self.ecef2ned(ecef, origin)
         return self.ned2pae(ned)
 
-
     def ecef2utm(self, ecef):
         lla = self.ecef2lla(ecef)
         utm, info = self.lla2utm(lla)
         return utm, info
 
-
     def ecefvec2nedvec(self, lat, lon):
         """
         Returns the rotation matrix to translate coordinate systems between
         ECEF and NED.
-        
+
         Inputs: latitude and longitude in radians
 
         Outputs: the unit vector matrix of the NED coordinate system with
@@ -283,12 +284,13 @@ class GPS:
                     )
         """
 
-        return array([[-sin(lat)*cos(lon), -sin(lat)*sin(lon), cos(lat) ],
-                      [-sin(lon)         , cos(lon)          , 0        ],
-                      [-cos(lat)*cos(lon), -cos(lat)*sin(lon), -sin(lat)]
-                     ]
-                    )
-
+        return array(
+            [
+                [-sin(lat) * cos(lon), -sin(lat) * sin(lon), cos(lat)],
+                [-sin(lon), cos(lon), 0],
+                [-cos(lat) * cos(lon), -cos(lat) * sin(lon), -sin(lat)],
+            ]
+        )
 
     def lla2ecef(self, lla):
         """
@@ -302,7 +304,7 @@ class GPS:
         alt = lla[2]
 
         # Calculate length of the normal to the ellipsoid
-        N = self.wgs84.a / sqrt(1 - (self.wgs84.e * sin(lat))**2)
+        N = self.wgs84.a / sqrt(1 - (self.wgs84.e * sin(lat)) ** 2)
 
         # Calculate ecef coordinates
         x = (N + alt) * cos(lat) * cos(lon)
@@ -312,10 +314,9 @@ class GPS:
         # Return the ecef coordinates
         return (x, y, z)
 
-
-    def lla2gcc(self, lla, geoOrigin=''):
+    def lla2gcc(self, lla, geoOrigin=""):
         """
-        Same as lls2ecef, but accepts an X3D-style geoOrigin string for 
+        Same as lls2ecef, but accepts an X3D-style geoOrigin string for
         subtraction of it in ecef (gcc) cooridinates
         """
         if geoOrigin:
@@ -326,8 +327,7 @@ class GPS:
 
         x, y, z = self.lla2ecef(lla)
 
-        return (x - x0, y - y0, z -z0)
-
+        return (x - x0, y - y0, z - z0)
 
     def lla2utm(self, lla):
         """Converts lat, lon, alt to Universal Transverse Mercator coordinates
@@ -338,67 +338,93 @@ class GPS:
             Snyder, J. P., Map Projections-A Working Manual, U.S. Geol. Surv.
                 Prof. Pap., 1395, 1987
         Code segments from pygps project, Russ Nelson"""
-        #Decompose lla
+        # Decompose lla
         lat = lla[0]
         lon = lla[1]
         alt = lla[2]
-        #Determine the zone number
-        zoneNumber = int((lon+180.)/6) + 1
-        #Special zone for Norway
-        if (56. <= lat < 64.) and (3. <= lon < 12.):
+        # Determine the zone number
+        zoneNumber = int((lon + 180.0) / 6) + 1
+        # Special zone for Norway
+        if (56.0 <= lat < 64.0) and (3.0 <= lon < 12.0):
             zoneNumber = 32
-        #Special zones for Svalbard
-        if 72. <= lat < 84.:
-            if 0. <= lon < 9.: zoneNumber = 31
-            elif 9. <= lon < 21.: zoneNumber = 33
-            elif 21. <= lon < 33.: zoneNumber = 35
-            elif 33. <= lon < 42.: zoneNumber = 37
-        #Format the zone
+        # Special zones for Svalbard
+        if 72.0 <= lat < 84.0:
+            if 0.0 <= lon < 9.0:
+                zoneNumber = 31
+            elif 9.0 <= lon < 21.0:
+                zoneNumber = 33
+            elif 21.0 <= lon < 33.0:
+                zoneNumber = 35
+            elif 33.0 <= lon < 42.0:
+                zoneNumber = 37
+        # Format the zone
         zone = "%d%c" % (zoneNumber, self.utmLetterDesignator(lat))
-        #Determine longitude origin
+        # Determine longitude origin
         lonOrigin = (zoneNumber - 1) * 6 - 180 + 3
-        #Convert to radians
+        # Convert to radians
         latRad = deg2rad(lat)
         lonRad = deg2rad(lon)
         lonOriginRad = deg2rad(lonOrigin)
-        #Conversion constants
+        # Conversion constants
         k0 = 0.9996
         eSquared = self.wgs84.e**2
-        ePrimeSquared = eSquared/(1.-eSquared)
-        N = self.wgs84.a/sqrt(1.-eSquared*sin(latRad)**2)
-        T = tan(latRad)**2
-        C = ePrimeSquared*cos(latRad)**2
-        A = (lonRad - lonOriginRad)*cos(latRad)
-        M = self.wgs84.a*( \
-            (1. - \
-                eSquared/4. - \
-                3.*eSquared**2/64. - \
-                5.*eSquared**3/256)*latRad - \
-            (3.*eSquared/8. + \
-                3.*eSquared**2/32. + \
-                45.*eSquared**3/1024.)*sin(2.*latRad) + \
-            (15.*eSquared**2/256. + \
-                45.*eSquared**3/1024.)*sin(4.*latRad) - \
-            (35.*eSquared**3/3072.)*sin(6.*latRad))
-        M0 = 0.
-        #Calculate coordinates
-        x = k0*N*( \
-            A+(1-T+C)*A**3/6. + \
-            (5.-18.*T+T**2+72.*C-58.*ePrimeSquared)*A**5/120.) + 500000.
-        y = k0*( \
-            M-M0+N*tan(latRad)*( \
-                A**2/2. + \
-                (5.-T+9.*C+4.*C**2)*A**4/24. + \
-                (61.-58.*T+T**2+600.*C-330.*ePrimeSquared)*A**6/720.))
-        #Calculate scale factor
-        k = k0*(1 + \
-            (1+C)*A**2/2. + \
-            (5.-4.*T+42.*C+13.*C**2-28.*ePrimeSquared)*A**4/24. + \
-            (61.-148.*T+16.*T**2)*A**6/720.)
+        ePrimeSquared = eSquared / (1.0 - eSquared)
+        N = self.wgs84.a / sqrt(1.0 - eSquared * sin(latRad) ** 2)
+        T = tan(latRad) ** 2
+        C = ePrimeSquared * cos(latRad) ** 2
+        A = (lonRad - lonOriginRad) * cos(latRad)
+        M = self.wgs84.a * (
+            (1.0 - eSquared / 4.0 - 3.0 * eSquared**2 / 64.0 - 5.0 * eSquared**3 / 256)
+            * latRad
+            - (
+                3.0 * eSquared / 8.0
+                + 3.0 * eSquared**2 / 32.0
+                + 45.0 * eSquared**3 / 1024.0
+            )
+            * sin(2.0 * latRad)
+            + (15.0 * eSquared**2 / 256.0 + 45.0 * eSquared**3 / 1024.0)
+            * sin(4.0 * latRad)
+            - (35.0 * eSquared**3 / 3072.0) * sin(6.0 * latRad)
+        )
+        M0 = 0.0
+        # Calculate coordinates
+        x = (
+            k0
+            * N
+            * (
+                A
+                + (1 - T + C) * A**3 / 6.0
+                + (5.0 - 18.0 * T + T**2 + 72.0 * C - 58.0 * ePrimeSquared)
+                * A**5
+                / 120.0
+            )
+            + 500000.0
+        )
+        y = k0 * (
+            M
+            - M0
+            + N
+            * tan(latRad)
+            * (
+                A**2 / 2.0
+                + (5.0 - T + 9.0 * C + 4.0 * C**2) * A**4 / 24.0
+                + (61.0 - 58.0 * T + T**2 + 600.0 * C - 330.0 * ePrimeSquared)
+                * A**6
+                / 720.0
+            )
+        )
+        # Calculate scale factor
+        k = k0 * (
+            1
+            + (1 + C) * A**2 / 2.0
+            + (5.0 - 4.0 * T + 42.0 * C + 13.0 * C**2 - 28.0 * ePrimeSquared)
+            * A**4
+            / 24.0
+            + (61.0 - 148.0 * T + 16.0 * T**2) * A**6 / 720.0
+        )
         utm = [x, y, alt]
         info = [zone, k]
         return utm, info
-
 
     def llarpy2ecef(self, lat, lon, alt, roll, pitch, yaw):
         """
@@ -464,17 +490,16 @@ class GPS:
         Z0 = array([0, 0, 1])
 
         # calculate psi and theta
-        psi = atan2( dot(x3, Y0), dot(x3, X0) )
-        theta = atan2( -dot(x3, Z0), sqrt( (dot(x3, X0)) ** 2 + (dot(x3, Y0)) **2 ) )
+        psi = atan2(dot(x3, Y0), dot(x3, X0))
+        theta = atan2(-dot(x3, Z0), sqrt((dot(x3, X0)) ** 2 + (dot(x3, Y0)) ** 2))
 
         # calculate phi
         Y2 = dot(self.rotate_3x3(psi, Z0), Y0)
         Z2 = dot(self.rotate_3x3(theta, Y2), Z0)
 
-        phi = atan2( dot(y3, Z2), dot(y3, Y2))
+        phi = atan2(dot(y3, Z2), dot(y3, Y2))
 
         return (X, Y, Z, psi, theta, phi)
-
 
     def ned2ecef(self, ned, origin):
         """Converts ned local tangent plane coordinates into ecef coordinates
@@ -486,9 +511,13 @@ class GPS:
         llaOrigin = self.ecef2lla(origin)
         lat = deg2rad(llaOrigin[0])
         lon = deg2rad(llaOrigin[1])
-        Rt2e = array([[-sin(lat)*cos(lon), -sin(lon), -cos(lat)*cos(lon)],
-                    [-sin(lat)*sin(lon), cos(lon), -cos(lat)*sin(lon)],
-                    [cos(lat), 0., -sin(lat)]])
+        Rt2e = array(
+            [
+                [-sin(lat) * cos(lon), -sin(lon), -cos(lat) * cos(lon)],
+                [-sin(lat) * sin(lon), cos(lon), -cos(lat) * sin(lon)],
+                [cos(lat), 0.0, -sin(lat)],
+            ]
+        )
         return list(dot(Rt2e, array(ned)) + array(origin))
 
     def ned2pae(self, ned):
@@ -499,9 +528,8 @@ class GPS:
         """
         p = euclideanDistance(ned)
         alpha = atan2(ned[1], ned[0])
-        epsilon = atan2(-ned[2], sqrt(ned[0]**2 + ned[1]**2))
+        epsilon = atan2(-ned[2], sqrt(ned[0] ** 2 + ned[1] ** 2))
         return [p, rad2deg(alpha), rad2deg(epsilon)]
-
 
     def rotate_3x3(self, theta, normal_vec):
         """
@@ -518,58 +546,82 @@ class GPS:
               the rotation.
         """
 
-        n_x = array([[      0  , -normal_vec[2], normal_vec[1] ],
-                     [normal_vec[2] ,       0  , -normal_vec[0]],
-                     [-normal_vec[1], normal_vec[0] ,   0      ]
-                    ]
-                   )
-
+        n_x = array(
+            [
+                [0, -normal_vec[2], normal_vec[1]],
+                [normal_vec[2], 0, -normal_vec[0]],
+                [-normal_vec[1], normal_vec[0], 0],
+            ]
+        )
 
         nnt = normal_vec * self.transpose(normal_vec)
 
-        return (1 - cos(theta)) * nnt + cos(theta) * self._IDENTITY_3X3 + sin(theta) * n_x
-
+        return (
+            (1 - cos(theta)) * nnt + cos(theta) * self._IDENTITY_3X3 + sin(theta) * n_x
+        )
 
     def transpose(self, arr):
-        """ 
+        """
         numpy doesn't want to transpose a 3x1 vector into a 1x3 vector. So
         we'll do it ourselves.
         """
 
-        return array( [[arr[0]], [arr[1]], [arr[2]]])
-
+        return array([[arr[0]], [arr[1]], [arr[2]]])
 
     def utmLetterDesignator(self, lat):
         """Returns the latitude zone of the UTM coordinates"""
-        if -80 <= lat < -72: return 'C'
-        elif -72 <= lat < -64: return 'D'
-        elif -64 <= lat < -56: return 'E'
-        elif -56 <= lat < -48: return 'F'
-        elif -48 <= lat < -40: return 'G'
-        elif -40 <= lat < -32: return 'H'
-        elif -32 <= lat < -24: return 'J'
-        elif -24 <= lat < -16: return 'K'
-        elif -16 <= lat < -8: return 'L'
-        elif -8 <= lat < 0: return 'M'
-        elif 0 <= lat < 8: return 'N'
-        elif 8 <= lat < 16: return 'P'
-        elif 16 <= lat < 24: return 'Q'
-        elif 24 <= lat < 32: return 'R'
-        elif 32 <= lat < 40: return 'S'
-        elif 40 <= lat < 48: return 'T'
-        elif 48 <= lat < 56: return 'U'
-        elif 56 <= lat < 64: return 'V'
-        elif 64 <= lat < 72: return 'W'
-        elif 72 <= lat < 80: return 'X'
-        else: return 'Z'
+        if -80 <= lat < -72:
+            return "C"
+        elif -72 <= lat < -64:
+            return "D"
+        elif -64 <= lat < -56:
+            return "E"
+        elif -56 <= lat < -48:
+            return "F"
+        elif -48 <= lat < -40:
+            return "G"
+        elif -40 <= lat < -32:
+            return "H"
+        elif -32 <= lat < -24:
+            return "J"
+        elif -24 <= lat < -16:
+            return "K"
+        elif -16 <= lat < -8:
+            return "L"
+        elif -8 <= lat < 0:
+            return "M"
+        elif 0 <= lat < 8:
+            return "N"
+        elif 8 <= lat < 16:
+            return "P"
+        elif 16 <= lat < 24:
+            return "Q"
+        elif 24 <= lat < 32:
+            return "R"
+        elif 32 <= lat < 40:
+            return "S"
+        elif 40 <= lat < 48:
+            return "T"
+        elif 48 <= lat < 56:
+            return "U"
+        elif 56 <= lat < 64:
+            return "V"
+        elif 64 <= lat < 72:
+            return "W"
+        elif 72 <= lat < 80:
+            return "X"
+        else:
+            return "Z"
 
 
 if __name__ == "__main__":
     wgs84 = WGS84()
     gps = GPS()
-    lla = (34. + 0/60. + 0.00174/3600.,
-        -117. - 20./60. - 0.84965/3600.,
-        251.702)
+    lla = (
+        34.0 + 0 / 60.0 + 0.00174 / 3600.0,
+        -117.0 - 20.0 / 60.0 - 0.84965 / 3600.0,
+        251.702,
+    )
     print("lla: {}".format(lla))
     ecef = gps.lla2ecef(lla)
     print("ecef: {}".format(ecef))

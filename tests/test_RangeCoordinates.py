@@ -17,25 +17,28 @@ Tests the following functions:
                 * transpose
 
 """
-#-----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
 # IMPORTS
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 import unittest as _unittest
 from random import randint
 from random import random
 from opendis.RangeCoordinates import *
-#-----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
 # CONSTANTS
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 gps = GPS()
 wgs84 = WGS84()
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # FUNCTIONS
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 
-#-----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
 # CLASSES
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 class SimpleTest(_unittest.TestCase):
 
     # set up the test
@@ -60,7 +63,7 @@ class SimpleTest(_unittest.TestCase):
 
         def body_to_ecef_and_back(body, ecef):
             """
-            Verify llarpy2ecef() translates given body coordinates to given 
+            Verify llarpy2ecef() translates given body coordinates to given
             ecef coordinates. Verify ecef2llarpy() translates those coordinates
             back to the given body coordinates.
 
@@ -99,13 +102,12 @@ class SimpleTest(_unittest.TestCase):
         lat, lon, alt, roll, pitch, yaw = 0, 0, 0, 0, 0, 0
 
         # define ECEF coordinates
-        X, Y, Z, psi, theta, phi = wgs84.a, 0, 0, 0, -pi/2, 0
+        X, Y, Z, psi, theta, phi = wgs84.a, 0, 0, 0, -pi / 2, 0
 
         # test
-        body_to_ecef_and_back((lat, lon, alt, roll, pitch, yaw),
-                              (X, Y, Z, psi, theta, phi)
-                              )
-
+        body_to_ecef_and_back(
+            (lat, lon, alt, roll, pitch, yaw), (X, Y, Z, psi, theta, phi)
+        )
 
         ######################################################################
         # test ground vehicle at prime meridian and equator pointed south
@@ -113,14 +115,13 @@ class SimpleTest(_unittest.TestCase):
         # define body coordinates
         lat, lon, alt, roll, pitch, yaw = 0, 0, 0, 0, 0, deg2rad(180)
 
-        # define ECEF coordinates 
-        X, Y, Z, psi, theta, phi = wgs84.a, 0, 0, pi/2, pi/2, -pi/2
+        # define ECEF coordinates
+        X, Y, Z, psi, theta, phi = wgs84.a, 0, 0, pi / 2, pi / 2, -pi / 2
 
         # test
-        body_to_ecef_and_back((lat, lon, alt, roll, pitch, yaw),
-                              (X, Y, Z, psi, theta, phi)
-                              )
-
+        body_to_ecef_and_back(
+            (lat, lon, alt, roll, pitch, yaw), (X, Y, Z, psi, theta, phi)
+        )
 
         ######################################################################
         # test ground vehicle at north pole pointed south @ 180
@@ -132,10 +133,9 @@ class SimpleTest(_unittest.TestCase):
         X, Y, Z, psi, theta, phi = 0, 0, wgs84.b, 0, 0, -pi
 
         # test
-        body_to_ecef_and_back((lat, lon, alt, roll, pitch, yaw),
-                              (X, Y, Z, psi, theta, phi)
-                              )
-
+        body_to_ecef_and_back(
+            (lat, lon, alt, roll, pitch, yaw), (X, Y, Z, psi, theta, phi)
+        )
 
         ######################################################################
         # test aircraft flying 10000 m above Adeliaide, Australia heading SE,
@@ -158,10 +158,9 @@ class SimpleTest(_unittest.TestCase):
         phi = deg2rad(-29.67)
 
         # test
-        body_to_ecef_and_back((lat, lon, alt, roll, pitch, yaw),
-                              (X, Y, Z, psi, theta, phi)
-                              )
-
+        body_to_ecef_and_back(
+            (lat, lon, alt, roll, pitch, yaw), (X, Y, Z, psi, theta, phi)
+        )
 
         ######################################################################
         # test body to ecef and back with random values in range:
@@ -231,9 +230,9 @@ class SimpleTest(_unittest.TestCase):
             self.assertAlmostEqual(b[5], phi, 2)
 
 
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # DO THE THING
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 if __name__ == "__main__":
     _unittest.main()
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
