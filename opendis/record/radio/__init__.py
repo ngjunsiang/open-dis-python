@@ -7,13 +7,16 @@ Python-side deltas from the XML (sample-review rulings): the XML's
 RadioCommsHeader is flattened onto the PDUs (the composed PDU header
 already owns the attribute name ``header``; legacy dis7.py made the same
 call); the Transmitter keeps SINGLE Modulation Parameters and Antenna
-Pattern records (the XML's objectlists are wrong there — the standard
-allows one of each, §7.7.2/Annex C/§6.2.8) with byte-length counts, and
-its VTP list decodes uid-66 records via the registry. The §6.2.8.2 Beam
-Antenna Pattern record is generated here (header-less, Table 31 — the
-Transmitter's ``antennaPatternType`` field types it); the Annex C
-dispatch classes (GenericRadio, HAVE QUICK, SINCGARS, unknown
-placeholders) live in the hand seam ``radio/annexc.py``. Signal
+Pattern records (§7.7.2 s: "zero or one" of each; byte-length counts
+per Table 176) with the Annex C MP dispatch (variant group on
+``modulationType.radioSystem``) and its VTP list decodes uid-66 records
+via the registry. The §6.2.8 Antenna Pattern home and §6.2.8.2 Beam
+record (header-less, Table 31), the §6.2.58 home with the Annex C MP
+records (Generic Radio / Simple Intercom zero-length markers, Basic
+HAVE QUICK Table C.3, CCTT SINCGARS Table C.7), and the §6.2.95 home
+with the High-Fidelity HAVE QUICK VTP record (Table C.4, recordType
+3000) are generated here since the annex-c-mp-ap spec wave; the unknown
+radio/pattern placeholders are curated runtime fallbacks. Signal
 and Intercom Signal carry bit-counted byte payloads padded to 32 bits.
 """
 
@@ -21,6 +24,7 @@ from dataclasses import dataclass, field
 from typing import ClassVar
 
 from opendis.enum_registry import rich_or_int
+from opendis.record.base import StandardVariableRecord, VariableRecord
 from opendis.record.common import (
     EntityIdentifier,
     EntityType,
@@ -29,36 +33,81 @@ from opendis.record.common import (
     WorldCoordinates,
 )
 from opendis.record.pdu import Pdu
-from opendis.record.radio.annexc import (
-    AntennaPatternRecord,
-    BasicHaveQuickMP,
-    CCTTSincgarsMP,
-    GenericRadio,
-    ModulationParametersRecord,
-    SimpleIntercomRadio,
-    UnknownAntennaPattern,
-    UnknownRadio,
-)
 from opendis.stream import DataInputStream, DataOutputStream
-from opendis.types import enum8, enum16, float32, uint8, uint16, uint32, uint64
+from opendis.types import enum8, enum16, float32, uint8, uint16, uint32, uint64, int32
 
 __all__ = [
+    "AntennaPatternRecord",
+    "BasicHaveQuickMP",
     "BeamAntennaPattern",
+    "CCTTSincgarsMP",
+    "GenericRadio",
+    "HighFidelityHAVEQUICKRadio",
     "IntercomCommunicationsParameters",
     "IntercomControlPdu",
     "IntercomReferenceID",
     "IntercomSignalPdu",
+    "ModulationParametersRecord",
     "ModulationType",
     "RadioCommunicationsFamilyPdu",
     "ReceiverPdu",
     "SignalPdu",
+    "SimpleIntercomRadio",
     "TransmitterPdu",
+    "UnknownAntennaPattern",
+    "UnknownRadio",
+    "VariableTransmitterParametersRecord",
 ]
 
 
 def _padTo32(byteCount: int) -> int:
     """Pad bytes needed to bring a datagram to a 32-bit boundary."""
     return (4 - byteCount % 4) % 4
+
+
+@dataclass(slots=True)
+class AntennaPatternRecord(VariableRecord):
+    """§6.2.8 Antenna Pattern record
+
+    Base for Antenna Pattern records. Antenna pattern records are non-self-
+    identifying: the Transmitter PDU Antenna Pattern Type field identifies
+    the record type and the Antenna Pattern Length field gives the record
+    length in octets; the total length of each record shall be a multiple of
+    64 bits.
+    """
+
+
+# generator: curated runtime placeholder — reserved/unknown antenna
+# pattern types carry their bytes raw (§6.2.8 non-self-identifying
+# records; not an XML type, so generation adds nothing)
+
+
+class UnknownAntennaPattern(AntennaPatternRecord):
+    """Placeholder for unknown or unimplemented antenna pattern types."""
+
+    def __init__(self, data: bytes = b""):
+        self.data = data
+
+    def marshalledSize(self) -> int:
+        return len(self.data)
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        super().serialize(outputStream)
+        outputStream.write_bytes(self.data)
+
+    def parse(
+        self,  # pyright: ignore[reportIncompatibleMethodOverride]
+        inputStream: DataInputStream,
+        bytelength: int,
+    ) -> None:
+        # Validate bytelength argument by calling base method
+        super().parse(inputStream, bytelength)
+        # Antenna Pattern records are non-self-identifying (§6.2.8) — no
+        # record header precedes the pattern data (Table 31: the whole
+        # 320-bit Beam record is pattern fields), so the full record
+        # length is payload. The old ``bytelength - 6`` assumed a
+        # 6-byte type/length header that does not exist.
+        self.data = inputStream.read_bytes(bytelength)
 
 
 @dataclass(slots=True)
@@ -125,6 +174,240 @@ class BeamAntennaPattern(AntennaPatternRecord):
         item = cls()
         item.parse(inputStream)
         return item
+
+
+@dataclass(slots=True)
+class ModulationParametersRecord(VariableRecord):
+    """§6.2.58 Modulation Parameters record
+
+    Base for Modulation Parameters records. Record-specific fields vary by
+    radio system and are defined in Annex C; the total length of each record
+    shall be a multiple of 64 bits (Table 89).
+    """
+
+
+# generator: curated runtime placeholder — radio systems without an
+# in-standard MP record (SINCGARS 5 and EPLRS 7 define none, Annex
+# C.5/C.7; JTIDS/MIDS 8 records live in SISO-STD-002, C.8.2.3) keep
+# their bytes raw; not an XML type, so generation adds nothing
+
+
+class UnknownRadio(ModulationParametersRecord):
+    """Placeholder for unknown or unimplemented radio types."""
+
+    def __init__(self, data: bytes = b""):
+        self.data = data
+
+    def marshalledSize(self) -> int:
+        return len(self.data)
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        super().serialize(outputStream)
+        outputStream.write_bytes(self.data)
+
+    def parse(
+        self, inputStream: DataInputStream, bytelength: int | None = None
+    ) -> None:
+        # Validate bytelength argument by calling base method
+        super().parse(inputStream, bytelength)
+        assert isinstance(bytelength, int)
+        self.data = inputStream.read_bytes(bytelength)
+
+
+@dataclass(slots=True)
+class GenericRadio(ModulationParametersRecord):
+    """Annex C.2 Generic radio. Identified by Radio System = Generic Radio or
+    Simple Intercom (1) with any nonzero Major Modulation. There are no
+    specific Transmitter, Signal, or Receiver PDU requirements unique to a
+    generic radio; the record is zero-length.
+    """
+
+    def marshalledSize(self):
+        return 0
+
+    def serialize(self, outputStream: DataOutputStream):
+        pass
+
+    def parse(self, inputStream: DataInputStream):
+        pass
+
+
+@dataclass(slots=True)
+class SimpleIntercomRadio(ModulationParametersRecord):
+    """Annex C.3 Simple Intercom. Identified by Radio System = Generic Radio or
+    Simple Intercom (1) and Major Modulation = No Statement (0). The Length
+    of Modulation Parameters shall be set to zero (Annex C.3.2.2 h); the
+    record is zero-length.
+    """
+
+    def marshalledSize(self):
+        return 0
+
+    def serialize(self, outputStream: DataOutputStream):
+        pass
+
+    def parse(self, inputStream: DataInputStream):
+        pass
+
+
+@dataclass(slots=True)
+class BasicHaveQuickMP(ModulationParametersRecord):
+    """Basic HAVE QUICK Modulation Parameters record (Annex C.4.2.2, Table C.3,
+    128 bits). Used by the Basic option of HAVE QUICK I/II/IIA (Radio System
+    2, 3, 4) and also required by the High-Fidelity option; shall be
+    included regardless of the Spread Spectrum field.
+    """
+
+    netId: uint16 = 0
+    mwodIndex: uint16 = 0
+    reserved16: uint16 = 0
+    reserved8_1: uint8 = 0
+    reserved8_2: uint8 = 0
+    timeOfDay: uint32 = 0
+    padding: uint32 = field(init=False, default=0)
+
+    def marshalledSize(self) -> int:
+        return 16
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        outputStream.write_uint16(self.netId)
+        outputStream.write_uint16(self.mwodIndex)
+        outputStream.write_uint16(self.reserved16)
+        outputStream.write_uint8(self.reserved8_1)
+        outputStream.write_uint8(self.reserved8_2)
+        outputStream.write_uint32(self.timeOfDay)
+        outputStream.write_uint32(self.padding)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        self.netId = inputStream.read_uint16()
+        self.mwodIndex = inputStream.read_uint16()
+        self.reserved16 = inputStream.read_uint16()
+        self.reserved8_1 = inputStream.read_uint8()
+        self.reserved8_2 = inputStream.read_uint8()
+        self.timeOfDay = inputStream.read_uint32()
+        self.padding = inputStream.read_uint32()
+
+
+@dataclass(slots=True)
+class CCTTSincgarsMP(ModulationParametersRecord):
+    """CCTT SINCGARS Modulation Parameters record (Annex C.6.2.3, Table C.7,
+    128 bits). Radio System = CCTT SINCGARS (6); the record shall always be
+    included in the Transmitter PDU.
+    """
+
+    FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
+        "startOfMessage": 170,
+        "clearChannel": 171,
+    }
+
+    fhNetId: uint16 = 0
+    hopSetId: uint16 = 0
+    lockoutSetId: uint16 = 0
+    startOfMessage: enum8 = 0  # [UID 170]
+    clearChannel: enum8 = 0  # [UID 171]
+    fhSyncTimeOffset: uint32 = 0
+    transmissionSecurityKey: uint16 = 0
+    padding: uint16 = field(init=False, default=0)
+
+    def marshalledSize(self) -> int:
+        return 16
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        outputStream.write_uint16(self.fhNetId)
+        outputStream.write_uint16(self.hopSetId)
+        outputStream.write_uint16(self.lockoutSetId)
+        outputStream.write_uint8(self.startOfMessage)
+        outputStream.write_uint8(self.clearChannel)
+        outputStream.write_uint32(self.fhSyncTimeOffset)
+        outputStream.write_uint16(self.transmissionSecurityKey)
+        outputStream.write_uint16(self.padding)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        self.fhNetId = inputStream.read_uint16()
+        self.hopSetId = inputStream.read_uint16()
+        self.lockoutSetId = inputStream.read_uint16()
+        self.startOfMessage = rich_or_int(170, inputStream.read_uint8())
+        self.clearChannel = rich_or_int(171, inputStream.read_uint8())
+        self.fhSyncTimeOffset = inputStream.read_uint32()
+        self.transmissionSecurityKey = inputStream.read_uint16()
+        self.padding = inputStream.read_uint16()
+
+
+@dataclass(slots=True)
+class VariableTransmitterParametersRecord(StandardVariableRecord):
+    """§6.2.95 Variable Transmitter Parameters record
+
+    Base for Variable Transmitter Parameters records in the standard
+    variable record format of 6.2.83: Record Type [UID 66], Record Length in
+    octets (a multiple of 8), record-specific fields, and padding to a
+    64-bit boundary. The record types applicable to a radio system are
+    identified in Annex C.
+    """
+
+
+@dataclass(slots=True)
+class HighFidelityHAVEQUICKRadio(VariableTransmitterParametersRecord):
+    """High-Fidelity HAVE QUICK Variable Transmitter Parameters record (Annex
+    C.4.2.3, Table C.4). Record Type 3000, Record Length 40 octets, 320 bits
+    total; required in addition to the Basic HAVE QUICK MP record when the
+    High-Fidelity option is modeled.
+
+    Uid-66 Standard Variable record (Annex C.4.2.3): the class writes its
+    own recordType/recordLength header and the registry decodes the wire by
+    ``recordType`` — the 3000 dispatch value is registry data (Table C.4's
+    format, not the XML; REF-010 uid 66 names the type "High Fidelity HAVE
+    QUICK/SATURN Radio"). The Basic HAVE QUICK MP record rides the
+    Transmitter's modulationParameters slot alongside this record.
+    """
+
+    FIELD_ENUM_UID: ClassVar[dict[str, int]] = {
+        "todTransmitIndicator": 297,
+    }
+
+    netId: uint16 = 0
+    todTransmitIndicator: enum8 = 0  # [UID 297]
+    todDelta: int32 = 0
+    wod1: uint32 = 0
+    wod2: uint32 = 0
+    wod3: uint32 = 0
+    wod4: uint32 = 0
+    wod5: uint32 = 0
+    wod6: uint32 = 0
+    padding1: uint16 = field(init=False, default=0)
+    padding2: uint8 = field(init=False, default=0)
+
+    recordType: ClassVar[int] = 3000  # [UID 66] Variable Record Type
+
+    def marshalledSize(self) -> int:
+        return 40
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        outputStream.write_uint32(self.recordType)
+        outputStream.write_uint16(self.recordLength)
+        outputStream.write_uint16(self.padding1)
+        outputStream.write_uint16(self.netId)
+        outputStream.write_uint8(self.todTransmitIndicator)
+        outputStream.write_uint8(self.padding2)
+        outputStream.write_int32(self.todDelta)
+        outputStream.write_uint32(self.wod1)
+        outputStream.write_uint32(self.wod2)
+        outputStream.write_uint32(self.wod3)
+        outputStream.write_uint32(self.wod4)
+        outputStream.write_uint32(self.wod5)
+        outputStream.write_uint32(self.wod6)
+
+    def parse(self, inputStream: DataInputStream, bytelength: int) -> None:
+        self.padding1 = inputStream.read_uint16()
+        self.netId = inputStream.read_uint16()
+        self.todTransmitIndicator = rich_or_int(297, inputStream.read_uint8())
+        self.padding2 = inputStream.read_uint8()
+        self.todDelta = inputStream.read_int32()
+        self.wod1 = inputStream.read_uint32()
+        self.wod2 = inputStream.read_uint32()
+        self.wod3 = inputStream.read_uint32()
+        self.wod4 = inputStream.read_uint32()
+        self.wod5 = inputStream.read_uint32()
+        self.wod6 = inputStream.read_uint32()
 
 
 @dataclass(slots=True)
@@ -287,6 +570,8 @@ class TransmitterPdu(RadioCommunicationsFamilyPdu):
             vtp.serialize(outputStream)
 
     def _parseBody(self, inputStream: DataInputStream):
+        from opendis.record import parseStandardVariableRecord
+
         self.radioReferenceID = EntityIdentifier.parse(inputStream)
         self.radioNumber = inputStream.read_uint16()
         self.radioEntityType = EntityType.parse(inputStream)
