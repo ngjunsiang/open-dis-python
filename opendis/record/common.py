@@ -48,8 +48,10 @@ MUNITION_DOMAIN_UID = 14
 class SimulationAddress:
     """§6.2.80 Simulation Address record
 
-    A Simulation Address record shall consist of the Site Identification
-    number and the Application Identification number.
+    A simulation's designation associated with all object identifiers except
+    those contained in Live Entity PDUs shall be specified by a Simulation
+    Address record. A Simulation Address record shall consist of the Site
+    Number and the Application Number.
     """
 
     site: uint16 = 0
@@ -82,8 +84,12 @@ class SimulationAddress:
 class EntityIdentifier:
     """§6.2.28 Entity Identifier record
 
-    Entity Identifier. Unique ID for entities in the world. Consists of an
-    simulation address and a entity number.
+    The unique designation of each entity in an event or exercise that is
+    not contained in a Live Entity PDU shall be specified by an Entity
+    Identifier record. The Entity Identifier (Entity ID) record shall
+    consist of a Simulation Address (see 6.2.80) and an Entity Number. The
+    Entity Identifier is an object identifier; general requirements for all
+    object identifiers are specified in 4.2.5.2.
 
     This is the standard 6-byte shape of the ruled entity-identifier
     taxonomy; the 4-byte live form (§6.2.53) belongs to the Live Entity
@@ -201,7 +207,8 @@ class EulerAngles:
     """§6.2.32 Euler Angles record
 
     Three floating point values representing an orientation, psi, theta, and
-    phi, aka the euler angles, in radians.
+    phi, aka the euler angles, in radians. These angles shall be specified
+    with respect to the entity's coordinate system.
     """
 
     psi: float32 = 0.0
@@ -234,7 +241,22 @@ class EulerAngles:
 class Vector3Float:
     """§6.2.96 Vector record
 
-    Three floating point values, x, y, and z.
+    Vector values for entity coordinates, linear acceleration, and linear
+    velocity shall be represented using a Vector record. This record shall
+    consist of three fields, each a 32-bit floating point number. The unit
+    of measure represented by these fields shall depend on the information
+    represented. Entity Coordinate Vector: location relative to a particular
+    entity shall be specified with respect to the origin of the entity's
+    coordinate system; the entity coordinate system shall be as specified in
+    1.6.3. Linear Acceleration Vector: linear acceleration shall be
+    represented as a vector with components in either world coordinate
+    system or entity's coordinate system depending on the value in the Dead
+    Reckoning Algorithm field; each vector component shall represent
+    acceleration in meters per second squared. Linear Velocity Vector:
+    linear velocity shall be represented as a vector with three components
+    in either world coordinate system or entity's coordinate system
+    depending on the value in the Dead Reckoning Algorithm field; each
+    vector component shall represent velocity in meters per second.
     """
 
     x: float32 = 0.0
@@ -315,10 +337,11 @@ WorldCoordinates = Vector3Double
 class ClockTime:
     """§6.2.14 Clock Time record
 
-    Time measurements that exceed one hour are represented by this record.
-    The first field is the hours since the unix epoch (Jan 1 1970, used by
-    most Unix systems and java) and the second field the timestamp units
-    since the top of the hour.
+    Time measurements that surpass 1 h shall be represented by a Clock Time
+    record. The first field is the hours since 0000 h 1 January 1970 UTC and
+    the second field the time past the hour indicated in the Hour field,
+    represented by a Timestamp record (see 6.2.88). The reference time
+    represented shall be either Absolute or Relative Time (see Annex G).
 
     timePastHour is held as its raw 32-bit Timestamp value (§6.2.88) — 64
     bits each way, the record is 8 bytes.
@@ -343,7 +366,17 @@ class ClockTime:
 class MunitionDescriptor:
     """§6.2.19.2 Munition Descriptor record
 
-    Represents the firing or detonation of a munition.
+    The firing or detonation of a munition shall be represented by a
+    Munition Descriptor record. Munition Type is an Entity Type record (see
+    6.2.30); Warhead is a 16-bit enumeration (see [UID 60]); Fuse is a
+    16-bit enumeration (see [UID 61]); Quantity is the number of rounds
+    fired in the burst or the number of munitions simultaneously launched;
+    Rate is the rate of fire such as rounds per minute, and shall contain
+    zero if Quantity equals one. The Descriptor field of the Fire and
+    Detonation PDUs carries one 128-bit descriptor record: a Munition
+    Descriptor (this record), an Explosion Descriptor (6.2.19.3), or an
+    Expendable Descriptor (6.2.19.4; expendable type plus 64 bits of
+    padding, the same 128-bit size on the wire).
     """
 
     FIELD_ENUM_UID: ClassVar[dict[str, int]] = {

@@ -113,7 +113,12 @@ class DeadReckoningParameters:
 class VariableParameter:
     """§6.2.94 Variable Parameter record
 
-    Used in DetonationPdu, ArticulatedPartsPdu among others.
+    The specification of additional information associated with an entity or
+    detonation, not otherwise accounted for in a PDU, shall be represented
+    by a Variable Parameter record. This record shall provide information on
+    articulated parts, attached parts, and other data associated with an
+    entity or detonation. Used in DetonationPdu, ArticulatedPartsPdu among
+    others.
 
     General form (§6.2.94.1). The 15 record-specific bytes stay opaque;
     typed decoders (articulated parts etc.) ride the StandardVariableRecord
