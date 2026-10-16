@@ -527,7 +527,9 @@ class IsGroupOfPdu(EntityManagementFamilyPdu):
 
 @dataclass(slots=True)
 class TransferOwnershipPdu(EntityManagementFamilyPdu):
-    """Information initiating the dyanic allocation and control of simulation
+    """§7.8.4 Transfer Ownership PDU
+
+    Information initiating the dynamic allocation and control of simulation
     entities between two simulation applications.
     """
 
@@ -548,7 +550,7 @@ class TransferOwnershipPdu(EntityManagementFamilyPdu):
 
     @property
     def numberOfRecordSets(self) -> uint32:
-        """Number of record sets in the transfer."""
+        """Number of Record Sets (R), Table 185."""
         return len(self.recordSets)
 
     def _marshalledBodySize(self) -> int:

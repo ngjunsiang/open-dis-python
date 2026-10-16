@@ -788,7 +788,7 @@ class IntercomReferenceID:
 
 @dataclass(slots=True)
 class IntercomSignalPdu(RadioCommunicationsFamilyPdu):
-    """§7.7.6 Intercom Signal PDU
+    """§7.7.5 Intercom Signal PDU
 
     Conveys the audio or digital data that is used to communicate between
     simulated intercom devices.
@@ -898,7 +898,7 @@ class IntercomCommunicationsParameters:
 
 @dataclass(slots=True)
 class IntercomControlPdu(RadioCommunicationsFamilyPdu):
-    """§7.7.7 Intercom Control PDU
+    """§7.7.6 Intercom Control PDU
 
     Communicates the state of a particular intercom device, request an
     action of another intercom device, or respond to an action request.

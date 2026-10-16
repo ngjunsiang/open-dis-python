@@ -511,8 +511,13 @@ class Resolver:
             count_field = kid.get("countFieldName") or kid.get("countListFieldName")
             if element is None or not count_field:
                 # a list of enum/bitfield values (not records): minefield
-                # fusing [UID 192] / paint scheme [UID 202]
-                val = kid.find("sisoenum") or kid.find("sisobitfield")
+                # fusing [UID 192] / paint scheme [UID 202]. NB: is-None
+                # checks, not truthiness — childless Elements are falsy
+                # (deprecated ElementTree bool), so `find() or find()`
+                # silently discarded self-closing enum children.
+                val = kid.find("sisoenum")
+                if val is None:
+                    val = kid.find("sisobitfield")
                 if val is not None and count_field:
                     bits = int(val.get("size"))
                     uid = val.get("uid")

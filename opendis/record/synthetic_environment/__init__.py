@@ -398,7 +398,7 @@ class GridAxisDescriptorVariable:
 
     @property
     def numberOfPointsOnXiAxis(self) -> uint16:
-        """Number of grid locations along Xi axis."""
+        """Number of grid locations along Xi axis (derived from xiValues)."""
         return len(self.xiValues)
 
     def _unpaddedBodySize(self) -> int:

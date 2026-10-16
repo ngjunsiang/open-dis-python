@@ -816,12 +816,15 @@ class CommentPdu(SimulationManagementFamilyPdu):
 
     pduType: ClassVar[int] = 22  # [UID 4]
 
-    variableDatumRecords: list[VariableDatum] = field(default_factory=list)
     fixedDatumRecords: list[FixedDatum] = field(default_factory=list)
+    variableDatumRecords: list[VariableDatum] = field(default_factory=list)
 
     @property
     def numberOfFixedDatumRecords(self) -> uint32:
-        """Number of fixed datum records, not used in this Pdu."""
+        """Number of fixed datum records, not used in this Pdu (7.5.13 b: shall be
+        set to zero; list kept so malformed-but-parseable datagrams still round-
+        trip).
+        """
         return len(self.fixedDatumRecords)
 
     @property
@@ -836,17 +839,17 @@ class CommentPdu(SimulationManagementFamilyPdu):
             super(CommentPdu, self)._marshalledBodySize()
             + 4
             + 4
-            + sum(item.marshalledSize() for item in self.variableDatumRecords)
             + sum(item.marshalledSize() for item in self.fixedDatumRecords)
+            + sum(item.marshalledSize() for item in self.variableDatumRecords)
         )
 
     def _serializeBody(self, outputStream: DataOutputStream) -> None:
         super(CommentPdu, self)._serializeBody(outputStream)
         outputStream.write_uint32(self.numberOfFixedDatumRecords)
         outputStream.write_uint32(self.numberOfVariableDatumRecords)
-        for item in self.variableDatumRecords:
-            item.serialize(outputStream)
         for item in self.fixedDatumRecords:
+            item.serialize(outputStream)
+        for item in self.variableDatumRecords:
             item.serialize(outputStream)
 
     def _parseBody(self, inputStream: DataInputStream) -> None:
@@ -855,12 +858,12 @@ class CommentPdu(SimulationManagementFamilyPdu):
         numberOfVariableDatumRecords = inputStream.read_uint32()
         # Never append to a pre-existing list (instance-reuse corruption,
         # PR #49): the list is replaced wholesale.
-        self.variableDatumRecords = [
-            VariableDatum.parseFrom(inputStream)
-            for _ in range(numberOfVariableDatumRecords)
+        self.fixedDatumRecords = [
+            FixedDatum.parseFrom(inputStream) for _ in range(numberOfFixedDatumRecords)
         ]
         # Never append to a pre-existing list (instance-reuse corruption,
         # PR #49): the list is replaced wholesale.
-        self.fixedDatumRecords = [
-            FixedDatum.parseFrom(inputStream) for _ in range(numberOfFixedDatumRecords)
+        self.variableDatumRecords = [
+            VariableDatum.parseFrom(inputStream)
+            for _ in range(numberOfVariableDatumRecords)
         ]

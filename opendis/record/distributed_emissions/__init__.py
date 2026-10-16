@@ -1304,7 +1304,7 @@ class IFFPduLayer2Data:
 
     @property
     def numberOfIFFFundamentalParameterDataRecords(self) -> uint16:
-        """numberOfIFFFundamentalParameterDataRecords"""
+        """Number of IFF Fundamental Parameter Data Records (N), Table 168."""
         return len(self.IFFFundamentalParameterDataRecord)
 
     def marshalledSize(self) -> int:
@@ -1383,7 +1383,7 @@ class IFFPduLayer3TransponderFormatData:
 
     @property
     def numberOfIFFDataRecords(self) -> uint16:
-        """numberOfIFFDataRecords"""
+        """Number of IFF Data Records (N), Table 170."""
         return len(self.IFFFundamentalParameterDataRecord)
 
     def marshalledSize(self) -> int:
@@ -1466,7 +1466,7 @@ class IFFPduLayer3InterrogatorFormatData:
 
     @property
     def numberOfIFFDataRecords(self) -> uint16:
-        """numberOfIFFDataRecords"""
+        """Number of IFF Data Records (N), Table 169."""
         return len(self.IFFFundamentalParameterDataRecord)
 
     def marshalledSize(self) -> int:
@@ -1549,7 +1549,7 @@ class IFFPduLayer4InterrogatorFormatData:
 
     @property
     def numberOfIFFDataRecords(self) -> uint16:
-        """numberOfIFFDataRecords"""
+        """Number of IFF Data Records (N), Table 171."""
         return len(self.IFFFundamentalParameterDataRecord)
 
     def marshalledSize(self) -> int:
@@ -1632,7 +1632,7 @@ class IFFPduLayer4TransponderFormatData:
 
     @property
     def numberOfIFFDataRecords(self) -> uint16:
-        """numberOfIFFDataRecords"""
+        """Number of IFF Data Records (N), Table 172."""
         return len(self.IFFFundamentalParameterDataRecord)
 
     def marshalledSize(self) -> int:
@@ -1719,7 +1719,7 @@ class IFFPduLayer5Data:
 
     @property
     def numberOfIFFDataRecords(self) -> uint16:
-        """numberOfIFFDataRecords"""
+        """Number of IFF Data Records (N), Table 173."""
         return len(self.IFFFundamentalParameterDataRecord)
 
     def marshalledSize(self) -> int:

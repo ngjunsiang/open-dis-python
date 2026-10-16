@@ -454,7 +454,7 @@ class DirectedEnergyDamage(StandardVariableRecord):
 class DirectedEnergyTargetEnergyDeposition:
     """§6.2.20.4 DE Target Energy Deposition record
 
-    DE energy depostion properties for a target entity.
+    DE energy deposition properties for a target entity.
     """
 
     targetEntityID: EntityIdentifier = field(default_factory=EntityIdentifier)
@@ -512,7 +512,7 @@ class DirectedEnergyAreaAimpoint(StandardVariableRecord):
 
     @property
     def directedEnergyTargetEnergyDepositionRecordCount(self) -> uint16:
-        """Number of DE target energy depositon records."""
+        """Number of DE target energy deposition records."""
         return len(self.directedEnergyTargetEnergyDepositionRecordList)
 
     recordType: ClassVar[int] = 4001  # [UID 66] Variable Record Type

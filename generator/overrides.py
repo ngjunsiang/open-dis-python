@@ -412,32 +412,9 @@ FIELD_RENAMES = {
         "DataQueryReliablePdu",
         "numberOfVariableDatumRecords",
     ): "numberOfVariableDatumIDs",
-    # the IFF layer classes carry a copy-pasted Layer 2 count name (the
-    # 7.6.5.4/.5/.6 lists hold IFF Data records, not IFF Fundamental
-    # Parameter Data); Layer 2 keeps the name, minus the tail
-    ("IFFPduLayer2Data", "numberOfIFFFundamentalParameterDataRecordsParameters"): (
-        "numberOfIFFFundamentalParameterDataRecords"
-    ),
-    (
-        "IFFPduLayer3TransponderFormatData",
-        "numberOfIFFFundamentalParameterDataRecordsParameters",
-    ): "numberOfIFFDataRecords",
-    (
-        "IFFPduLayer3InterrogatorFormatData",
-        "numberOfIFFFundamentalParameterDataRecordsParameters",
-    ): "numberOfIFFDataRecords",
-    (
-        "IFFPduLayer4InterrogatorFormatData",
-        "numberOfIFFFundamentalParameterDataRecordsParameters",
-    ): "numberOfIFFDataRecords",
-    (
-        "IFFPduLayer4TransponderFormatData",
-        "numberOfIFFFundamentalParameterDataRecordsParameters",
-    ): "numberOfIFFDataRecords",
-    (
-        "IFFPduLayer5Data",
-        "numberOfIFFFundamentalParameterDataRecordsParameters",
-    ): "numberOfIFFDataRecords",
+    # the six IFF-layer count renames RETIRED 2026-10-17: the
+    # spec-corrections wave corrected the count names in the XML
+    # (v0.11.0 item 5) — the old-name entries died with it
 }
 
 # name -> name across every record (uniform-spelling rulings).
@@ -451,25 +428,10 @@ GLOBAL_FIELD_RENAMES = {
 # nonzero count would desynchronize parse — the list keeps such
 # datagrams round-tripping byte-exact).
 EXTRA_FIELDS = {
-    "TransferOwnershipPdu": [
-        (
-            "numberOfRecordSets",
-            ir.Primitive(type="uint32"),
-            "Number of record sets in the transfer",
-            True,
-            "recordSets",
-        )
-    ],
-    "CommentPdu": [
-        (
-            "fixedDatumRecords",
-            ir.ObjectList(
-                element="FixedDatum", count_field="numberOfFixedDatumRecords"
-            ),
-            "Fixed datum records (shall be zero on this PDU; kept for "
-            "malformed-but-parseable datagrams)",
-        )
-    ],
+    # TransferOwnershipPdu / CommentPdu / CommentReliablePdu extras RETIRED
+    # 2026-10-17: the spec-corrections wave (v0.11.0, PR #6) declares the
+    # record-set list and both datum lists natively — the curated extras
+    # duplicated them.
     "TransmitterPdu": [
         (
             "modulationParameters",
@@ -490,25 +452,14 @@ EXTRA_FIELDS = {
             "Variable Transmitter Parameters (uid-66 records, registry decode)",
         ),
     ],
-    "CommentReliablePdu": [
-        (
-            "fixedDatumRecords",
-            ir.ObjectList(
-                element="FixedDatum", count_field="numberOfFixedDatumRecords"
-            ),
-            "Fixed datum records (shall be zero on this PDU; kept for "
-            "malformed-but-parseable datagrams)",
-        )
-    ],
 }
 
 # (class, XML field) -> (annotation, default, rider|None) for fields whose
 # shape is fully curated — the LE flag-conditional optionals. Owning
 # classes carry METHOD_BODIES (presence dispatch is curated).
 FIELD_OVERRIDES = {
-    # Table 221 carries a 16-bit Appearance Flag-1 (the XML's uint8
-    # under-sizes it — upstream candidate; exemplar math is Table-locked)
-    ("AppearancePdu", "appearanceFlag1"): ("uint16", "0", None),
+    # appearanceFlag1 uint16 override RETIRED 2026-10-17: the XML now
+    # declares the 16-bit record (v0.11.0 item 2, 9.4.3.5 c)
     ("AppearancePdu", "appearanceFlag2"): ("uint8 | None", "None", None),
     ("AppearancePdu", "forceId"): ("enum8 | None", "None", "[UID 6]"),
     ("AppearancePdu", "entityType"): ("EntityType | None", "None", None),
@@ -624,12 +575,8 @@ FIELD_OVERRIDES = {
 # Data-Query datum-ID rebinding: §7.5.9 lists carry datum IDs, not
 # FixedDatum records — the XML's objectlist classRef is wrong there).
 FIELD_SHAPES = {
-    ("DataQueryPdu", "fixedDatums"): ir.PrimitiveList(
-        element="uint32", count_field="numberOfFixedDatumRecords", element_uid=66
-    ),
-    ("DataQueryPdu", "variableDatums"): ir.PrimitiveList(
-        element="uint32", count_field="numberOfVariableDatumRecords", element_uid=66
-    ),
+    # the DataQuery datum-ID rebinding RETIRED 2026-10-17: the
+    # spec-corrections wave models the 7.5.9 ID lists natively
     # Record Query-R: flat datum-ID list, not RecordQuerySpecification
     # records (§5.12.4.14; the XML's wrapper layer has no wire bytes)
     ("RecordQueryReliablePdu", "recordIDs"): ir.PrimitiveList(
@@ -687,44 +634,12 @@ FIELD_SHAPES = {
     # Table 183: the Silent Entity System list carries §6.2.79 Silent
     # Entity System records (96 + 32A bits each), not bare EntityType
     # records — the XML's classRef is an upstream gap; standard followed
-    ("AggregateStatePdu", "silentEntitySystemList"): ir.ObjectList(
-        element="SilentEntitySystem", count_field="numberOfSilentEntityTypes"
-    ),
-    # the layer 3/4/5 lists hold flat §6.2.43 IFF Data records, not the
-    # XML's IFFDataSpecification wrapper (Table 169-173; the wrapper adds
-    # a count the layer already carries — Record-R flattening precedent)
-    (
-        "IFFPduLayer3TransponderFormatData",
-        "IFFFundamentalParameterDataRecord",
-    ): ir.ObjectList(
-        element="IFFData",
-        count_field="numberOfIFFFundamentalParameterDataRecordsParameters",
-    ),
-    (
-        "IFFPduLayer3InterrogatorFormatData",
-        "IFFFundamentalParameterDataRecord",
-    ): ir.ObjectList(
-        element="IFFData",
-        count_field="numberOfIFFFundamentalParameterDataRecordsParameters",
-    ),
-    (
-        "IFFPduLayer4InterrogatorFormatData",
-        "IFFFundamentalParameterDataRecord",
-    ): ir.ObjectList(
-        element="IFFData",
-        count_field="numberOfIFFFundamentalParameterDataRecordsParameters",
-    ),
-    (
-        "IFFPduLayer4TransponderFormatData",
-        "IFFFundamentalParameterDataRecord",
-    ): ir.ObjectList(
-        element="IFFData",
-        count_field="numberOfIFFFundamentalParameterDataRecordsParameters",
-    ),
-    ("IFFPduLayer5Data", "IFFFundamentalParameterDataRecord"): ir.ObjectList(
-        element="IFFData",
-        count_field="numberOfIFFFundamentalParameterDataRecordsParameters",
-    ),
+    # AggregateState silentEntitySystemList shape RETIRED 2026-10-17:
+    # the XML now references SilentEntitySystem natively (v0.11.0 item 3)
+    # the five layer 3/4/5 list shapes + the count renames RETIRED
+    # 2026-10-17 together: the spec-corrections wave renamed the counts
+    # and flattened the lists to §6.2.43 IFF Data records natively (the
+    # overrides carried the old count names, so they retired in lockstep)
     # generic SV-format records: the payload is byte-granular wire state
     # sized by the STORED recordLength (K + alignment pad as received;
     # IntercomCommunicationsParameters precedent)
@@ -744,27 +659,10 @@ FIELD_SHAPES = {
 # (class, field) -> force the hidden-count treatment (derived len()
 # property, never instance state) where the XML forgot hidden="true"
 # (the IFF layer classes' copy-pasted count fields).
-FIELD_HIDDEN = {
-    ("GridAxisDescriptorVariable", "numberOfPointsOnXiAxis"),
-    ("IFFPduLayer2Data", "numberOfIFFFundamentalParameterDataRecordsParameters"),
-    (
-        "IFFPduLayer3TransponderFormatData",
-        "numberOfIFFFundamentalParameterDataRecordsParameters",
-    ),
-    (
-        "IFFPduLayer3InterrogatorFormatData",
-        "numberOfIFFFundamentalParameterDataRecordsParameters",
-    ),
-    (
-        "IFFPduLayer4InterrogatorFormatData",
-        "numberOfIFFFundamentalParameterDataRecordsParameters",
-    ),
-    (
-        "IFFPduLayer4TransponderFormatData",
-        "numberOfIFFFundamentalParameterDataRecordsParameters",
-    ),
-    ("IFFPduLayer5Data", "numberOfIFFFundamentalParameterDataRecordsParameters"),
-}
+# FIELD_HIDDEN RETIRED 2026-10-17: the spec-corrections wave (v0.11.0)
+# set hidden="true" on the GridAxis variable-axis point count, and the
+# IFF layer counts were renamed in the XML (the old-name entries died).
+FIELD_HIDDEN = {}
 
 # (class, field) -> uid-66 registry-decoded list: emitted as plain ``list``
 # + parseStandardVariableRecord (Standard Variable records are a tagged
@@ -828,33 +726,12 @@ VIEW_ATTACHES = {
 # stale 1995-edition numbering (upstream campaign candidates; the body
 # text stays XML-canonical).
 DOCSTRING_CITES = {
-    # XML comments still carry 1995-edition PDU numbering; the standard's
-    # 2012 numbers rule (upstream campaign candidates, logged in the
-    # milestones doc)
-    # the IFF PDU class comment cites the 7.6.5.1 General subclause; the
-    # canonical cite is the PDU section itself
-    "IdentificationFriendOrFoePdu": "7.6.5",
-    "ServiceRequestPdu": "7.4.2",
-    "ResupplyOfferPdu": "7.4.3",
-    "ResupplyReceivedPdu": "7.4.4",
-    "ResupplyCancelPdu": "7.4.5",
-    "RepairCompletePdu": "7.4.6",
-    "RepairResponsePdu": "7.4.7",
-    "TransmitterPdu": "7.7.2",
-    "SignalPdu": "7.7.3",
-    "ReceiverPdu": "7.7.4",
-    "IntercomSignalPdu": "7.7.6",
-    "IntercomControlPdu": "7.7.7",
+    # every entry but the IO pair RETIRED 2026-10-17: the
+    # spec-corrections wave corrected the family cites in the XML
+    # (logistics 7.4.x, radio 7.7.x, minefield 7.9.x, entity management
+    # 7.8.x, IFF 7.6.5); the IO family file was outside its scope
     "InformationOperationsActionPdu": "5.13.3",
     "InformationOperationsReportPdu": "5.13.4",
-    "AggregateStatePdu": "7.8.2",
-    "IsGroupOfPdu": "7.8.3",
-    "TransferOwnershipPdu": "7.8.4",
-    "IsPartOfPdu": "7.8.5",
-    "MinefieldStatePdu": "7.9.2",
-    "MinefieldQueryPdu": "7.9.3",
-    "MinefieldDataPdu": "7.9.4",
-    "MinefieldResponseNACKPdu": "7.9.5",
 }
 
 # module key -> verbatim import lines emitted after the docstring
