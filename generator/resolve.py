@@ -86,6 +86,7 @@ class Resolver:
             raise SpecError(f"unknown class {name!r} (not in spec, not bound)")
         xml_owner = el.get("name")
         flat = self._flatten(el)
+        is_sv, sv_dispatch, flat = self._sv_signature(name, flat)
         attributes = [self._attribute(a, declarer) for a, declarer in flat]
         dropped = set(self.ov.FIELD_DROPS.get(xml_owner, []))
         attributes = [a for a in attributes if a.name not in dropped]
@@ -109,7 +110,6 @@ class Resolver:
         # curated parent overrides: SV records resolve onto the kernel
         # StandardVariableRecord base; RECORD_BASES rehomes a record onto
         # a hand protocol class (BeamAntennaPattern -> AntennaPatternRecord)
-        is_sv = xml_owner in self.ov.SV_RECORDS
         if is_sv:
             # an SV record whose XML lineage already provides a generated
             # record base (§6.2.95 home) keeps it — only root-parented SV
@@ -139,11 +139,43 @@ class Resolver:
             parent=parent,
             is_pdu=is_pdu,
             is_sv=is_sv,
-            identity_vars=self._identity_vars(el, name),
+            identity_vars=self._identity_vars(el, name, sv_dispatch),
             xml=el,
         )
 
-    def _identity_vars(self, el, name: str) -> tuple[tuple[str, str, str | None], ...]:
+    def _sv_signature(self, name: str, flat):
+        """§6.2.83 Standard Variable signature (bucket-C item 4): the
+        class's two leading wire fields are recordType u32 carrying a
+        FIXED dispatch value (defaultValue) + recordLength u16 (hidden,
+        recordOctets role). Typed SV records resolve on the kernel base
+        which owns the header; the dispatch value flows from the XML.
+        Generic SV-format records (IFFData, Attribute) carry a varying
+        recordType with no defaultValue — their headers stay instance
+        state and the signature does not fire."""
+        if len(flat) < 2:
+            return False, None, flat
+        (a0, _d0), (a1, _d1) = flat[0], flat[1]
+        p0 = a0.find("primitive")
+        p1 = a1.find("primitive")
+        if a0.get("name") != "recordType" or a1.get("name") != "recordLength":
+            return False, None, flat
+        if (
+            p0 is None
+            or p0.get("type") != "uint32"
+            or p1 is None
+            or p1.get("type") != "uint16"
+            or a1.get("hidden") != "true"
+            or a1.get("lengthRole") != "recordOctets"
+        ):
+            return False, None, flat
+        value = p0.get("defaultValue")
+        if not (value or "").isdigit():
+            return False, None, flat  # generic SV record: no fixed dispatch
+        return True, value, flat[2:]
+
+    def _identity_vars(
+        self, el, name: str, sv_dispatch: str | None = None
+    ) -> tuple[tuple[str, str, str | None], ...]:
         """XML-declared identity ClassVars (bucket-C item 7): the class's
         own ``<initialValue name="pduType|protocolFamily">`` says WHICH
         constant the class carries; the numeric value is the class ``id``
@@ -175,6 +207,8 @@ class Resolver:
                 f"{name!r} declares multiple identity constants — "
                 "emission order would be ambiguous"
             )
+        if sv_dispatch is not None:
+            out.append(("recordType", sv_dispatch, self.ov.SV_RECORD_TYPE_RIDER))
         return tuple(out)
 
     def _link_counts(

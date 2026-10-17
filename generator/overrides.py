@@ -378,12 +378,11 @@ FIELD_DROPS = {
         "variableTransmitterParameters",
     ],
     # SV records: the header fields are the kernel base's contract —
-    # recordType is the curated registry ClassVar, recordLength the
-    # derived marshalledSize property (§6.2.83)
-    "DirectedEnergyDamage": ["recordType", "recordLength"],
-    "HighFidelityHAVEQUICKRadio": ["recordType", "recordLength"],
-    "DirectedEnergyAreaAimpoint": ["recordType", "recordLength"],
-    "DirectedEnergyPrecisionAimpoint": ["recordType", "recordLength"],
+    # recordType is the registry ClassVar, recordLength the derived
+    # marshalledSize property (§6.2.83)
+    # DirectedEnergy* / HighFidelityHAVEQUICKRadio entries RETIRED
+    # 2026-10-17: the §6.2.83 signature inference consumes the header
+    # fields mechanically (bucket-C item 4)
     # generic SV-format records: the trailing alignment pad rides the
     # payload contract (recordSpecificFields carries K + pad bytes so a
     # stored recordLength stays the wire truth; Intercom precedent)
@@ -670,22 +669,12 @@ REGISTRY_LISTS = {
     ("InformationOperationsReportPdu", "ioRecords"),
 }
 
-# XML class -> uid-66 recordType value for the typed Standard Variable
-# records generated into the family modules (2026-10-16 seam promotion).
-# The XML declares recordType as a bare uint32 — the dispatch values live
-# only in the standard's record tables (Table 44: Record Type = 4001) and
-# the registry (opendis/record/__init__.py). Classes here resolve frozen
-# on the kernel StandardVariableRecord base with an SV-header wire shape
-# (recordType u32 + recordLength u16 written by the class, §6.2.83).
-SV_RECORDS = {
-    "DirectedEnergyDamage": 4500,
-    # Annex C.4.2.3 Table C.4: Record Type = 3000 (the dispatch value the
-    # registry decodes; REF-010 uid 66 names it "High Fidelity HAVE
-    # QUICK/SATURN Radio")
-    "HighFidelityHAVEQUICKRadio": 3000,
-    "DirectedEnergyAreaAimpoint": 4001,
-    "DirectedEnergyPrecisionAimpoint": 4000,
-}
+# XML class -> uid-66 recordType dispatch for the typed Standard Variable
+# records. SV_RECORDS RETIRED 2026-10-17 (bucket-C item 4): the resolver
+# infers is_sv + the dispatch value from the §6.2.83 signature (recordType
+# u32 defaultValue + recordLength u16 hidden/recordOctets); the SV-header
+# FIELD_DROPS went with it — the signature consumes the two header fields.
+SV_RECORD_TYPE_RIDER = "[UID 66] Variable Record Type"
 
 # XML class -> hand base class for records whose protocol home is a hand
 # module (like KERNEL_BASES but without the PDU body-method split).
@@ -2384,10 +2373,11 @@ class MemberSource:
 # the spec XML (the XML initialValues are symbolic — DisPduType.ENTITY_STATE).
 
 # Residual identity/constant ClassVars the XML cannot declare: the §6.1.8
-# Table 25 symbolic constants (symbolic_names) and — until the SV-signature
-# inference owns them — the uid-66 dispatch values. The pduType/
-# protocolFamily entries RETIRED 2026-10-17 (bucket-C item 7): the XML's
-# initialValue + class id now drive them mechanically (resolve).
+# Table 25 symbolic constants (symbolic_names). The pduType/protocolFamily
+# entries RETIRED 2026-10-17 (bucket-C item 7): the XML's initialValue +
+# class id drive them mechanically (resolve). The uid-66 recordType
+# dispatch entries RETIRED the same day (item 4): the §6.2.83 signature's
+# defaultValue owns them; rider = SV_RECORD_TYPE_RIDER.
 CLASS_VARS = {
     "SimulationAddress": [
         ("ALL_SITES", "sym.ALL_SITES", None),
@@ -2395,20 +2385,6 @@ CLASS_VARS = {
     ],
     "EntityIdentifier": [
         ("ALL_ENTITIES", "sym.ALL_ENTITIES", None),
-    ],
-    # uid-66 dispatch values (Table 44/46; the XML's recordType primitives
-    # carry no value — registry data, mirrored in record/__init__.py)
-    "DirectedEnergyDamage": [
-        ("recordType", "4500", "[UID 66] Variable Record Type"),
-    ],
-    "DirectedEnergyAreaAimpoint": [
-        ("recordType", "4001", "[UID 66] Variable Record Type"),
-    ],
-    "DirectedEnergyPrecisionAimpoint": [
-        ("recordType", "4000", "[UID 66] Variable Record Type"),
-    ],
-    "HighFidelityHAVEQUICKRadio": [
-        ("recordType", "3000", "[UID 66] Variable Record Type"),
     ],
 }
 
