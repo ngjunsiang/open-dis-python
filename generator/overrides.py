@@ -722,12 +722,11 @@ VIEW_ATTACHES = {
 # stale 1995-edition numbering (upstream campaign candidates; the body
 # text stays XML-canonical).
 DOCSTRING_CITES = {
-    # every entry but the IO pair RETIRED 2026-10-17: the
-    # spec-corrections wave corrected the family cites in the XML
-    # (logistics 7.4.x, radio 7.7.x, minefield 7.9.x, entity management
-    # 7.8.x, IFF 7.6.5); the IO family file was outside its scope
-    "InformationOperationsActionPdu": "5.13.3",
-    "InformationOperationsReportPdu": "5.13.4",
+    # fully RETIRED 2026-10-17: the spec-corrections wave corrected the
+    # family cites in the XML (logistics 7.4.x, radio 7.7.x, minefield
+    # 7.9.x, entity management 7.8.x, IFF 7.6.5); the IO pair followed
+    # in spec v0.12.1 (issue #8 remainder, 5.13.3/4 -> 7.12.2/3). The
+    # mechanism stays for future stale-cite finds.
 }
 
 # module key -> verbatim import lines emitted after the docstring

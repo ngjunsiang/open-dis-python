@@ -51,7 +51,7 @@ class InformationOperationsFamilyPdu(Pdu):
 
 @dataclass(slots=True)
 class InformationOperationsActionPdu(InformationOperationsFamilyPdu):
-    """§5.13.3 IO Action PDU
+    """§7.12.2 IO Action PDU
 
     Used to communicate an IO attack or the effects of an IO attack on one
     or more target entities.
@@ -142,7 +142,7 @@ class InformationOperationsActionPdu(InformationOperationsFamilyPdu):
 
 @dataclass(slots=True)
 class InformationOperationsReportPdu(InformationOperationsFamilyPdu):
-    """§5.13.4 IO Report PDU
+    """§7.12.3 IO Report PDU
 
     Used to communicate the effects of an IO attack on one or more target
     entities.

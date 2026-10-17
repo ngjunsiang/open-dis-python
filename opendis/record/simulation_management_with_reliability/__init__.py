@@ -167,7 +167,7 @@ class RecordSpecificationElement:
 
 @dataclass(slots=True)
 class CreateEntityReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
-    """§5.12.4.2 Create Entity-R PDU
+    """§7.11.2 Create Entity-R PDU
 
     Serves the same function as the Create Entity PDU but with the addition
     of reliability service levels. Canonical descriptive name;
@@ -212,7 +212,7 @@ CreateEntityRPdu = CreateEntityReliablePdu
 
 @dataclass(slots=True)
 class RemoveEntityReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
-    """§5.12.4.3 Remove Entity-R PDU
+    """§7.11.3 Remove Entity-R PDU
 
     Contains the same information as found in the Remove Entity PDU with the
     addition of the level of reliability service to be used for the removal
@@ -256,7 +256,7 @@ RemoveEntityRPdu = RemoveEntityReliablePdu
 
 @dataclass(slots=True)
 class StartResumeReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
-    """§5.12.4.4 Start/Resume-R PDU
+    """§7.11.4 Start/Resume-R PDU
 
     Serves the same function as the Start/Resume PDU but with the addition
     of reliability service levels. Canonical descriptive name;
@@ -311,7 +311,7 @@ StartResumeRPdu = StartResumeReliablePdu
 
 @dataclass(slots=True)
 class StopFreezeReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
-    """§5.12.4.5 Stop/Freeze-R PDU
+    """§7.11.5 Stop/Freeze-R PDU
 
     Serves the same function as the Stop/Freeze PDU (see 5.6.5.5.1) but with
     the addition of reliability service levels. Canonical descriptive name;
@@ -367,7 +367,7 @@ StopFreezeRPdu = StopFreezeReliablePdu
 
 @dataclass(slots=True)
 class AcknowledgeReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
-    """§5.12.4.6 Acknowledge-R PDU
+    """§7.11.6 Acknowledge-R PDU
 
     Serves the same function as the Acknowledge PDU but is used to
     acknowledge the receipt of a Create Entity-R PDU, a Remove Entity-R PDU,
@@ -407,7 +407,7 @@ AcknowledgeRPdu = AcknowledgeReliablePdu
 
 @dataclass(slots=True)
 class ActionRequestReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
-    """§5.12.4.7 Action Request-R PDU
+    """§7.11.7 Action Request-R PDU
 
     Serves the same function as the Action Request PDU but with the addition
     of reliability service levels. Canonical descriptive name;
@@ -494,7 +494,7 @@ ActionRequestRPdu = ActionRequestReliablePdu
 
 @dataclass(slots=True)
 class ActionResponseReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
-    """§5.12.4.8 Action Response-R PDU
+    """§7.11.8 Action Response-R PDU
 
     Serves the same function as the Action Response PDU (see 5.6.5.8.1) but
     is used to acknowledge the receipt of an Action Request-R PDU. Canonical
@@ -568,7 +568,7 @@ ActionResponseRPdu = ActionResponseReliablePdu
 
 @dataclass(slots=True)
 class DataQueryReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
-    """§5.12.4.9 Data Query-R PDU
+    """§7.11.9 Data Query-R PDU
 
     Serves the same function as the Data Query PDU but with the addition of
     reliability service levels. Canonical descriptive name; DataQueryRPdu is
@@ -655,7 +655,7 @@ DataQueryRPdu = DataQueryReliablePdu
 
 @dataclass(slots=True)
 class SetDataReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
-    """§5.12.4.10 Set Data-R PDU
+    """§7.11.10 Set Data-R PDU
 
     Serves the same function as the Set Data PDU but with the addition of
     reliability service levels. Canonical descriptive name; SetDataRPdu is
@@ -737,7 +737,7 @@ SetDataRPdu = SetDataReliablePdu
 
 @dataclass(slots=True)
 class DataReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
-    """§5.12.4.11 Data-R PDU
+    """§7.11.11 Data-R PDU
 
     Serves the same function as the Data PDU but with the addition of
     reliability service levels and is used in response to a Data Query-R
@@ -820,7 +820,7 @@ DataRPdu = DataReliablePdu
 
 @dataclass(slots=True)
 class EventReportReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
-    """§5.12.4.12 Event Report-R PDU
+    """§7.11.12 Event Report-R PDU
 
     Contains the same information as found in the Event Report PDU.
     Canonical descriptive name; EventReportRPdu is an alias.
@@ -893,7 +893,7 @@ EventReportRPdu = EventReportReliablePdu
 
 @dataclass(slots=True)
 class CommentReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
-    """§5.12.4.13 Comment-R PDU
+    """§7.11.13 Comment-R PDU
 
     Serves the same function as the Comment PDU. Canonical descriptive name;
     CommentRPdu is an alias.
@@ -958,7 +958,7 @@ CommentRPdu = CommentReliablePdu
 
 @dataclass(slots=True)
 class RecordReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
-    """§5.12.4.16 Record-R PDU
+    """§7.11.16 Record-R PDU
 
     Used to respond to a Record Query-R PDU or a Set Record-R PDU. It is
     used to provide information requested in a Record Query-R PDU, to
@@ -1031,7 +1031,7 @@ RecordRPdu = RecordReliablePdu
 
 @dataclass(slots=True)
 class SetRecordReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
-    """§5.12.4.15 Set Record-R PDU
+    """§7.11.15 Set Record-R PDU
 
     Used to set or change certain parameter values. These parameter values
     are contained within a record format as compared to the datum format
@@ -1101,7 +1101,7 @@ SetRecordRPdu = SetRecordReliablePdu
 
 @dataclass(slots=True)
 class RecordQueryReliablePdu(SimulationManagementWithReliabilityFamilyPdu):
-    """§5.12.4.14 Record Query-R PDU
+    """§7.11.14 Record Query-R PDU
 
     Used to communicate a request for data in record format. Canonical
     descriptive name; RecordQueryRPdu is an alias.

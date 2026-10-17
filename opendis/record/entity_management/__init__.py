@@ -227,7 +227,7 @@ class NamedLocationIdentification:
 class SilentEntitySystem:
     """§6.2.79 Silent Entity System record
 
-    information abou an enitity not producing espdus.
+    Information about an entity not producing Entity State PDUs.
 
     One Silent Entity System record stands for a number of same-typed silent
     entities; the appearance-record list carries one raw uint32 appearance
