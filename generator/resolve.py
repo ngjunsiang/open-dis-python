@@ -582,6 +582,21 @@ class Resolver:
 
     def _variant_group(self, tag, group, owner: str) -> ir.VariantGroup:
         members = tuple(self._shape(k) for k in group)
+        if tag == "classRef":
+            # record variant group (bucket-C items 1+2): first-true-wins
+            # over the when= terms. Members may be exhaustive-when (the
+            # LE elided/full identifier switches) or carry one trailing
+            # no-when default (IFF layer formats); presence itself rides
+            # a separate presentIf/count on the attribute
+            if not all(isinstance(m, ir.ClassRef) for m in members):
+                raise SpecError(f"classRef group on {owner!r} mixes member kinds")
+            defaults = [m for m in members if not m.when]
+            if len(defaults) > 1 or (defaults and members[-1] is not defaults[0]):
+                raise SpecError(
+                    f"attribute {owner!r} classRef group may carry at most "
+                    "one no-when default, LAST (first-true-wins ordering)"
+                )
+            return ir.VariantGroup(tag=tag, members=members)
         carrying = [m for m in members if getattr(m, "when", None)]
         if not carrying:
             raise SpecError(f"attribute {owner!r} repeats <{tag}> without when= guards")

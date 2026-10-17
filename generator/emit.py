@@ -184,6 +184,48 @@ def _variant_members(group: ir.VariantGroup, owner: str):
     return when_members[0], defaults[0]
 
 
+# -- presentIf optionals + record variant groups (bucket-C items 1+2) --------
+
+
+def _is_record_group(shape) -> bool:
+    """A classRef variant group: first-true-wins record selection, the
+    union annotation naming every member."""
+    return isinstance(shape, ir.VariantGroup) and shape.tag == "classRef"
+
+
+def _is_optional(attr: ir.Attribute) -> bool:
+    """presentIf on a scalar/record/group field makes it ``X | None``
+    (absent = None). Lists keep their empty-list absence (minefield
+    dataFilter precedent); pads/payloads ignore presentIf."""
+    if not attr.present_if:
+        return False
+    shape = attr.shape
+    return isinstance(
+        shape, (ir.Primitive, ir.EnumRef, ir.ClassRef, ir.BitfieldRef)
+    ) or _is_record_group(shape)
+
+
+def _guard_dispatch_fields(rec: ir.RecordClass) -> None:
+    """Fields whose wire presence/shape dispatches (presentIf optionals,
+    record variant groups) parse via curated methods — refuse to emit a
+    mechanical body that would silently mis-shape the wire."""
+    if rec.name in overrides.METHOD_BODIES:
+        return
+    offender = next(
+        (
+            a.name
+            for a in rec.attributes
+            if _is_optional(a) or _is_record_group(a.shape)
+        ),
+        None,
+    )
+    if offender is not None:
+        raise SpecError(
+            f"{rec.name!r}.{offender} dispatches on presentIf/when= — its "
+            "wire methods must be curated (METHOD_BODIES)"
+        )
+
+
 class _ModuleInfo:
     """Module-level usage scan (imports, constants, logger)."""
 
@@ -286,6 +328,17 @@ class _ModuleInfo:
         elif isinstance(shape, (ir.BytesPayload, ir.OptionalRecord, ir.PadToBoundary)):
             pass  # payload is bytes; optional records parse curated; pads packer-computed
         elif isinstance(shape, ir.VariantGroup):
+            if _is_record_group(shape):
+                # union of record members; optional members need no
+                # default instance, unconditional unions factory the
+                # first member (the no-when/elided shape)
+                for member in shape.members:
+                    home = self.module_path(member.target)
+                    if home and home != f"opendis.record.{self.module}":
+                        self.add_import(home, member.target)
+                if not _is_optional(attr):
+                    self.uses_dataclass_field = True
+                return
             when_member, default = _variant_members(shape, attr.name)
             for member in (when_member, default):
                 self.type_names.add(ir.ENUM_ANN[member.size])
@@ -304,7 +357,7 @@ class _ModuleInfo:
     def uses_enum_uids(self, rec: ir.RecordClass) -> bool:
         return any(
             (isinstance(a.shape, ir.EnumRef) and a.shape.uid is not None)
-            or isinstance(a.shape, ir.VariantGroup)
+            or (isinstance(a.shape, ir.VariantGroup) and not _is_record_group(a.shape))
             for a in rec.attributes
         )
 
@@ -523,7 +576,10 @@ def _context_bindings(rec: ir.RecordClass):
         ),
         None,
     )
-    if type_attr is None:
+    if type_attr is None or type_attr.present_if:
+        # no key on the wire, or the key itself is flag-optional (the LE
+        # Appearance PDU resolves its variants from the receiver's cached
+        # entity type — §9.4.3; dispatching on an absent key is unsound)
         return None
     bound = [
         (a.view_binding.removeprefix("Entity"), a.name)
@@ -689,6 +745,7 @@ def _emit_record(
         # markers) emit them below
         return
 
+    _guard_dispatch_fields(rec)
     body = overrides.METHOD_BODIES.get(rec.name)
     size_name, ser_name, parse_name = (
         ("_marshalledBodySize", "_serializeBody", "_parseBody")
@@ -935,9 +992,13 @@ def _emit_class_vars(
 def _field_enum_entries(rec: ir.RecordClass) -> list[tuple[str, str]]:
     entries = []
     for attr in rec.attributes:
+        if _is_optional(attr):
+            continue  # optional enums decode via their curated bodies
         if isinstance(attr.shape, ir.EnumRef) and attr.shape.uid is not None:
             entries.append((attr.name, str(attr.shape.uid)))
-        elif isinstance(attr.shape, ir.VariantGroup):
+        elif isinstance(attr.shape, ir.VariantGroup) and not _is_record_group(
+            attr.shape
+        ):
             _, default = _variant_members(attr.shape, attr.name)
             entries.append((attr.name, _const_name(default.enum_type)))
     return entries
@@ -945,7 +1006,10 @@ def _field_enum_entries(rec: ir.RecordClass) -> list[tuple[str, str]]:
 
 def _field_line(owner: str, attr: ir.Attribute) -> str:
     shape = attr.shape
-    if isinstance(shape, ir.Primitive):
+    if _is_record_group(shape):
+        ann = " | ".join(m.target for m in shape.members)
+        default = f"field(default_factory={shape.members[0].target})"
+    elif isinstance(shape, ir.Primitive):
         if attr.pad:
             ann, default = shape.type, "field(init=False, default=0)"
         else:
@@ -988,6 +1052,9 @@ def _field_line(owner: str, attr: ir.Attribute) -> str:
         )
     else:
         raise SpecError(f"unsupported field {attr.name!r}")
+    if _is_optional(attr):
+        ann += " | None"
+        default = "None"
     line = f"    {attr.name}: {ann} = {default}"
     rider = (
         overrides.FIELD_RIDERS.get((owner, attr.name))
@@ -1017,7 +1084,7 @@ def _uid_rider(attr: ir.Attribute) -> str | None:
         return f"[UID {shape.uid}]"
     if isinstance(shape, ir.BitfieldRef):
         return f"[UID {shape.uid}]"
-    if isinstance(shape, ir.VariantGroup):
+    if isinstance(shape, ir.VariantGroup) and not _is_record_group(shape):
         _, default = _variant_members(shape, attr.name)
         uids = [default.uid] + [
             m.uid for m in shape.members if isinstance(m, ir.EnumRef) and m.when
@@ -1042,6 +1109,11 @@ def _marshalled_expr(
         parts.append(str(SV_HEADER_BYTES))
     for attr in (wire if wire is not None else rec.attributes):
         shape = attr.shape
+        if _is_optional(attr) or _is_record_group(shape):
+            raise SpecError(
+                f"{attr.name!r} on {rec.name!r} dispatches on presentIf/when= — "
+                "its wire size is curated (METHOD_BODIES)"
+            )
         if attr.hidden:
             # wire-only count byte: contributes to size, never to state
             parts.append(str(ir.PRIM_BITS[shape.type] // 8))
@@ -1088,6 +1160,11 @@ def _marshalled_expr(
 
 def _serialize_line(owner: str, attr: ir.Attribute) -> list[str]:
     shape = attr.shape
+    if _is_optional(attr) or _is_record_group(shape):
+        raise SpecError(
+            f"{attr.name!r} on {owner!r} dispatches on presentIf/when= — "
+            "its serialize is curated (METHOD_BODIES)"
+        )
     if isinstance(shape, ir.ClassRef):
         return [f"        self.{attr.name}.serialize(outputStream)"]
     if isinstance(shape, ir.Primitive):
@@ -1161,6 +1238,12 @@ def _parse_pieces(
     if super_base:
         stmts.append(f"        super({rec.name}, self)._parseBody(inputStream)")
     for attr in (wire if wire is not None else rec.attributes):
+        shape = attr.shape
+        if _is_optional(attr) or _is_record_group(shape):
+            raise SpecError(
+                f"{attr.name!r} on {rec.name!r} dispatches on presentIf/when= — "
+                "its parse is curated (METHOD_BODIES)"
+            )
         if isinstance(attr.shape, ir.PadToBoundary):
             continue  # trailing alignment pad: parse block handles it
         shape = attr.shape

@@ -456,105 +456,14 @@ EXTRA_FIELDS = {
 }
 
 # (class, XML field) -> (annotation, default, rider|None) for fields whose
-# shape is fully curated — the LE flag-conditional optionals. Owning
-# classes carry METHOD_BODIES (presence dispatch is curated).
+# shape is fully curated. The LE/IFF presentIf entries RETIRED 2026-10-17
+# (bucket-C item 2): the resolver now evaluates presentIf — scalar/record/
+# group fields become ``X | None`` unions (absent = None), record variant
+# groups emit first-true-wins unions; lists keep empty-list absence
+# (minefield dataFilter precedent). Riders that were SISO data moved to
+# FIELD_RIDERS. What remains here is shape curation presentIf cannot
+# express.
 FIELD_OVERRIDES = {
-    # appearanceFlag1 uint16 override RETIRED 2026-10-17: the XML now
-    # declares the 16-bit record (v0.11.0 item 2, 9.4.3.5 c)
-    ("AppearancePdu", "appearanceFlag2"): ("uint8 | None", "None", None),
-    ("AppearancePdu", "forceId"): ("enum8 | None", "None", "[UID 6]"),
-    ("AppearancePdu", "entityType"): ("EntityType | None", "None", None),
-    ("AppearancePdu", "alternateEntityType"): ("EntityType | None", "None", None),
-    ("AppearancePdu", "entityMarking"): ("EntityMarking | None", "None", None),
-    ("AppearancePdu", "capabilities"): ("uint32 | None", "None", "[UID 55] bitmap"),
-    ("AppearancePdu", "appearanceVisual"): ("uint32 | None", "None", "[UID 31-43]"),
-    ("AppearancePdu", "appearanceIR"): ("uint32 | None", "None", None),
-    ("AppearancePdu", "appearanceEM"): ("uint32 | None", "None", None),
-    ("AppearancePdu", "appearanceAudio"): ("uint32 | None", "None", None),
-    ("LEMunitionDescriptor", "warhead"): ("enum16 | None", "None", "[UID 60]"),
-    ("LEMunitionDescriptor", "fuse"): ("enum16 | None", "None", "[UID 61]"),
-    ("LEMunitionDescriptor", "quantity"): ("uint16 | None", "None", None),
-    ("LEMunitionDescriptor", "rate"): ("uint16 | None", "None", None),
-    ("LiveEntityFirePdu", "targetLiveEntityId"): (
-        "LiveEntityIdentifier | None",
-        "None",
-        None,
-    ),
-    ("LiveEntityFirePdu", "munitionLiveEntityId"): (
-        "LiveEntityIdentifierElided | LiveEntityIdentifier | None",
-        "None",
-        None,
-    ),
-    ("LiveEntityFirePdu", "eventId"): (
-        "EventIdentifierLiveEntityElided | EventIdentifierLiveEntity",
-        "field(default_factory=EventIdentifierLiveEntityElided)",
-        None,
-    ),
-    ("LiveEntityFirePdu", "location"): (
-        "LiveEntityRelativeWorldCoordinates | None",
-        "None",
-        None,
-    ),
-    ("LiveEntityDetonationPdu", "detonationFlag2"): ("uint8 | None", "None", None),
-    ("LiveEntityDetonationPdu", "targetLiveEntityId"): (
-        "LiveEntityIdentifier | None",
-        "None",
-        None,
-    ),
-    ("LiveEntityDetonationPdu", "munitionLiveEntityId"): (
-        "LiveEntityIdentifierElided | LiveEntityIdentifier | None",
-        "None",
-        None,
-    ),
-    ("LiveEntityDetonationPdu", "eventId"): (
-        "EventIdentifierLiveEntityElided | EventIdentifierLiveEntity | None",
-        "None",
-        None,
-    ),
-    ("LiveEntityDetonationPdu", "worldLocation"): (
-        "LiveEntityRelativeWorldCoordinates | None",
-        "None",
-        None,
-    ),
-    ("LiveEntityDetonationPdu", "munitionOrientation"): (
-        "LiveEntityOrientation16 | None",
-        "None",
-        None,
-    ),
-    ("LiveEntityDetonationPdu", "entityLocation"): (
-        "LiveEntityRelativeEntityCoordinates | None",
-        "None",
-        None,
-    ),
-    # IFF layers 2-5 (v0.12.0 model): presence declared by the Layer 1
-    # Fundamental Operational Data Information Layers bits (§6.2.39 c,
-    # §6.2.45 a/Table 74 — bit N = Layer N); Layers 3/4 are variant
-    # groups (interrogator/transponder format per System Type [UID 82]
-    # + the CIT Change/Options bit 4, Table B.5/B.5.13/.14) — curated
-    # union annotations replace the group before validation (LE
-    # precedent); the curated PDU wire methods dispatch.
-    ("IdentificationFriendOrFoePdu", "iFFPduLayer2Data"): (
-        "IFFPduLayer2Data | None",
-        "None",
-        None,
-    ),
-    ("IdentificationFriendOrFoePdu", "iFFPduLayer3Data"): (
-        "IFFPduLayer3InterrogatorFormatData | IFFPduLayer3TransponderFormatData"
-        " | None",
-        "None",
-        None,
-    ),
-    ("IdentificationFriendOrFoePdu", "iFFPduLayer4Data"): (
-        "IFFPduLayer4InterrogatorFormatData | IFFPduLayer4TransponderFormatData"
-        " | None",
-        "None",
-        None,
-    ),
-    ("IdentificationFriendOrFoePdu", "iFFPduLayer5Data"): (
-        "IFFPduLayer5Data | None",
-        "None",
-        None,
-    ),
     # the XML's countFieldName="numberOfGridAxes" on the grid-data list is
     # an upstream bug: Table 192's G = V x product of the per-axis point
     # counts — a derived count with no wire field (curated body owns it)
@@ -2417,6 +2326,8 @@ PROTOCOL_FAMILY_RIDERS = {
 FIELD_RIDERS = {
     ("EntityStatePdu", "entityAppearance"): "[UID 31-43] or a bitfield view",
     ("EntityStatePdu", "capabilities"): "[UID 55] or a bitfield view",
+    ("AppearancePdu", "capabilities"): "[UID 55] bitmap",
+    ("AppearancePdu", "appearanceVisual"): "[UID 31-43]",
     ("SystemIdentifier", "changeOptions"): (
         "8-bit Change/Options (Table B.5); Table 118 totals the record at "
         "48 bits — the §6.2.87 prose cites the 16-bit-looking §6.2.13 shape"
@@ -2548,12 +2459,6 @@ MODULE_SOURCE_IMPORTS = {
     "warfare": {
         "opendis.record.base": [
             "StandardVariableRecord",
-        ],
-    },
-    "live_entity": {
-        "opendis.record.common": [
-            "EntityMarking",
-            "EntityType",
         ],
     },
     "simulation_management": {
