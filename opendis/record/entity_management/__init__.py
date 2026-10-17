@@ -47,6 +47,7 @@ __all__ = [
     "IsPartOfPdu",
     "NamedLocationIdentification",
     "Relationship",
+    "SilentAggregateSystem",
     "SilentEntitySystem",
     "TransferOwnershipPdu",
 ]
@@ -224,6 +225,41 @@ class NamedLocationIdentification:
 
 
 @dataclass(slots=True)
+class SilentAggregateSystem:
+    """An aggregate not issuing Aggregate State PDUs, carried in the Aggregate
+    State PDU's Silent Aggregate System records. Table 183 / 7.8.2: 96 bits
+    (Number of Aggregates + Padding + Aggregate Type).
+    """
+
+    numberOfAggregates: uint16 = 0
+    aggregateType: AggregateType = field(default_factory=AggregateType)
+    # Padding ruling: explicit attribute, out of __init__ (zero by default,
+    # holds the wire value after parse so odd pads round-trip byte-exact).
+    padding: uint16 = field(init=False, default=0)
+
+    def marshalledSize(self) -> int:
+        return 2 + 2 + self.aggregateType.marshalledSize()
+
+    def serialize(self, outputStream: DataOutputStream) -> None:
+        outputStream.write_uint16(self.numberOfAggregates)
+        outputStream.write_uint16(self.padding)
+        self.aggregateType.serialize(outputStream)
+
+    def parse(self, inputStream: DataInputStream) -> None:
+        self.numberOfAggregates = inputStream.read_uint16()
+        self.padding = inputStream.read_uint16()
+        self.aggregateType = AggregateType.parse(inputStream)
+
+    @classmethod
+    def parseFrom(cls, inputStream: DataInputStream) -> "SilentAggregateSystem":
+        """Construct a new record from the stream (list-parse helper; the
+        mutating ``parse`` above satisfies the Record protocol)."""
+        item = cls()
+        item.parse(inputStream)
+        return item
+
+
+@dataclass(slots=True)
 class SilentEntitySystem:
     """§6.2.79 Silent Entity System record
 
@@ -320,7 +356,7 @@ class AggregateStatePdu(EntityManagementFamilyPdu):
     velocity: Vector3Float = field(default_factory=Vector3Float)
     aggregateIDList: list[AggregateIdentifier] = field(default_factory=list)
     entityIDList: list[EntityIdentifier] = field(default_factory=list)
-    silentAggregateSystemList: list[EntityType] = field(default_factory=list)
+    silentAggregateSystemList: list[SilentAggregateSystem] = field(default_factory=list)
     silentEntitySystemList: list[SilentEntitySystem] = field(default_factory=list)
     variableDatumList: list[VariableDatum] = field(default_factory=list)
 
@@ -446,7 +482,8 @@ class AggregateStatePdu(EntityManagementFamilyPdu):
         if padding:
             inputStream.read_bytes(padding)
         self.silentAggregateSystemList = [
-            EntityType.parse(inputStream) for _ in range(numberOfSilentAggregateTypes)
+            SilentAggregateSystem.parseFrom(inputStream)
+            for _ in range(numberOfSilentAggregateTypes)
         ]
         self.silentEntitySystemList = [
             SilentEntitySystem.parseFrom(inputStream)
@@ -481,8 +518,6 @@ class IsGroupOfPdu(EntityManagementFamilyPdu):
     latitude: float64 = 0.0
     longitude: float64 = 0.0
     groupedEntityDescriptions: list[EntityIdentifier] = field(default_factory=list)
-    # Padding ruling: explicit attribute, out of __init__ (zero by default,
-    # holds the wire value after parse so odd pads round-trip byte-exact).
     pad: uint32 = field(init=False, default=0)
 
     @property

@@ -145,6 +145,10 @@ RECORD_MODULES = {
         "AggregateMarking",
         "Relationship",
         "NamedLocationIdentification",
+        # Table 183's Silent Aggregate System list element (authored in
+        # the XML as its own 96-bit record since spec v0.12.3, issue #7;
+        # the list previously classRef'd EntityType — 64 bits, wire-wrong)
+        "SilentAggregateSystem",
         # §6.2.79 Silent Entity System record — Table 183's Silent Entity
         # System list element (the XML's AggregateStatePdu classRefs
         # EntityType there; upstream XML gap, standard followed)
@@ -1666,7 +1670,8 @@ padding = _padTo32(12 + self._prefixSize() + idLists)
 if padding:
     inputStream.read_bytes(padding)
 self.silentAggregateSystemList = [
-    EntityType.parse(inputStream) for _ in range(numberOfSilentAggregateTypes)
+    SilentAggregateSystem.parseFrom(inputStream)
+    for _ in range(numberOfSilentAggregateTypes)
 ]
 self.silentEntitySystemList = [
     SilentEntitySystem.parseFrom(inputStream)

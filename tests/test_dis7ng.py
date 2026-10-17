@@ -49,6 +49,7 @@ from opendis.record.entity_management import (
     IsPartOfPdu,
     NamedLocationIdentification,
     Relationship,
+    SilentAggregateSystem,
     SilentEntitySystem,
     TransferOwnershipPdu,
 )
@@ -1622,6 +1623,29 @@ class TestGriddedDataPduWire(unittest.TestCase):
         self.assertAlmostEqual(got1.fieldScale, 1.5, places=6)
         self.assertEqual(list(got1.dataValues), [10, 20, 30])
         self.assertAlmostEqual(got2.dataValues[2], 3.5, places=6)
+        self.assertEqual(parsed.to_bytes(), raw)
+
+
+class TestSilentAggregateSystem(unittest.TestCase):
+    """Table 183's Silent Aggregate System record (96 bits:
+    NumberOfAggregates u16 + Padding u16 + Aggregate Type; authored in the
+    spec XML v0.12.3, issue #7 — the list previously classRef'd EntityType,
+    64 bits, wire-wrong)."""
+
+    def test_silent_aggregate_system_round_trip(self):
+        pdu = AggregateStatePdu()
+        silent = SilentAggregateSystem(numberOfAggregates=2)
+        silent.aggregateType = AggregateType(1, 1, 39, 2)
+        pdu.silentAggregateSystemList = [silent]
+        raw = pdu.to_bytes()
+        # 96 bits per record (Table 183): 12 bytes
+        self.assertEqual(silent.marshalledSize(), 12)
+        parsed = createPdu(raw)
+        self.assertEqual(parsed.numberOfSilentAggregateTypes, 1)
+        got = parsed.silentAggregateSystemList[0]
+        self.assertEqual(got.numberOfAggregates, 2)
+        self.assertEqual(got.aggregateType, AggregateType(1, 1, 39, 2))
+        self.assertEqual(got.padding, 0)
         self.assertEqual(parsed.to_bytes(), raw)
 
 
