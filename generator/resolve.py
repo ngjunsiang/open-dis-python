@@ -29,6 +29,28 @@ class Resolver:
             canonical = self.canonical_name(xml_name)
             if canonical == xml_name or canonical not in self.by_canonical:
                 self.by_canonical.setdefault(canonical, xml_name)
+        # classes emitted into generated modules (module homes are the
+        # curated bucket-D decision; every other abstract class is a
+        # drop candidate — see _is_dropped_parent)
+        self.emitted = {
+            self.canonical_name(n)
+            for order in self.ov.RECORD_MODULES.values()
+            for n in order
+        }
+
+    def _is_dropped_parent(self, canonical: str) -> bool:
+        """abstract="true" parents that are neither emitted classes nor
+        kernel bases are Java-side abstractions (bucket-C item 3, spec
+        v0.12.8): never emitted, never a Python base — the subclass
+        flattens their fields and stands alone."""
+        if (
+            canonical in self.ov.KERNEL_BASES
+            or canonical in self.ov.KERNEL_RECORD_BASES
+            or canonical in self.emitted
+        ):
+            return False
+        el = self.xml_classes.get(self.by_canonical.get(canonical, canonical))
+        return el is not None and el.get("abstract") == "true"
 
     def canonical_name(self, xml_name: str) -> str:
         """XML class name -> canonical Python class name (bindings, then
@@ -355,7 +377,7 @@ class Resolver:
         if canonical in self.ov.KERNEL_BASES:
             base, _module = self.ov.KERNEL_BASES[canonical]
             return base, True
-        if canonical in self.ov.PARENT_DROPS:
+        if self._is_dropped_parent(canonical):
             # Java-side abstraction (AbstractIFFPduLayerData, GridData…):
             # never emitted, never a Python base — the subclass flattens
             # its fields and stands alone

@@ -167,9 +167,9 @@ RECORD_MODULES = {
         "SyntheticEnvironmentFamilyPdu",
         "EnvironmentalProcessPdu",
         # §6.2.40 grid-axis descriptor records (fixed/variable; the shared
-        # GridAxisDescriptor base is a Java-side abstraction —
-        # PARENT_DROPS) + §6.2.41 Grid Data records (the standard defines
-        # representation types 0-2 only) + §7.10.3 Gridded Data PDU
+        # GridAxisDescriptor base is a Java-side abstraction — abstract
+        # marker, resolver drop) + §6.2.41 Grid Data records (the standard
+        # defines representation types 0-2 only) + §7.10.3 Gridded Data PDU
         "GridAxisDescriptorFixed",
         "GridAxisDescriptorVariable",
         "GridDataType0",
@@ -324,12 +324,10 @@ PRIMITIVE_BINDINGS = {
 }
 
 # XML parent classes that are Java-side abstractions, never emitted and
-# never Python bases: subclasses flatten their fields and stand alone.
-PARENT_DROPS = {
-    "AbstractIFFPduLayerData",
-    "GridData",
-    "GridAxisDescriptor",
-}
+# never Python bases. PARENT_DROPS RETIRED 2026-10-17 (bucket-C item 3,
+# spec v0.12.8): the three classes now carry abstract="true" in the XML
+# and the resolver infers the drop (abstract + not an emitted class and
+# not a kernel base — resolve._is_dropped_parent).
 
 # classRef targets that splice their own fields in place (the ruled
 # RadioCommsHeader flattening: the composed PDU header already owns the
