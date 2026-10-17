@@ -613,11 +613,10 @@ FIELD_SHAPES = {
     ("IsGroupOfPdu", "groupedEntityDescriptions"): ir.ObjectList(
         element="EntityIdentifier", count_field="numberOfGroupedEntities"
     ),
-    # TransferOwnership: flat record-set list (the XML's RecordSpecification
-    # wrapper layer has no wire bytes; count rides the PDU)
-    ("TransferOwnershipPdu", "recordSets"): ir.ObjectList(
-        element="RecordSpecificationElement", count_field="numberOfRecordSets"
-    ),
+    # TransferOwnership recordSets RETIRED 2026-10-17: the v0.11.0
+    # correction wave (10991fe) already flattened the XML to a bare
+    # RecordSpecificationElement list — redundant since that repin,
+    # missed by both bridge-retirement rounds
     # EnvironmentRecord: opaque geometry (bit-count expression length - 64)
     ("Environment", "geometry"): ir.BytesPayload(bit_count_field=None),
     # TSPI system-specific data: byte-counted payload (§9.4.2)
