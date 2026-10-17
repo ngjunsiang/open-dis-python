@@ -16,9 +16,15 @@ from .xmlload import TYPE_TAGS, SpecError, collect_classes
 
 
 class Resolver:
-    def __init__(self, root, overrides_module=overrides):
+    def __init__(self, root, overrides_module=overrides, view_map=None):
         self.xml_classes, self.aliases = collect_classes(root)
         self.ov = overrides_module
+        # uid -> local view class name for the generated single-layout
+        # bitfield tables (bucket-C item 5): a sisobitfield field whose
+        # uid has a view attaches it unconditionally at parse. Context
+        # tables (EntityAppearance/EntityCapabilities kind layouts) are
+        # excluded here — they dispatch on entityType (item 6).
+        self.view_map = view_map or {}
         # canonical Python name -> XML class element (bindings/aliases may
         # rename classes, e.g. EntityInformationInteractionFamilyPdu ->
         # EntityInformationFamilyPdu). A class whose XML name already IS
@@ -504,6 +510,7 @@ class Resolver:
             by_tag.setdefault(kid.tag, []).append(kid)
         shapes = []
         viewable = False
+        view_binding = None
         for tag, group in by_tag.items():
             if len(group) > 1:
                 shapes.append(self._variant_group(tag, group, owner=name))
@@ -513,7 +520,19 @@ class Resolver:
                     kid.tag == "classRef"
                     and kid.get("name") in self.ov.PRIMITIVE_BINDINGS
                 ):
-                    viewable = True  # curated parse may attach a bitfield view
+                    # absorbed primitive: the raw integer may gain a typed
+                    # view at parse (uid-keyed direct attach, or the
+                    # kind-dispatched context layouts keyed by entityType)
+                    viewable = True
+                    view_binding = kid.get("name")
+                elif (
+                    kid.tag == "sisobitfield"
+                    and kid.get("type") in self.ov.PRIMITIVE_BINDINGS
+                ):
+                    # same absorption, XML-spelled as a bitfield typed by
+                    # the bound class (EntityCapabilities [UID 55]): no
+                    # uid-keyed view exists — the context layout dispatches
+                    view_binding = kid.get("type")
                 shapes.append(self._shape(kid))
         override = self.ov.FIELD_SHAPES.get((owner, attr_el.get("name")))
         if override is not None:
@@ -544,6 +563,11 @@ class Resolver:
         if isinstance(shape, ir.BytesPayload):
             hidden = False
             count_bits = True
+        view = (
+            self.view_map.get(shape.uid)
+            if isinstance(shape, ir.BitfieldRef) and not hidden
+            else None
+        )
         return ir.Attribute(
             name=name,
             comment=attr_el.get("comment"),
@@ -552,6 +576,8 @@ class Resolver:
             hidden=hidden,
             count_bits=count_bits,
             viewable=viewable,
+            view=view,
+            view_binding=view_binding,
         )
 
     def _variant_group(self, tag, group, owner: str) -> ir.VariantGroup:

@@ -19,10 +19,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import ir, overrides
+from . import ir, overrides, ref010
 from .emit import emit_module
-from .emit_bitfields import emit_bitfield_module
-from .ref010 import load_ref010
+from .emit_bitfields import context_view_layout, direct_view_map, emit_bitfield_module
 from .resolve import Resolver
 from .xmlload import load_spec
 
@@ -60,8 +59,18 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     out_root = Path(args.out)
 
+    # REF-010 supplies the bitfield views first (bucket-C items 5+6):
+    # single-layout tables attach by uid; the kind/domain-qualified
+    # EntityAppearance/EntityCapabilities layouts become the context
+    # dispatch the entity_information module emits
+    tables, enum_names, enum_rows = ref010.load_ref010(args.ref010)
+    candidates = {u for uids in overrides.BITFIELD_VIEWS.values() for u in uids}
+    context_uids, context_layout = ref010._context_split(tables, enum_rows, candidates)
+    view_map = direct_view_map(tables, context_uids)
+    context_views = context_view_layout(tables, context_layout, enum_rows)
+
     root = load_spec(args.xml_dir)
-    resolver = Resolver(root)
+    resolver = Resolver(root, view_map=view_map)
     resolved = {}
     for module_key, order in overrides.RECORD_MODULES.items():
         resolved[module_key] = (order, resolver.resolve(order))
@@ -81,14 +90,15 @@ def main(argv: list[str] | None = None) -> int:
             if module_key == "common"
             else f"record/{module_key}/__init__.py"
         )
-        src = emit_module(records, order, module_key, all_list_elements)
+        src = emit_module(
+            records, order, module_key, all_list_elements, context_views=context_views
+        )
         path = _write(out_root, rel, src)
         print(
             f"wrote {path} ({len(src.splitlines())} lines, "
             f"{len(records)} resolved records incl. deps)"
         )
 
-    tables, enum_names = load_ref010(args.ref010)
     for module_key, uids in overrides.BITFIELD_VIEWS.items():
         missing = [u for u in uids if u not in tables]
         if missing:

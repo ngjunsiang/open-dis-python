@@ -254,13 +254,16 @@ class _ModuleInfo:
             pass
         elif isinstance(shape, ir.BitfieldRef):
             self.type_names.add(f"uint{shape.size}")
-            view = overrides.VIEW_ATTACHES.get((owner, attr.name))
-            if view:
+            if attr.view:
                 # local names ending in ``View`` are aliased imports
-                canonical = view[:-4] if view.endswith("View") else view
+                canonical = attr.view[:-4] if attr.view.endswith("View") else attr.view
                 self.add_import(
                     "opendis.bitfields",
-                    f"{canonical} as {view}" if canonical != view else view,
+                    (
+                        f"{canonical} as {attr.view}"
+                        if canonical != attr.view
+                        else attr.view
+                    ),
                 )
         elif isinstance(shape, ir.ObjectList):
             self.uses_dataclass_field = True
@@ -322,9 +325,28 @@ def emit_module(
     order: list[str],
     module: str,
     list_elements: set[str] = frozenset(),
+    context_views: dict | None = None,
 ) -> str:
     info = _ModuleInfo(records, order, module)
     lines: list[str] = []
+
+    # classes whose parse wraps kind-qualified viewable fields, in module
+    # order — the first one anchors the module-level dispatch dicts
+    context_users: list[tuple[str, str, list[tuple[str, str]]]] = []
+    context_suffixes: list[str] = []
+    if context_views:
+        for name in order:
+            bound = _context_bindings(records[name])
+            if bound is None:
+                continue
+            context_users.append((name, *bound))
+            for suffix, _field in bound[1]:
+                if suffix in context_views and suffix not in context_suffixes:
+                    context_suffixes.append(suffix)
+        for suffix in context_suffixes:
+            for where in ("platform", "kind"):
+                for cls, _uid in context_views[suffix][where].values():
+                    info.add_import("opendis.bitfields", cls)
 
     doc = overrides.MODULE_DOCSTRINGS.get(module)
     if doc:
@@ -429,9 +451,23 @@ def emit_module(
         )
         lines.append(f"    return ({octets} - byteCount % {octets}) % {octets}")
     for name in order:
+        if context_users and name == context_users[0][0]:
+            # dispatch dicts lead the first class whose parse walks them
+            lines.append("")
+            lines.append("")
+            lines += _context_dicts_block(context_views, context_suffixes)
         lines.append("")
         lines.append("")
-        _emit_record(records[name], records, lines, list_elements, name == pad_owner)
+        _emit_record(
+            records[name],
+            records,
+            lines,
+            list_elements,
+            name == pad_owner,
+            context_bindings=next(
+                ((t, b) for n, t, b in context_users if n == name), None
+            ),
+        )
         tail = overrides.CLASS_TAILS.get(name)
         if tail:
             lines.append("")
@@ -452,12 +488,117 @@ _PAD_RULING = (
 )
 
 
+# -- context-dependent bitfield dispatch (bucket-C items 5+6) ---------------
+#
+# EntityAppearance/EntityCapabilities wire fields are raw uint32 state in
+# Python; the REF-010 layouts select per entity kind (per domain for
+# platforms), so parse wraps the integer into the matching view class.
+# The (kind, domain) -> table mapping derives from REF-010 names matched
+# against the uid-7/uid-8 row labels (ref010); this emitter lays out the
+# module-level dispatch dicts and the parse tail.
+
+# Verbatim exemplar layout — hand-wrapped for the two known view families
+# (the wrap puts the "/" joining the binding names at col 79; anything
+# else fails loud rather than re-flowing)
+_CONTEXT_COMMENT = (
+    "# generator: context-dependent bitfield layouts — the Entity{s1} /\n"
+    "# Entity{s2} tables depend on entity kind (and, for platforms, on\n"
+    "# domain). Parse wraps the raw uint32 into the matching view; kinds "
+    "with\n"
+    "# no REF-010 table keep the plain int. The marshaller writes "
+    "int(field)\n"
+    "# either way."
+)
+
+
+def _context_bindings(rec: ir.RecordClass):
+    """(entityType field name, [(layout suffix, field name), ...]) when
+    the record holds kind-qualified viewable fields AND an EntityType
+    reference to key them on; else None."""
+    type_attr = next(
+        (
+            a
+            for a in rec.attributes
+            if isinstance(a.shape, ir.ClassRef) and a.shape.target == "EntityType"
+        ),
+        None,
+    )
+    if type_attr is None:
+        return None
+    bound = [
+        (a.view_binding.removeprefix("Entity"), a.name)
+        for a in rec.attributes
+        if a.view_binding and a.view_binding.startswith("Entity")
+    ]
+    if not bound:
+        return None
+    return type_attr.name, bound
+
+
+def _context_dict_names(suffix: str) -> tuple[str, str]:
+    upper = suffix.upper()
+    if upper.endswith("IES"):
+        upper = upper[:-3] + "Y"  # CAPABILITIES -> CAPABILITY (exemplar names)
+    return f"_{upper}_VIEWS", f"_{upper}_KIND_VIEWS"
+
+
+def _context_dicts_block(context_views: dict, suffixes: list[str]) -> list[str]:
+    """The module-level dispatch dicts (verbatim exemplar layout)."""
+    if len(suffixes) != 2:
+        raise SpecError(
+            f"context dispatch comment assumes two view families, got {suffixes!r}"
+        )
+    lines = _CONTEXT_COMMENT.format(s1=suffixes[0], s2=suffixes[1]).split("\n")
+    for index, suffix in enumerate(suffixes):
+        # exemplar comment style: the leading family's rows carry the
+        # "platform, <domain> domain" gloss; later families stay bare
+        verbose = index == 0
+        kind_labels = context_views["kind_labels"]
+        domain_labels = context_views["domain_labels"]
+        views, kind_views = _context_dict_names(suffix)
+        lines.append(f"{views}: dict[tuple[int, int], type] = {{")
+        for domain in sorted(context_views[suffix]["platform"]):
+            cls, uid = context_views[suffix]["platform"][domain]
+            if verbose:
+                label = domain_labels[domain].lower()
+                comment = f"  # platform, {label} domain [UID {uid}]"
+            else:
+                comment = f"  # [UID {uid}]"
+            lines.append(f"    (1, {domain}): {cls},{comment}")
+        lines.append("}")
+        lines.append(f"{kind_views}: dict[int, type] = {{")
+        for kind in sorted(context_views[suffix]["kind"]):
+            cls, uid = context_views[suffix]["kind"][kind]
+            lines.append(f"    {kind}: {cls},  # [UID {uid}]")
+        lines.append("}")
+    return lines
+
+
+def _context_tail(type_field: str, bound: list[tuple[str, str]]) -> list[str]:
+    """Parse-method tail: wrap each bound field into its kind's view."""
+    lines = [
+        f"key = (int(self.{type_field}.entityKind), int(self.{type_field}.domain))"
+    ]
+    for suffix, field in bound:
+        var = suffix[0].lower() + suffix[1:]
+        if var.endswith("ies"):
+            var = var[:-3] + "y"
+        views, kind_views = _context_dict_names(suffix)
+        lines.append(f"{var}View = {views}.get(key) or {kind_views}.get(")
+        lines.append(f"    int(self.{type_field}.entityKind)")
+        lines.append(")")
+        lines.append(f"if {var}View is not None:")
+        lines.append(f"    self.{field} = {var}View(self.{field})")
+    return lines
+
+
 def _emit_record(
     rec: ir.RecordClass,
     records: dict[str, ir.RecordClass],
     lines: list[str],
     list_elements: set[str] = frozenset(),
     first_pad: bool = False,
+    context_bindings: tuple[str, list[tuple[str, str]]] | None = None,
 ) -> None:
     if rec.frozen:
         lines.append("@dataclass(frozen=True, slots=True)")
@@ -691,10 +832,12 @@ def _emit_record(
         if rec.frozen:
             lines.append(f"        return cls({', '.join(args)})")
 
-    tail = overrides.PARSE_TAILS.get(rec.name)
-    if tail:
+    if context_bindings is not None:
+        # kind-qualified view wrap (context dispatch): the parse tail
+        # walks the module dicts keyed on this record's entityType
         lines.append("")
-        lines += [f"        {ln}" if ln.strip() else "" for ln in tail.split("\n")]
+        for ln in _context_tail(*context_bindings):
+            lines.append(f"        {ln}")
 
     if member and member.after_methods:
         lines.append("")
@@ -857,15 +1000,14 @@ def _field_line(owner: str, attr: ir.Attribute) -> str:
 
 
 def _view_rider(owner: str, attr: ir.Attribute) -> str | None:
-    """BitfieldRef rider when a curated view attaches at parse."""
+    """BitfieldRef rider when a view attaches at parse."""
     shape = attr.shape
-    if (owner, attr.name) not in overrides.VIEW_ATTACHES:
+    if attr.view is None:
         return None
     if not isinstance(shape, ir.BitfieldRef):
         raise SpecError(f"view attach on non-bitfield field {owner}.{attr.name}")
-    local = overrides.VIEW_ATTACHES[(owner, attr.name)]
-    if local.endswith("View"):
-        return f"[UID {shape.uid}] or the {local[:-4]} view"
+    if attr.view.endswith("View"):
+        return f"[UID {shape.uid}] or the {attr.view[:-4]} view"
     return f"[UID {shape.uid}] or the view"
 
 
@@ -1058,9 +1200,8 @@ def _parse_pieces(
             _emit_value(rec, attr.name, expr, stmts, args)
         elif isinstance(shape, ir.BitfieldRef):
             expr = f"inputStream.read_uint{shape.size}()"
-            view = overrides.VIEW_ATTACHES.get((rec.name, attr.name))
-            if view:
-                expr = f"{view}({expr})"
+            if attr.view:
+                expr = f"{attr.view}({expr})"
             _emit_value(rec, attr.name, expr, stmts, args)
         elif isinstance(shape, ir.ObjectList):
             if (rec.name, attr.name) in overrides.REGISTRY_LISTS:

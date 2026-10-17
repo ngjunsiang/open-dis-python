@@ -694,14 +694,16 @@ KERNEL_RECORD_BASES = {
     ),
 }
 
-# (class, field) -> bitfield view class name attached unconditionally at
-# parse (context-independent layouts only; kind-dependent wraps stay in
-# PARSE_TAILS). Names ending in ``View`` import as aliases.
-VIEW_ATTACHES = {
-    ("DirectedEnergyFirePdu", "flags"): "DEFireFlagsView",
-    ("StopFreezePdu", "frozenBehavior"): "StopFreezeFrozenBehavior",
-    ("StopFreezeReliablePdu", "frozenBehavior"): "StopFreezeFrozenBehavior",
-    ("MinefieldStatePdu", "appearance"): "MinefieldStateAppearance",
+# (class, field) -> bitfield view attached unconditionally at parse.
+# VIEW_ATTACHES RETIRED 2026-10-17 (bucket-C items 5+6): the uid keys it —
+# a sisobitfield field whose uid has a generated single-layout view
+# attaches it mechanically (resolve stamps Attribute.view from the
+# REF-010-derived map); the kind/domain-qualified EntityAppearance /
+# EntityCapabilities layouts dispatch on entityType in the emitted parse
+# tail (emit). Residual: local-name aliases the mechanical lookup can't
+# derive (naming choices, not lookups).
+VIEW_LOCAL_ALIASES = {
+    313: "DEFireFlagsView",  # DEFireFlags imported under a View alias
 }
 
 # class -> replacement leading §citation where the XML comment carries
@@ -2442,61 +2444,18 @@ FIELD_ANNOTATIONS = {
     ("TransmitterPdu", "antennaLocation"): "WorldCoordinates",
 }
 
-# Verbatim source appended at the end of _parseBody (context-dependent
-# bitfield view selection is beyond mechanical generation).
-PARSE_TAILS = {
-    "EntityStatePdu": """key = (int(self.entityType.entityKind), int(self.entityType.domain))
-appearanceView = _APPEARANCE_VIEWS.get(key) or _APPEARANCE_KIND_VIEWS.get(
-    int(self.entityType.entityKind)
-)
-if appearanceView is not None:
-    self.entityAppearance = appearanceView(self.entityAppearance)
-capabilityView = _CAPABILITY_VIEWS.get(key) or _CAPABILITY_KIND_VIEWS.get(
-    int(self.entityType.entityKind)
-)
-if capabilityView is not None:
-    self.capabilities = capabilityView(self.capabilities)""",
-}
+# Verbatim source appended at the end of _parseBody.
+# PARSE_TAILS RETIRED 2026-10-17 (bucket-C item 6): the EntityAppearance
+# kind-dispatch derives from REF-010 — table names matched against the
+# uid-7/uid-8 row labels (ref010._context_split) drive the module dicts
+# and the parse tail (emit._context_dicts_block / _context_tail).
 
 # (after-class, source) blocks injected between emitted classes.
 MODULE_SOURCES = {
-    "entity_information": [
-        (
-            "EntityInformationFamilyPdu",
-            """# generator: context-dependent bitfield layouts — the EntityAppearance /
-# EntityCapabilities tables depend on entity kind (and, for platforms, on
-# domain). Parse wraps the raw uint32 into the matching view; kinds with
-# no REF-010 table keep the plain int. The marshaller writes int(field)
-# either way.
-_APPEARANCE_VIEWS: dict[tuple[int, int], type] = {
-    (1, 1): LandPlatformAppearance,  # platform, land domain [UID 31]
-    (1, 2): AirPlatformAppearance,  # platform, air domain [UID 32]
-    (1, 3): SurfacePlatformAppearance,  # platform, surface domain [UID 33]
-    (1, 4): SubsurfacePlatformAppearance,  # platform, subsurface domain [UID 34]
-    (1, 5): SpacePlatformAppearance,  # platform, space domain [UID 35]
-}
-_APPEARANCE_KIND_VIEWS: dict[int, type] = {
-    2: MunitionAppearance,  # [UID 36]
-    3: LifeFormsAppearance,  # [UID 37]
-    4: EnvironmentalAppearance,  # [UID 38]
-    5: CulturalFeatureAppearance,  # [UID 39]
-    6: SupplyAppearance,  # [UID 40]
-    7: RadioAppearance,  # [UID 41]
-    8: ExpendableAppearance,  # [UID 42]
-    9: SensorEmitterAppearance,  # [UID 43]
-}
-_CAPABILITY_VIEWS: dict[tuple[int, int], type] = {
-    (1, 1): LandPlatformCapabilities,  # [UID 450]
-    (1, 2): AirPlatformCapabilities,  # [UID 451]
-    (1, 3): SurfacePlatformCapabilities,  # [UID 452]
-    (1, 4): SubsurfacePlatformCapabilities,  # [UID 453]
-    (1, 5): SpacePlatformCapabilities,  # [UID 454]
-}
-_CAPABILITY_KIND_VIEWS: dict[int, type] = {
-    2: MunitionCapabilities,  # [UID 455]
-}""",
-        )
-    ],
+    # the entity_information context-view dicts entry RETIRED 2026-10-17
+    # (bucket-C item 6): the EntityAppearance/EntityCapabilities dispatch
+    # derives from REF-010 labels and emits ahead of its first consumer
+    # (emit._context_dicts_block); its bitfield imports derive with it
     "entity_management": [
         (
             "EntityManagementFamilyPdu",
@@ -2586,29 +2545,6 @@ class UnknownRadio(ModulationParametersRecord):
 # module key -> extra imports the curated blocks above need (the usage
 # scan cannot see inside verbatim source strings).
 MODULE_SOURCE_IMPORTS = {
-    "entity_information": {
-        "opendis.bitfields": [
-            "AirPlatformAppearance",
-            "AirPlatformCapabilities",
-            "CulturalFeatureAppearance",
-            "EnvironmentalAppearance",
-            "ExpendableAppearance",
-            "LandPlatformAppearance",
-            "LandPlatformCapabilities",
-            "LifeFormsAppearance",
-            "MunitionAppearance",
-            "MunitionCapabilities",
-            "RadioAppearance",
-            "SensorEmitterAppearance",
-            "SpacePlatformAppearance",
-            "SpacePlatformCapabilities",
-            "SubsurfacePlatformAppearance",
-            "SubsurfacePlatformCapabilities",
-            "SupplyAppearance",
-            "SurfacePlatformAppearance",
-            "SurfacePlatformCapabilities",
-        ],
-    },
     "warfare": {
         "opendis.record.base": [
             "StandardVariableRecord",

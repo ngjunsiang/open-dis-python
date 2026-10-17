@@ -202,6 +202,12 @@ class Attribute:
     count_for: str | None = None  # for hidden counts: the list field sized
     count_bits: bool = False  # hidden count is a bit count (BytesPayload)
     viewable: bool = False  # primitive-bound: parse may attach a curated view
+    view: str | None = None  # BitfieldRef: the attached view's local name
+    # (uid-keyed lookup over the generated single-layout tables; None on
+    # raw fields and the kind/domain-qualified context tables)
+    view_binding: str | None = None  # viewable: the absorbed XML class name
+    # (EntityAppearance/EntityCapabilities — context layouts keyed by the
+    # record's entityType; emits the kind-dispatch parse tail)
     pad: bool = False  # named padding primitive: field(init=False), grouped last
 
 

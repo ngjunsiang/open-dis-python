@@ -88,6 +88,50 @@ def _view_class_name(table: BitfieldTable) -> str:
     return overrides.BITFIELD_CLASS_NAMES.get(table.uid, _pascal(table.name))
 
 
+def direct_view_map(
+    tables: dict[int, BitfieldTable], context_uids: set[int], ov=overrides
+) -> dict[int, str]:
+    """uid -> local view name for the generated single-layout tables
+    (bucket-C item 5): every generated view that is NOT one of the
+    kind/domain-qualified context tables attaches wherever its uid
+    appears. Local-name aliases stay curated (naming choices)."""
+    out: dict[int, str] = {}
+    for uids in ov.BITFIELD_VIEWS.values():
+        for uid in uids:
+            if uid in context_uids:
+                continue
+            table = tables.get(uid)
+            if table is None:
+                raise SpecError(f"view uid {uid} has no REF-010 table")
+            out[uid] = ov.VIEW_LOCAL_ALIASES.get(uid, _view_class_name(table))
+    return out
+
+
+def context_view_layout(
+    tables: dict[int, BitfieldTable],
+    layout: dict,
+    enum_rows: dict[int, dict[int, str]],
+    kind_uid: int = 7,
+    domain_uid: int = 8,
+) -> dict:
+    """Emit-ready context dispatch data: per suffix, platform/kind rows
+    resolved to (view class name, uid), plus the uid-7/8 row labels the
+    dict comments quote."""
+    out: dict = {
+        suffix: {
+            where: {
+                value: (_view_class_name(tables[uid]), uid)
+                for value, uid in rows.items()
+            }
+            for where, rows in slots.items()
+        }
+        for suffix, slots in layout.items()
+    }
+    out["kind_labels"] = enum_rows.get(kind_uid, {})
+    out["domain_labels"] = enum_rows.get(domain_uid, {})
+    return out
+
+
 def emit_bitfield_module(
     module_key: str, uids: list[int], tables: dict, enum_names: dict, ov=overrides
 ) -> str:
