@@ -216,4 +216,8 @@ class RecordClass:
     is_sv: bool = False  # uid-66 Standard Variable record (SV_RECORDS):
     # writes its own recordType/recordLength header; frozen parse takes
     # the wire bytelength (§6.2.83)
+    # XML-declared identity constants (pduType/protocolFamily from
+    # initialValue + class id; uid-66 recordType from the SV signature's
+    # defaultValue): (var name, value expr, rider) in emission order
+    identity_vars: tuple[tuple[str, str, str | None], ...] = ()
     xml: Element | None = dc_field(default=None, repr=False, compare=False)

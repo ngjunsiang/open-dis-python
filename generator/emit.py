@@ -214,7 +214,9 @@ class _ModuleInfo:
             self.needs_logger |= overrides.CLASS_MEMBERS.get(
                 name, overrides.MemberSource("", False)
             ).needs_logger
-            for _, expr, _ in overrides.CLASS_VARS.get(name, []):
+            for _, expr, _ in list(rec.identity_vars) + overrides.CLASS_VARS.get(
+                name, []
+            ):
                 self.uses_classvar = True
                 self.uses_sym |= expr.startswith("sym.")
             for attr in rec.attributes:
@@ -480,7 +482,9 @@ def _emit_record(
     lines += _doc_block(doc, pad="    ")
     lines.append("")
 
-    class_vars = overrides.CLASS_VARS.get(rec.name)
+    # XML-declared identity constants (pduType/protocolFamily/recordType)
+    # lead; curated residuals (Table 25 symbols) follow
+    class_vars = list(rec.identity_vars) + (overrides.CLASS_VARS.get(rec.name) or [])
     if rec.is_pdu and class_vars:
         # PDU identity constants lead the body (pduType/protocolFamily)
         _emit_class_vars(class_vars, lines)

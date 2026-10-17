@@ -139,8 +139,43 @@ class Resolver:
             parent=parent,
             is_pdu=is_pdu,
             is_sv=is_sv,
+            identity_vars=self._identity_vars(el, name),
             xml=el,
         )
+
+    def _identity_vars(self, el, name: str) -> tuple[tuple[str, str, str | None], ...]:
+        """XML-declared identity ClassVars (bucket-C item 7): the class's
+        own ``<initialValue name="pduType|protocolFamily">`` says WHICH
+        constant the class carries; the numeric value is the class ``id``
+        (they agree across the roster; REF-010 owns the symbolic names).
+        Riders are SISO data the XML cannot say and stay curated."""
+        out: list[tuple[str, str, str | None]] = []
+        for iv in el.findall("initialValue"):
+            var = iv.get("name")
+            if var not in ("pduType", "protocolFamily"):
+                continue  # field defaults (e.g. padding) are not identity
+            raw = el.get("id")
+            if raw is None or not raw.isdigit():
+                raise SpecError(
+                    f"{name!r} declares {var} ({iv.get('value')!r}) but its "
+                    f"class id {raw!r} is not a number"
+                )
+            if var == "protocolFamily":
+                rider = self.ov.PROTOCOL_FAMILY_RIDERS.get(name)
+                if rider is None:
+                    raise SpecError(
+                        f"family {name!r} lacks a curated [UID 5] rider "
+                        "(PROTOCOL_FAMILY_RIDERS)"
+                    )
+            else:
+                rider = "[UID 4]"
+            out.append((var, raw, rider))
+        if len(out) > 1:
+            raise SpecError(
+                f"{name!r} declares multiple identity constants — "
+                "emission order would be ambiguous"
+            )
+        return tuple(out)
 
     def _link_counts(
         self,

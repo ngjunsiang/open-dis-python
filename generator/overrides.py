@@ -2383,6 +2383,11 @@ class MemberSource:
 # [UID] comments; the numeric values are SISO registry data absent from
 # the spec XML (the XML initialValues are symbolic — DisPduType.ENTITY_STATE).
 
+# Residual identity/constant ClassVars the XML cannot declare: the §6.1.8
+# Table 25 symbolic constants (symbolic_names) and — until the SV-signature
+# inference owns them — the uid-66 dispatch values. The pduType/
+# protocolFamily entries RETIRED 2026-10-17 (bucket-C item 7): the XML's
+# initialValue + class id now drive them mechanically (resolve).
 CLASS_VARS = {
     "SimulationAddress": [
         ("ALL_SITES", "sym.ALL_SITES", None),
@@ -2390,42 +2395,6 @@ CLASS_VARS = {
     ],
     "EntityIdentifier": [
         ("ALL_ENTITIES", "sym.ALL_ENTITIES", None),
-    ],
-    "EntityInformationFamilyPdu": [
-        ("protocolFamily", "1", "[UID 5] Entity Information/Interaction"),
-    ],
-    "EntityStatePdu": [
-        ("pduType", "1", "[UID 4]"),
-    ],
-    "CollisionPdu": [
-        ("pduType", "4", "[UID 4]"),
-    ],
-    # 66 per IEEE 1278.1-2012 §5.2.4 + Table 136 (the DIS-6-style "6" is
-    # Resupply Offer in the 2012 numbering; XML id, REF-010 uid 4, and the
-    # standard agree on 66)
-    "CollisionElasticPdu": [
-        ("pduType", "66", "[UID 4]"),
-    ],
-    "EntityStateUpdatePdu": [
-        ("pduType", "67", "[UID 4]"),
-    ],
-    "AttributePdu": [
-        ("pduType", "72", "[UID 4]"),
-    ],
-    "WarfareFamilyPdu": [
-        ("protocolFamily", "2", "[UID 5] Warfare"),
-    ],
-    "FirePdu": [
-        ("pduType", "2", "[UID 4]"),
-    ],
-    "DetonationPdu": [
-        ("pduType", "3", "[UID 4]"),
-    ],
-    "DirectedEnergyFirePdu": [
-        ("pduType", "68", "[UID 4]"),
-    ],
-    "EntityDamageStatusPdu": [
-        ("pduType", "69", "[UID 4]"),
     ],
     # uid-66 dispatch values (Table 44/46; the XML's recordType primitives
     # carry no value — registry data, mirrored in record/__init__.py)
@@ -2441,225 +2410,28 @@ CLASS_VARS = {
     "HighFidelityHAVEQUICKRadio": [
         ("recordType", "3000", "[UID 66] Variable Record Type"),
     ],
-    "LogisticsFamilyPdu": [
-        ("protocolFamily", "3", "[UID 5] Logistics"),
-    ],
-    "ServiceRequestPdu": [
-        ("pduType", "5", "[UID 4]"),
-    ],
-    "ResupplyOfferPdu": [
-        ("pduType", "6", "[UID 4]"),
-    ],
-    "ResupplyReceivedPdu": [
-        ("pduType", "7", "[UID 4]"),
-    ],
-    "ResupplyCancelPdu": [
-        ("pduType", "8", "[UID 4]"),
-    ],
-    "RepairCompletePdu": [
-        ("pduType", "9", "[UID 4]"),
-    ],
-    "RepairResponsePdu": [
-        ("pduType", "10", "[UID 4]"),
-    ],
-    "SimulationManagementFamilyPdu": [
-        ("protocolFamily", "5", "[UID 5] Simulation Management"),
-    ],
-    "CreateEntityPdu": [
-        ("pduType", "11", "[UID 4]"),
-    ],
-    "RemoveEntityPdu": [
-        ("pduType", "12", "[UID 4]"),
-    ],
-    "StartResumePdu": [
-        ("pduType", "13", "[UID 4]"),
-    ],
-    "StopFreezePdu": [
-        ("pduType", "14", "[UID 4]"),
-    ],
-    "AcknowledgePdu": [
-        ("pduType", "15", "[UID 4]"),
-    ],
-    "ActionRequestPdu": [
-        ("pduType", "16", "[UID 4]"),
-    ],
-    "ActionResponsePdu": [
-        ("pduType", "17", "[UID 4]"),
-    ],
-    "DataQueryPdu": [
-        ("pduType", "18", "[UID 4]"),
-    ],
-    "SetDataPdu": [
-        ("pduType", "19", "[UID 4]"),
-    ],
-    "DataPdu": [
-        ("pduType", "20", "[UID 4]"),
-    ],
-    "EventReportPdu": [
-        ("pduType", "21", "[UID 4]"),
-    ],
-    "CommentPdu": [
-        ("pduType", "22", "[UID 4]"),
-    ],
-    "CreateEntityReliablePdu": [
-        ("pduType", "51", "[UID 4]"),
-    ],
-    "RemoveEntityReliablePdu": [
-        ("pduType", "52", "[UID 4]"),
-    ],
-    "StartResumeReliablePdu": [
-        ("pduType", "53", "[UID 4]"),
-    ],
-    "StopFreezeReliablePdu": [
-        ("pduType", "54", "[UID 4]"),
-    ],
-    "AcknowledgeReliablePdu": [
-        ("pduType", "55", "[UID 4]"),
-    ],
-    "ActionRequestReliablePdu": [
-        ("pduType", "56", "[UID 4]"),
-    ],
-    "ActionResponseReliablePdu": [
-        ("pduType", "57", "[UID 4]"),
-    ],
-    "DataQueryReliablePdu": [
-        ("pduType", "58", "[UID 4]"),
-    ],
-    "SetDataReliablePdu": [
-        ("pduType", "59", "[UID 4]"),
-    ],
-    "DataReliablePdu": [
-        ("pduType", "60", "[UID 4]"),
-    ],
-    "EventReportReliablePdu": [
-        ("pduType", "61", "[UID 4]"),
-    ],
-    "CommentReliablePdu": [
-        ("pduType", "62", "[UID 4]"),
-    ],
-    "RecordReliablePdu": [
-        ("pduType", "63", "[UID 4]"),
-    ],
-    "SetRecordReliablePdu": [
-        ("pduType", "64", "[UID 4]"),
-    ],
-    "RecordQueryReliablePdu": [
-        ("pduType", "65", "[UID 4]"),
-    ],
-    "SimulationManagementWithReliabilityFamilyPdu": [
-        ("protocolFamily", "10", "[UID 5] Simulation Management with Reliability"),
-    ],
-    "RadioCommunicationsFamilyPdu": [
-        ("protocolFamily", "4", "[UID 5] Radio Communications"),
-    ],
-    "TransmitterPdu": [
-        ("pduType", "25", "[UID 4]"),
-    ],
-    "SignalPdu": [
-        ("pduType", "26", "[UID 4]"),
-    ],
-    "ReceiverPdu": [
-        ("pduType", "27", "[UID 4]"),
-    ],
-    "IntercomSignalPdu": [
-        ("pduType", "31", "[UID 4]"),
-    ],
-    "IntercomControlPdu": [
-        ("pduType", "32", "[UID 4]"),
-    ],
-    "InformationOperationsFamilyPdu": [
-        ("protocolFamily", "13", "[UID 5] Information Operations"),
-    ],
-    "InformationOperationsActionPdu": [
-        ("pduType", "70", "[UID 4]"),
-    ],
-    "InformationOperationsReportPdu": [
-        ("pduType", "71", "[UID 4]"),
-    ],
-    "EntityManagementFamilyPdu": [
-        ("protocolFamily", "7", "[UID 5] Entity Management"),
-    ],
-    "AggregateStatePdu": [
-        ("pduType", "33", "[UID 4]"),
-    ],
-    "IsGroupOfPdu": [
-        ("pduType", "34", "[UID 4]"),
-    ],
-    "TransferOwnershipPdu": [
-        ("pduType", "35", "[UID 4]"),
-    ],
-    "IsPartOfPdu": [
-        ("pduType", "36", "[UID 4]"),
-    ],
-    "SyntheticEnvironmentFamilyPdu": [
-        ("protocolFamily", "9", "[UID 5] Synthetic Environment"),
-    ],
-    "EnvironmentalProcessPdu": [
-        ("pduType", "41", "[UID 4]"),
-    ],
-    "GriddedDataPdu": [
-        ("pduType", "42", "[UID 4]"),
-    ],
-    "PointObjectStatePdu": [
-        ("pduType", "43", "[UID 4]"),
-    ],
-    "LinearObjectStatePdu": [
-        ("pduType", "44", "[UID 4]"),
-    ],
-    "ArealObjectStatePdu": [
-        ("pduType", "45", "[UID 4]"),
-    ],
-    "DistributedEmissionsRegenerationFamilyPdu": [
-        ("protocolFamily", "6", "[UID 5] Distributed Emissions Regeneration"),
-    ],
-    "ElectromagneticEmissionPdu": [
-        ("pduType", "23", "[UID 4]"),
-    ],
-    "DesignatorPdu": [
-        ("pduType", "24", "[UID 4]"),
-    ],
-    "UnderwaterAcousticPdu": [
-        ("pduType", "29", "[UID 4]"),
-    ],
-    "IdentificationFriendOrFoePdu": [
-        ("pduType", "28", "[UID 4]"),
-    ],
-    "SupplementalEmissionEntityStatePdu": [
-        ("pduType", "30", "[UID 4]"),
-    ],
-    "LiveEntityFamilyPdu": [
-        ("protocolFamily", "11", "[UID 5] Live Entity"),
-    ],
-    "TimeSpacePositionInformationPdu": [
-        ("pduType", "46", "[UID 4]"),
-    ],
-    "AppearancePdu": [
-        ("pduType", "47", "[UID 4]"),
-    ],
-    "ArticulatedPartsPdu": [
-        ("pduType", "48", "[UID 4]"),
-    ],
-    "LiveEntityFirePdu": [
-        ("pduType", "49", "[UID 4]"),
-    ],
-    "LiveEntityDetonationPdu": [
-        ("pduType", "50", "[UID 4]"),
-    ],
-    "MinefieldFamilyPdu": [
-        ("protocolFamily", "8", "[UID 5] Minefield"),
-    ],
-    "MinefieldStatePdu": [
-        ("pduType", "37", "[UID 4]"),
-    ],
-    "MinefieldQueryPdu": [
-        ("pduType", "38", "[UID 4]"),
-    ],
-    "MinefieldDataPdu": [
-        ("pduType", "39", "[UID 4]"),
-    ],
-    "MinefieldResponseNACKPdu": [
-        ("pduType", "40", "[UID 4]"),
-    ],
+}
+
+# canonical family class -> protocolFamily rider. The [UID 5] row labels
+# are SISO data (REF-010 uid 5); the slash/space spellings are not
+# derivable from the XML's symbolic names, so the labels stay curated.
+PROTOCOL_FAMILY_RIDERS = {
+    "EntityInformationFamilyPdu": "[UID 5] Entity Information/Interaction",
+    "WarfareFamilyPdu": "[UID 5] Warfare",
+    "LogisticsFamilyPdu": "[UID 5] Logistics",
+    "RadioCommunicationsFamilyPdu": "[UID 5] Radio Communications",
+    "SimulationManagementFamilyPdu": "[UID 5] Simulation Management",
+    "DistributedEmissionsRegenerationFamilyPdu": (
+        "[UID 5] Distributed Emissions Regeneration"
+    ),
+    "EntityManagementFamilyPdu": "[UID 5] Entity Management",
+    "MinefieldFamilyPdu": "[UID 5] Minefield",
+    "SyntheticEnvironmentFamilyPdu": "[UID 5] Synthetic Environment",
+    "SimulationManagementWithReliabilityFamilyPdu": (
+        "[UID 5] Simulation Management with Reliability"
+    ),
+    "LiveEntityFamilyPdu": "[UID 5] Live Entity",
+    "InformationOperationsFamilyPdu": "[UID 5] Information Operations",
 }
 
 # -- curated field furniture ----------------------------------------------
