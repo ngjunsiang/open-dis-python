@@ -17,7 +17,7 @@
 # generator: typed uid-66 decoder wiring; unknown record types
 # generator: Table 192's G = V x product of the per-axis point counts —
 # generator: axis descriptors dispatch on their trailing axisType byte
-# generator: layers 2-5 are length-driven — each begins with a Layer
+# generator: layers 2-5 presence is FLAG-declared — the Layer 1
 # generator: representation types 3-6 have no record format
 # generator: curated runtime placeholder — radio systems without an
 # generator: curated runtime placeholder — reserved/unknown antenna

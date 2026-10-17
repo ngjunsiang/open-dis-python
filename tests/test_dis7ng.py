@@ -1456,7 +1456,7 @@ class TestIFFPdu(unittest.TestCase):
         layer3.IFFFundamentalParameterDataRecord = [
             IFFData(recordType=1, recordLength=8, recordSpecificFields=b"\x01\x02")
         ]
-        pdu.iFFPduLayer3InterrogatorFormatData = layer3
+        pdu.iFFPduLayer3Data = layer3
         raw = pdu.to_bytes()
         # layer lengths include their own headers (§6.2.51)
         self.assertEqual(layer2.layerHeader.length, layer2.marshalledSize())
@@ -1464,15 +1464,10 @@ class TestIFFPdu(unittest.TestCase):
         parsed = createPdu(raw)
         self.assertIsInstance(parsed.iFFPduLayer2Data, IFFPduLayer2Data)
         self.assertIsInstance(
-            parsed.iFFPduLayer3InterrogatorFormatData,
+            parsed.iFFPduLayer3Data,
             IFFPduLayer3InterrogatorFormatData,
         )
-        self.assertIsNone(parsed.iFFPduLayer3TransponderFormatData)
-        got = (
-            parsed.iFFPduLayer3InterrogatorFormatData.IFFFundamentalParameterDataRecord[
-                0
-            ]
-        )
+        got = parsed.iFFPduLayer3Data.IFFFundamentalParameterDataRecord[0]
         self.assertEqual(got.recordSpecificFields, b"\x01\x02")
         self.assertEqual(parsed.to_bytes(), raw)
 
@@ -1482,15 +1477,40 @@ class TestIFFPdu(unittest.TestCase):
         pdu = self._layer1(10)
         layer3t = IFFPduLayer3TransponderFormatData()
         layer3t.layerHeader = LayerHeader(layerNumber=3)
-        pdu.iFFPduLayer3TransponderFormatData = layer3t
+        pdu.iFFPduLayer3Data = layer3t
         raw = pdu.to_bytes()
         parsed = createPdu(raw)
         self.assertIsInstance(
-            parsed.iFFPduLayer3TransponderFormatData,
+            parsed.iFFPduLayer3Data,
             IFFPduLayer3TransponderFormatData,
         )
-        self.assertIsNone(parsed.iFFPduLayer3InterrogatorFormatData)
         self.assertEqual(parsed.to_bytes(), raw)
+
+    def test_iff_cit_format_dispatch(self):
+        # Combined Interrogator/Transponders (12, 13) read their
+        # Change/Options Transponder/Interrogator Indicator (Table B.5
+        # bit 4, B.5.13/.14): indicator 0 -> transponder format,
+        # indicator 1 -> interrogator format. One field per layer
+        # (v0.12.0 spec model); both sides round-trip.
+        for indicator, format_cls in (
+            (0, IFFPduLayer3TransponderFormatData),
+            (1 << 4, IFFPduLayer3InterrogatorFormatData),
+        ):
+            pdu = self._layer1(12)
+            # SystemIdentifier is frozen — replace it wholesale
+            pdu.systemID = SystemIdentifier(
+                systemType=12,
+                systemName=1,
+                systemMode=1,
+                changeOptions=indicator,
+            )
+            layer3 = format_cls()
+            layer3.layerHeader = LayerHeader(layerNumber=3)
+            pdu.iFFPduLayer3Data = layer3
+            raw = pdu.to_bytes()
+            parsed = createPdu(raw)
+            self.assertIsInstance(parsed.iFFPduLayer3Data, format_cls)
+            self.assertEqual(parsed.to_bytes(), raw)
 
     def test_iff_layer5_round_trip(self):
         pdu = self._layer1(1)

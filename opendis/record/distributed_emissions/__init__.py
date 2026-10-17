@@ -1798,11 +1798,14 @@ class IdentificationFriendOrFoePdu(DistributedEmissionsRegenerationFamilyPdu):
     specific other electronic systems. See §5.7.6. Canonical descriptive
     name; IFFPdu is an alias.
 
-    Layer 1 is always present; layers 2-5 are length-driven optionals — each
-    begins with a Layer Header whose Length includes the header (Table 165),
-    so parse consumes layers until the PDU length is exhausted. Layers 3 and
-    4 each have interrogator and transponder formats; the Layer 1 System
-    Type field [UID 82] picks the format.
+    Layer 1 is always present; layers 2-5 are optional, presence declared by
+    the Layer 1 Fundamental Operational Data Information Layers bits
+    (§6.2.39 c, §6.2.45 a/Table 74 — bit N = Layer N; in the spec XML since
+    v0.12.0) and each self-framed by a Layer Header whose Length includes
+    the header (Table 165) — parse reads while wire length remains. Layers 3
+    and 4 each have interrogator and transponder formats, picked by the
+    Layer 1 System Type [UID 82] plus the Combined Interrogator/Transponder
+    Change/Options indicator (Table B.5 bit 4, B.5.13/.14).
     """
 
     pduType: ClassVar[int] = 28  # [UID 4]
@@ -1817,10 +1820,12 @@ class IdentificationFriendOrFoePdu(DistributedEmissionsRegenerationFamilyPdu):
         default_factory=FundamentalOperationalData
     )
     iFFPduLayer2Data: IFFPduLayer2Data | None = None
-    iFFPduLayer3TransponderFormatData: IFFPduLayer3TransponderFormatData | None = None
-    iFFPduLayer3InterrogatorFormatData: IFFPduLayer3InterrogatorFormatData | None = None
-    iFFPduLayer4InterrogatorFormatData: IFFPduLayer4InterrogatorFormatData | None = None
-    iFFPduLayer4TransponderFormatData: IFFPduLayer4TransponderFormatData | None = None
+    iFFPduLayer3Data: (
+        IFFPduLayer3InterrogatorFormatData | IFFPduLayer3TransponderFormatData | None
+    ) = None
+    iFFPduLayer4Data: (
+        IFFPduLayer4InterrogatorFormatData | IFFPduLayer4TransponderFormatData | None
+    ) = None
     iFFPduLayer5Data: IFFPduLayer5Data | None = None
 
     def _layersInOrder(self) -> list:
@@ -1830,14 +1835,31 @@ class IdentificationFriendOrFoePdu(DistributedEmissionsRegenerationFamilyPdu):
             layer
             for layer in (
                 self.iFFPduLayer2Data,
-                self.iFFPduLayer3TransponderFormatData,
-                self.iFFPduLayer3InterrogatorFormatData,
-                self.iFFPduLayer4TransponderFormatData,
-                self.iFFPduLayer4InterrogatorFormatData,
+                self.iFFPduLayer3Data,
+                self.iFFPduLayer4Data,
                 self.iFFPduLayer5Data,
             )
             if layer is not None
         ]
+
+    def _layerIsInterrogator(self, layerNumber: int) -> bool:
+        """Layer 3/4 format dispatch ([UID 82] + the CIT indicator).
+
+        Interrogator sides: Mark XIIA Interrogator (6) and Mode 5
+        Interrogator (7, Layer 3) or Mode S Interrogator (8, Layer 4); the
+        Combined Interrogator/Transponders (12, 13) read their
+        Change/Options Transponder/Interrogator Indicator (Table B.5 bit 4,
+        B.5.13/.14) — Interrogator (1) sides with the interrogator format;
+        everything else is the transponder format, the true complement
+        (Layers 3/4 are Conditionally Required for any capable system type,
+        B.5.1.1 b).
+        """
+        systemType = int(self.systemID.systemType)
+        if systemType in (6, 7 if layerNumber == 3 else 8):
+            return True
+        if systemType in (12, 13):
+            return bool((int(self.systemID.changeOptions) >> 4) & 1)
+        return False
 
     def _marshalledBodySize(self):
         size = (
@@ -1872,13 +1894,14 @@ class IdentificationFriendOrFoePdu(DistributedEmissionsRegenerationFamilyPdu):
         self.systemDesignator = inputStream.read_uint8()
         self.systemSpecificData = inputStream.read_uint8()
         self.fundamentalParameters.parse(inputStream)
-        # generator: layers 2-5 are length-driven — each begins with a Layer
-        # Header whose Length includes the header (Table 165), so the loop runs
-        # on the remaining wire length, not a flag; the Layer 1 System Type
-        # field picks the Layer 3/4 format ([UID 82]: interrogator sides are
-        # Mark XIIA Interrogator 6, Mode 5 Interrogator 7, Mode S Interrogator
-        # 8, and the Combined Interrogator/Transponders 12-13); parseLayer
-        # takes the header fields the dispatch already consumed
+        # generator: layers 2-5 presence is FLAG-declared — the Layer 1
+        # Fundamental Operational Data Information Layers bits, one per layer
+        # (6.2.39 c, 6.2.45 a/Table 74; declared in the XML since v0.12.0) —
+        # and each layer self-frames with a Layer Header whose Length includes
+        # the header (Table 165), so the loop reads while wire length remains.
+        # Format dispatch: _layerIsInterrogator (System Type [UID 82] plus the
+        # Combined Interrogator/Transponder Change/Options indicator, Table B.5
+        # bit 4); parseLayer takes the header fields the dispatch consumed
         remaining = self.header._wireLength - 12 - 48
         while remaining >= 4:
             layerNumber = inputStream.read_uint8()
@@ -1889,27 +1912,27 @@ class IdentificationFriendOrFoePdu(DistributedEmissionsRegenerationFamilyPdu):
                     inputStream, layerNumber, layerSpecificInformation, length
                 )
             elif layerNumber == 3:
-                if int(self.systemID.systemType) in (6, 7, 12, 13):
-                    self.iFFPduLayer3InterrogatorFormatData = (
+                if self._layerIsInterrogator(3):
+                    self.iFFPduLayer3Data = (
                         IFFPduLayer3InterrogatorFormatData.parseLayer(
                             inputStream, layerNumber, layerSpecificInformation, length
                         )
                     )
                 else:
-                    self.iFFPduLayer3TransponderFormatData = (
+                    self.iFFPduLayer3Data = (
                         IFFPduLayer3TransponderFormatData.parseLayer(
                             inputStream, layerNumber, layerSpecificInformation, length
                         )
                     )
             elif layerNumber == 4:
-                if int(self.systemID.systemType) in (6, 8, 12, 13):
-                    self.iFFPduLayer4InterrogatorFormatData = (
+                if self._layerIsInterrogator(4):
+                    self.iFFPduLayer4Data = (
                         IFFPduLayer4InterrogatorFormatData.parseLayer(
                             inputStream, layerNumber, layerSpecificInformation, length
                         )
                     )
                 else:
-                    self.iFFPduLayer4TransponderFormatData = (
+                    self.iFFPduLayer4Data = (
                         IFFPduLayer4TransponderFormatData.parseLayer(
                             inputStream, layerNumber, layerSpecificInformation, length
                         )
