@@ -582,14 +582,10 @@ FIELD_SHAPES = {
     ("RecordQueryReliablePdu", "recordIDs"): ir.PrimitiveList(
         element="uint32", count_field="numberOfRecords", element_uid=66
     ),
-    # Record-R / Set Record-R: flat record-set lists — the XML's
-    # RecordSpecification wrapper adds a count the PDU already carries
-    ("RecordReliablePdu", "recordSets"): ir.ObjectList(
-        element="RecordSpecificationElement", count_field="numberOfRecordSets"
-    ),
-    ("SetRecordReliablePdu", "recordSets"): ir.ObjectList(
-        element="RecordSpecificationElement", count_field="numberOfRecordSets"
-    ),
+    # Record-R / Set Record-R recordSets RETIRED 2026-10-17: spec
+    # v0.12.5's wrapper-as-element fixes classRef the element as
+    # RecordSpecificationElement natively (the wrapper layer the
+    # bridge peeled off no longer exists in the XML)
     # Data Query-R: datum-ID lists like the §7.5.9 ruling
     ("DataQueryReliablePdu", "fixedDatumRecords"): ir.PrimitiveList(
         element="uint32", count_field="numberOfFixedDatumRecords", element_uid=66
