@@ -215,7 +215,9 @@ def _guard_dispatch_fields(rec: ir.RecordClass) -> None:
         (
             a.name
             for a in rec.attributes
-            if _is_optional(a) or _is_record_group(a.shape)
+            if _is_optional(a)
+            or _is_record_group(a.shape)
+            or isinstance(a.shape, ir.OptionalRecord)
         ),
         None,
     )
@@ -1109,7 +1111,11 @@ def _marshalled_expr(
         parts.append(str(SV_HEADER_BYTES))
     for attr in (wire if wire is not None else rec.attributes):
         shape = attr.shape
-        if _is_optional(attr) or _is_record_group(shape):
+        if (
+            _is_optional(attr)
+            or _is_record_group(shape)
+            or isinstance(shape, ir.OptionalRecord)
+        ):
             raise SpecError(
                 f"{attr.name!r} on {rec.name!r} dispatches on presentIf/when= — "
                 "its wire size is curated (METHOD_BODIES)"
@@ -1160,7 +1166,11 @@ def _marshalled_expr(
 
 def _serialize_line(owner: str, attr: ir.Attribute) -> list[str]:
     shape = attr.shape
-    if _is_optional(attr) or _is_record_group(shape):
+    if (
+        _is_optional(attr)
+        or _is_record_group(shape)
+        or isinstance(shape, ir.OptionalRecord)
+    ):
         raise SpecError(
             f"{attr.name!r} on {owner!r} dispatches on presentIf/when= — "
             "its serialize is curated (METHOD_BODIES)"
@@ -1239,7 +1249,11 @@ def _parse_pieces(
         stmts.append(f"        super({rec.name}, self)._parseBody(inputStream)")
     for attr in (wire if wire is not None else rec.attributes):
         shape = attr.shape
-        if _is_optional(attr) or _is_record_group(shape):
+        if (
+            _is_optional(attr)
+            or _is_record_group(shape)
+            or isinstance(shape, ir.OptionalRecord)
+        ):
             raise SpecError(
                 f"{attr.name!r} on {rec.name!r} dispatches on presentIf/when= — "
                 "its parse is curated (METHOD_BODIES)"

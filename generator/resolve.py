@@ -332,6 +332,15 @@ class Resolver:
                     (count is None or not count.hidden)
                     and count_name not in overridden
                     and a.name not in overridden
+                    # registry lists may carry a curated count property
+                    # (Transmitter's VTP list: the FIELD_DROPS'd count's
+                    # docstring is hand-ruled) — the registry decode owns
+                    # the wire, the contract exemption is deliberate
+                    and not (
+                        count is None
+                        and isinstance(shape, ir.ObjectList)
+                        and (owner, a.name) in self.ov.REGISTRY_LISTS
+                    )
                 ):
                     if count is not None and count.name in hidden_forced:
                         pass  # payload count: hidden below
@@ -550,6 +559,29 @@ class Resolver:
                 f"attribute {name!r} mixes type tags "
                 f"{sorted(by_tag)} — not a legal variant group"
             )
+        # bucket-C item 1: a record group (or single when-guarded classRef)
+        # NOT driven by presentIf is the Transmitter PDU's count-driven
+        # parameter-record form when its members share a §-home base —
+        # an optional single record on that home (presence rides the
+        # hidden byte-length count, selection the first-true-wins terms;
+        # the dispatch itself is curated METHOD_BODIES). Exhaustive-when
+        # groups without a home (the LE identifier switches) keep the
+        # union form.
+        if not attr_el.get("presentIf"):
+            if (
+                isinstance(shape, ir.VariantGroup)
+                and shape.tag == "classRef"
+                and len(shape.members) > 1
+            ):
+                shape = self._home_optional_group(shape, name)
+            elif isinstance(shape, ir.ClassRef) and shape.when:
+                parent = self._xml_parent(shape.target)
+                if parent is None or parent not in self.ov.KERNEL_RECORD_BASES:
+                    raise SpecError(
+                        f"when-guarded classRef {name!r} on {owner!r} selects "
+                        f"{shape.target!r} outside a §-home base — unsupported"
+                    )
+                shape = ir.OptionalRecord(target=parent)
         hidden = (
             attr_el.get("hidden") == "true"
             or (
@@ -579,6 +611,22 @@ class Resolver:
             view=view,
             view_binding=view_binding,
         )
+
+    def _xml_parent(self, canonical: str) -> str | None:
+        """Canonical XML parent (inheritsFrom) of a canonical class, or
+        None for root-parented classes."""
+        el = self.xml_classes.get(self.by_canonical.get(canonical, canonical))
+        if el is None or el.get("inheritsFrom") in (None, "root"):
+            return None
+        return self.canonical_name(el.get("inheritsFrom"))
+
+    def _home_optional_group(self, group: ir.VariantGroup, owner: str) -> ir.Shape:
+        parents = {self._xml_parent(m.target) for m in group.members}
+        if len(parents) == 1:
+            home = next(iter(parents))
+            if home is not None and home in self.ov.KERNEL_RECORD_BASES:
+                return ir.OptionalRecord(target=home)
+        return group
 
     def _variant_group(self, tag, group, owner: str) -> ir.VariantGroup:
         members = tuple(self._shape(k) for k in group)

@@ -362,18 +362,15 @@ FIELD_DROPS = {
     # §9.3.2: subprotocolNumber rides the header PDU Status byte; the pad
     # byte is the header's own (composed header — LE PDU adds zero bytes)
     "LiveEntityFamilyPdu": ["subprotocolNumber", "padding"],
-    # the Annex C XML (spec repo annex-c-mp-ap) now declares the single
-    # MP/AP records as variant groups and the VTP list natively; the
-    # curated shapes below (EXTRA_FIELDS OptionalRecord/ObjectList +
-    # METHOD_BODIES dispatch) still own the field — the variant-group
-    # selection is beyond mechanical resolution
+    # TransmitterPdu: the parameter-records section (MP/AP optional
+    # records + the VTP registry list) resolves natively since spec
+    # v0.12.9 — only the three hidden counts stay dropped: their
+    # properties are curated CLASS_MEMBERS (the byte-length docstrings
+    # are hand-ruled, not the XML comments)
     "TransmitterPdu": [
         "variableTransmitterParameterCount",
         "modulationParameterCount",
         "antennaPatternCount",
-        "modulationParameters",
-        "antennaPattern",
-        "variableTransmitterParameters",
     ],
     # SV records: the header fields are the kernel base's contract —
     # recordType is the registry ClassVar, recordLength the derived
@@ -428,32 +425,12 @@ GLOBAL_FIELD_RENAMES = {
 # (CommentPdu: the fixed-datum count exists without a list; a malformed
 # nonzero count would desynchronize parse — the list keeps such
 # datagrams round-tripping byte-exact).
-EXTRA_FIELDS = {
-    # TransferOwnershipPdu / CommentPdu / CommentReliablePdu extras RETIRED
-    # 2026-10-17: the spec-corrections wave (v0.11.0, PR #6) declares the
-    # record-set list and both datum lists natively — the curated extras
-    # duplicated them.
-    "TransmitterPdu": [
-        (
-            "modulationParameters",
-            ir.OptionalRecord(target="ModulationParametersRecord"),
-            "The Modulation Parameters record (single, Annex C; absent as None)",
-        ),
-        (
-            "antennaPattern",
-            ir.OptionalRecord(target="AntennaPatternRecord"),
-            "The Antenna Pattern record (single, §6.2.8; absent as None)",
-        ),
-        (
-            "variableTransmitterParameters",
-            ir.ObjectList(
-                element="StandardVariableRecord",
-                count_field="variableTransmitterParameterCount",
-            ),
-            "Variable Transmitter Parameters (uid-66 records, registry decode)",
-        ),
-    ],
-}
+# EXTRA_FIELDS is now EMPTY. The TransmitterPdu extras RETIRED 2026-10-17
+# (bucket-C item 1, spec v0.12.9): the XML declares the parameter-records
+# section natively — the MP/AP variant groups resolve as optional records
+# on their §-home bases (resolve._home_optional_group), the VTP list at
+# the §6.2.95 home element.
+EXTRA_FIELDS = {}
 
 # (class, XML field) -> (annotation, default, rider|None) for fields whose
 # shape is fully curated. The LE/IFF presentIf entries RETIRED 2026-10-17
