@@ -22,13 +22,5 @@ uint32 = int
 uint64 = int
 float32 = float
 float64 = float
-struct8 = int
-struct16 = int
-struct32 = int
 char8 = str
 char16 = str
-
-# Non-octet-size types for bitfields
-bf_enum = int
-bf_int = int
-bf_uint = int

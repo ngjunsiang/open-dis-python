@@ -10,18 +10,14 @@ from opendis.types import (
     enum8,
     enum16,
     enum32,
-    bf_enum,
-    bf_int,
-    bf_uint,
     float32,
     float64,
-    struct8,
     uint8,
     uint16,
     uint32,
 )
 
-from . import base, bitfield, symbolic_names as sym
+from . import base, symbolic_names as sym
 from .base import StandardVariableRecord
 from .common import *
 from .radio import *
