@@ -51,3 +51,41 @@ The docs will be generated in the `docs/opendis` folder.
 ## Poetry setup
 1. `poetry install` or `poetry update`
 1. `poetry run python examples/dis_receiver.py` or `poetry shell` && `python examples/dis_receiver.py`
+
+## Code generation (dis7-ng)
+
+The `opendis.record` and `opendis.bitfields` modules are generated
+output, regenerated from the pinned
+[submodules/open-dis-python-generator](https://github.com/ngjunsiang/open-dis-python-generator)
+submodule (which owns its own inputs: the corrected spec XML and the
+REF-010 data package, each pinned in turn):
+
+```bash
+git submodule update --init
+git -C submodules/open-dis-python-generator submodule update --init
+PYTHONPATH=submodules/open-dis-python-generator \
+    .venv/bin/python -m generator    # writes ./generated (staging only)
+cp generated/record/common.py opendis/record/    # converge after
+cp -r generated/record/*/ opendis/record/        # reviewing the
+cp generated/bitfields/*.py opendis/bitfields/   # diff
+```
+
+The acceptance harnesses (byte-identity, parity, stamp/corpus) live in
+the generator repo under `generator/verification/` and locate this
+checkout automatically:
+
+```bash
+.venv/bin/python submodules/open-dis-python-generator/generator/verification/byte_identity.py
+```
+
+## Optional: rich REF-010 enums
+
+Parsing yields plain ints for SISO enumerations by default. The
+optional `ref010` extra installs
+[siso-ref-010-python](https://github.com/ngjunsiang/siso-ref-010-python)
+(the REF-010 data package), which can feed the existing enum hook so
+parsed values resolve to rich enum members:
+
+```bash
+poetry install --extras ref010    # or, from a source install: pip install ".[ref010]"
+```
