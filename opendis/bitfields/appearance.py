@@ -9,10 +9,9 @@ the same uint32 wire field. Kinds without a capability table
 (life forms, environmental, cultural, supply, radio, expendable,
 sensor/emitter) keep the raw integer.
 
-# generator: layouts and bit positions are mechanical output of the
-# SISO-REF-010 bitfield tables; the row-name to camelCase property
-# sanitization ("Spot/Search Light #1 On" -> spotSearchLight1On) needs a
-# name-mapping table in the generator.
+# generator: layouts, bit positions and property names are mechanical
+# output consumed from the pinned siso-ref-010-python package (which
+# derives them from the SISO-REF-010 XML); nothing here renames rows.
 """
 
 from typing import ClassVar
@@ -56,7 +55,7 @@ class LandPlatformAppearance(BitfieldView):
         ("mobilityKilled", 1, 1, None),
         ("firePowerKilled", 2, 1, None),
         ("damage", 3, 2, 379),
-        ("isSmokeEmitting", 5, 1, None),
+        ("isSmokeEmanating", 5, 1, None),
         ("isEngineEmittingSmoke", 6, 1, None),
         ("trailingDustCloud", 7, 2, 381),
         ("primaryHatch", 9, 3, 382),
@@ -115,11 +114,11 @@ class LandPlatformAppearance(BitfieldView):
         self._setBits(3, 2, value)
 
     @property
-    def isSmokeEmitting(self) -> bool:
+    def isSmokeEmanating(self) -> bool:
         return self._getBit(5)
 
-    @isSmokeEmitting.setter
-    def isSmokeEmitting(self, on: bool) -> None:
+    @isSmokeEmanating.setter
+    def isSmokeEmanating(self, on: bool) -> None:
         self._setBit(5, on)
 
     @property
@@ -309,9 +308,9 @@ class AirPlatformAppearance(BitfieldView):
     _FIELDS: ClassVar[tuple[tuple[str, int, int, int | None], ...]] = (
         ("paintScheme", 0, 1, 378),
         ("propulsionKilled", 1, 1, None),
-        ("nvgMode", 2, 1, 400),
+        ("nVGMode", 2, 1, 400),
         ("damage", 3, 2, 379),
-        ("isSmokeEmitting", 5, 1, None),
+        ("isSmokeEmanating", 5, 1, None),
         ("isEngineEmittingSmoke", 6, 1, None),
         ("trailingEffects", 7, 2, 381),
         ("canopyTroopDoor", 9, 3, 387),
@@ -354,11 +353,11 @@ class AirPlatformAppearance(BitfieldView):
         self._setBit(1, on)
 
     @property
-    def nvgMode(self) -> bool:
+    def nVGMode(self) -> bool:
         return self._getBit(2)
 
-    @nvgMode.setter
-    def nvgMode(self, on: bool) -> None:
+    @nVGMode.setter
+    def nVGMode(self, on: bool) -> None:
         self._setBit(2, on)
 
     @property
@@ -371,11 +370,11 @@ class AirPlatformAppearance(BitfieldView):
         self._setBits(3, 2, value)
 
     @property
-    def isSmokeEmitting(self) -> bool:
+    def isSmokeEmanating(self) -> bool:
         return self._getBit(5)
 
-    @isSmokeEmitting.setter
-    def isSmokeEmitting(self, on: bool) -> None:
+    @isSmokeEmanating.setter
+    def isSmokeEmanating(self, on: bool) -> None:
         self._setBit(5, on)
 
     @property
@@ -751,7 +750,7 @@ class SubsurfacePlatformAppearance(BitfieldView):
         ("snorkel", 17, 1, None),
         ("radarMast", 18, 1, None),
         ("commsMast", 19, 1, None),
-        ("esmMast", 20, 1, None),
+        ("eSMMast", 20, 1, None),
         ("isFrozen", 21, 1, None),
         ("powerPlantOn", 22, 1, None),
         ("state", 23, 1, 386),
@@ -859,11 +858,11 @@ class SubsurfacePlatformAppearance(BitfieldView):
         self._setBit(19, on)
 
     @property
-    def esmMast(self) -> bool:
+    def eSMMast(self) -> bool:
         return self._getBit(20)
 
-    @esmMast.setter
-    def esmMast(self, on: bool) -> None:
+    @eSMMast.setter
+    def eSMMast(self, on: bool) -> None:
         self._setBit(20, on)
 
     @property
@@ -1137,8 +1136,8 @@ class LifeFormsAppearance(BitfieldView):
         ("signalSmokeInUse", 11, 1, None),
         ("flashLightsOn", 12, 1, None),
         ("signalMirrorInUse", 13, 1, None),
-        ("irStrobeOn", 14, 1, None),
-        ("irIlluminatorOn", 15, 1, None),
+        ("iRStrobeOn", 14, 1, None),
+        ("iRIlluminatorOn", 15, 1, None),
         ("lifeFormPosture", 16, 4, 392),
         ("isSmokingCigarette", 20, 1, None),
         ("isFrozen", 21, 1, None),
@@ -1219,19 +1218,19 @@ class LifeFormsAppearance(BitfieldView):
         self._setBit(13, on)
 
     @property
-    def irStrobeOn(self) -> bool:
+    def iRStrobeOn(self) -> bool:
         return self._getBit(14)
 
-    @irStrobeOn.setter
-    def irStrobeOn(self, on: bool) -> None:
+    @iRStrobeOn.setter
+    def iRStrobeOn(self, on: bool) -> None:
         self._setBit(14, on)
 
     @property
-    def irIlluminatorOn(self) -> bool:
+    def iRIlluminatorOn(self) -> bool:
         return self._getBit(15)
 
-    @irIlluminatorOn.setter
-    def irIlluminatorOn(self, on: bool) -> None:
+    @iRIlluminatorOn.setter
+    def iRIlluminatorOn(self, on: bool) -> None:
         self._setBit(15, on)
 
     @property
@@ -1898,7 +1897,7 @@ class LandPlatformCapabilities(BitfieldView):
         ("recovery", 2, 1, None),
         ("repair", 3, 1, None),
         ("slingLoadable", 6, 1, None),
-        ("iedPresenceIndicator", 7, 1, None),
+        ("iEDPresenceIndicator", 7, 1, None),
         ("taskOrganizable", 8, 1, None),
     )
 
@@ -1943,11 +1942,11 @@ class LandPlatformCapabilities(BitfieldView):
         self._setBit(6, on)
 
     @property
-    def iedPresenceIndicator(self) -> bool:
+    def iEDPresenceIndicator(self) -> bool:
         return self._getBit(7)
 
-    @iedPresenceIndicator.setter
-    def iedPresenceIndicator(self, on: bool) -> None:
+    @iEDPresenceIndicator.setter
+    def iEDPresenceIndicator(self, on: bool) -> None:
         self._setBit(7, on)
 
     @property
@@ -1968,12 +1967,12 @@ class AirPlatformCapabilities(BitfieldView):
         ("fuelSupply", 1, 1, None),
         ("recovery", 2, 1, None),
         ("repair", 3, 1, None),
-        ("adsB", 4, 1, None),
+        ("aDSB", 4, 1, None),
         ("slingLoadCarrier", 5, 1, None),
         ("slingLoadable", 6, 1, None),
-        ("iedPresenceIndicator", 7, 1, None),
+        ("iEDPresenceIndicator", 7, 1, None),
         ("taskOrganizable", 8, 1, None),
-        ("laircm", 9, 1, None),
+        ("lAIRCM", 9, 1, None),
     )
 
     @property
@@ -2009,11 +2008,11 @@ class AirPlatformCapabilities(BitfieldView):
         self._setBit(3, on)
 
     @property
-    def adsB(self) -> bool:
+    def aDSB(self) -> bool:
         return self._getBit(4)
 
-    @adsB.setter
-    def adsB(self, on: bool) -> None:
+    @aDSB.setter
+    def aDSB(self, on: bool) -> None:
         self._setBit(4, on)
 
     @property
@@ -2033,11 +2032,11 @@ class AirPlatformCapabilities(BitfieldView):
         self._setBit(6, on)
 
     @property
-    def iedPresenceIndicator(self) -> bool:
+    def iEDPresenceIndicator(self) -> bool:
         return self._getBit(7)
 
-    @iedPresenceIndicator.setter
-    def iedPresenceIndicator(self, on: bool) -> None:
+    @iEDPresenceIndicator.setter
+    def iEDPresenceIndicator(self, on: bool) -> None:
         self._setBit(7, on)
 
     @property
@@ -2049,11 +2048,11 @@ class AirPlatformCapabilities(BitfieldView):
         self._setBit(8, on)
 
     @property
-    def laircm(self) -> bool:
+    def lAIRCM(self) -> bool:
         return self._getBit(9)
 
-    @laircm.setter
-    def laircm(self, on: bool) -> None:
+    @lAIRCM.setter
+    def lAIRCM(self, on: bool) -> None:
         self._setBit(9, on)
 
 
@@ -2070,7 +2069,7 @@ class SurfacePlatformCapabilities(BitfieldView):
         ("recovery", 2, 1, None),
         ("repair", 3, 1, None),
         ("slingLoadable", 6, 1, None),
-        ("iedPresenceIndicator", 7, 1, None),
+        ("iEDPresenceIndicator", 7, 1, None),
         ("taskOrganizable", 8, 1, None),
     )
 
@@ -2115,11 +2114,11 @@ class SurfacePlatformCapabilities(BitfieldView):
         self._setBit(6, on)
 
     @property
-    def iedPresenceIndicator(self) -> bool:
+    def iEDPresenceIndicator(self) -> bool:
         return self._getBit(7)
 
-    @iedPresenceIndicator.setter
-    def iedPresenceIndicator(self, on: bool) -> None:
+    @iEDPresenceIndicator.setter
+    def iEDPresenceIndicator(self, on: bool) -> None:
         self._setBit(7, on)
 
     @property
@@ -2144,7 +2143,7 @@ class SubsurfacePlatformCapabilities(BitfieldView):
         ("recovery", 2, 1, None),
         ("repair", 3, 1, None),
         ("slingLoadable", 6, 1, None),
-        ("iedPresenceIndicator", 7, 1, None),
+        ("iEDPresenceIndicator", 7, 1, None),
         ("taskOrganizable", 8, 1, None),
     )
 
@@ -2189,11 +2188,11 @@ class SubsurfacePlatformCapabilities(BitfieldView):
         self._setBit(6, on)
 
     @property
-    def iedPresenceIndicator(self) -> bool:
+    def iEDPresenceIndicator(self) -> bool:
         return self._getBit(7)
 
-    @iedPresenceIndicator.setter
-    def iedPresenceIndicator(self, on: bool) -> None:
+    @iEDPresenceIndicator.setter
+    def iEDPresenceIndicator(self, on: bool) -> None:
         self._setBit(7, on)
 
     @property
@@ -2260,13 +2259,13 @@ class MunitionCapabilities(BitfieldView):
 
     _WIDTH: ClassVar[int] = 32
     _FIELDS: ClassVar[tuple[tuple[str, int, int, int | None], ...]] = (
-        ("iedPresenceIndicator", 7, 1, None),
+        ("iEDPresenceIndicator", 7, 1, None),
     )
 
     @property
-    def iedPresenceIndicator(self) -> bool:
+    def iEDPresenceIndicator(self) -> bool:
         return self._getBit(7)
 
-    @iedPresenceIndicator.setter
-    def iedPresenceIndicator(self, on: bool) -> None:
+    @iEDPresenceIndicator.setter
+    def iEDPresenceIndicator(self, on: bool) -> None:
         self._setBit(7, on)

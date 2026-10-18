@@ -1,14 +1,15 @@
 """CLI: generate record + bitfield modules from the corrected XML set.
 
 Usage (repo root, project venv, submodules initialized):
-    .venv/bin/python -m generator [--xml-dir ...] [--ref010 ...] [--out generated]
+    .venv/bin/python -m generator [--xml-dir ...] [--out generated]
 
-Default inputs are the pinned source-of-truth submodules (ruled
-2026-10-15): submodules/open-dis-spec-xml/xml is the canonical final
-word on DIS 7 wire discrepancies; submodules/siso-ref-010-xml supplies
-the bitfield layouts. The black post-pass runs via the invoking
-interpreter when available; the generator itself is stdlib-only by
-ruling. Output goes to the staging directory only — never into
+Inputs are the pinned sources of truth (ruled 2026-10-15; REF-010
+sourcing re-ruled 2026-10-18): submodules/open-dis-spec-xml/xml is the
+canonical final word on DIS 7 wire discrepancies; the pinned
+siso-ref-010-python dependency supplies the bitfield layouts, enum
+table names and dispatch labels (its wire pin is cross-checked at
+load). The black post-pass runs via the invoking interpreter when
+available. Output goes to the staging directory only — never into
 opendis/ (transition-oracle ruling).
 """
 
@@ -27,7 +28,6 @@ from .xmlload import load_spec
 
 REPO = Path(__file__).resolve().parents[1]
 DEFAULT_XML_DIR = REPO / "submodules" / "open-dis-spec-xml" / "xml"
-DEFAULT_REF010 = REPO / "submodules" / "siso-ref-010-xml" / "SISO-REF-010.xml"
 
 
 def _write(out_root: Path, rel: str, src: str) -> Path:
@@ -47,11 +47,6 @@ def main(argv: list[str] | None = None) -> int:
         help="corrected XML set (default: the pinned spec submodule)",
     )
     ap.add_argument(
-        "--ref010",
-        default=str(DEFAULT_REF010),
-        help="SISO-REF-010.xml (default: the pinned mirror submodule)",
-    )
-    ap.add_argument(
         "--out",
         default="generated",
         help="staging output directory (never writes opendis/)",
@@ -63,7 +58,7 @@ def main(argv: list[str] | None = None) -> int:
     # single-layout tables attach by uid; the kind/domain-qualified
     # EntityAppearance/EntityCapabilities layouts become the context
     # dispatch the entity_information module emits
-    tables, enum_names, enum_rows = ref010.load_ref010(args.ref010)
+    tables, enum_names, enum_rows = ref010.load_ref010()
     candidates = {u for uids in overrides.BITFIELD_VIEWS.values() for u in uids}
     context_uids, context_layout = ref010._context_split(tables, enum_rows, candidates)
     view_map = direct_view_map(tables, context_uids)

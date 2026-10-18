@@ -33,6 +33,13 @@ docformatter = {extras = ["tomli"], version = "^1.7.5"}
 pytest = "^8"
 pytest-cov = "^4"
 
+# Generation-time only (never imported by the opendis runtime): the
+# pinned REF-010 data source for generator/ref010.py. Kept out of the
+# dev group so CI's `poetry install --with dev` stays independent of
+# this (currently private) repository; install with `--with generator`.
+[tool.poetry.group.generator.dependencies]
+siso-ref-010-python = {git = "ssh://git@github.com/ngjunsiang/siso-ref-010-python.git", tag = "0.10.0"}
+
 
 [tool.commitizen]
 version = "1.1.0a8"

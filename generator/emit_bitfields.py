@@ -5,8 +5,9 @@ Policies (exemplar-derived, see docs/design/generator-milestones.md):
   xref stays in the _FIELDS uid column (always-keep ruling 2026-10-15;
   repr ignores the uid for width-1);
 * multi-bit rows -> int properties rich-joined via the row's xref uid;
-* property names are sanitized row names plus curated renames
-  ("Is Smoke Emanating" -> isSmokeEmitting);
+* property names arrive FINAL from the siso-ref-010-python package
+  (ruled 2026-10-18: dis7-ng follows the package, which follows the
+  XML; the exemplar's convenience renames are retired);
 * reserved gaps (bits covered by no row) round-trip untouched and are
   noted in the class docstring.
 
@@ -27,19 +28,8 @@ def _tokens(name: str) -> list[str]:
     return [t for t in re.split(r"[^A-Za-z0-9]+", name) if t]
 
 
-def _camel(name: str) -> str:
-    tokens = _tokens(name)
-    if not tokens:
-        raise SpecError(f"row name {name!r} sanitizes to nothing")
-    return tokens[0].lower() + "".join(t[:1].upper() + t[1:] for t in tokens[1:])
-
-
 def _pascal(name: str) -> str:
     return "".join(t[:1].upper() + t[1:] for t in _tokens(name))
-
-
-def _property_name(table: BitfieldTable, row) -> str:
-    return overrides.BITFIELD_RENAMES.get((table.uid, row.name), _camel(row.name))
 
 
 def _row_uid(row) -> int | None:
@@ -50,8 +40,9 @@ def _row_uid(row) -> int | None:
 
 
 def _exposed_rows(table: BitfieldTable) -> list:
-    # Rows literally named "Reserved" are non-accessors; their bits fall
-    # out of coverage and land in the reserved-note instead.
+    # Reserved rows are non-accessors (the package derives their
+    # property name as "reserved"); their bits fall out of coverage and
+    # land in the reserved-note instead.
     return [r for r in table.rows if r.name.strip().lower() != "reserved"]
 
 
@@ -188,8 +179,7 @@ def _emit_view(table: BitfieldTable, enum_names: dict, lines: list[str]) -> None
     rows = _exposed_rows(table)
     for row in rows:
         lines.append(
-            f"        ({_property_name(table, row)!r}, "
-            f"{row.shift}, {row.width}, {_row_uid(row)}),"
+            f"        ({row.name!r}, " f"{row.shift}, {row.width}, {_row_uid(row)}),"
         )
     lines.append("    )")
     for row in rows:
@@ -198,7 +188,7 @@ def _emit_view(table: BitfieldTable, enum_names: dict, lines: list[str]) -> None
 
 
 def _emit_property(table: BitfieldTable, row, enum_names: dict) -> list[str]:
-    name = _property_name(table, row)
+    name = row.name
     uid = _row_uid(row)
     out: list[str] = []
     if row.width == 1:

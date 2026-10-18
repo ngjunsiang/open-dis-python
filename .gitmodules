@@ -1,6 +1,3 @@
 [submodule "submodules/open-dis-spec-xml"]
 	path = submodules/open-dis-spec-xml
 	url = git@github.com:ngjunsiang/open-dis-spec-xml.git
-[submodule "submodules/siso-ref-010-xml"]
-	path = submodules/siso-ref-010-xml
-	url = git@github.com:ngjunsiang/siso-ref-010-xml.git

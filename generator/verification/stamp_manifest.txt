@@ -5,7 +5,7 @@
 # generator: domain's enum table is kind-dependent (UID 14 for
 # generator: frozen records get constructor-style parse (classmethod);
 # generator: keeping the raw header bytes (not just parsed fields) is
-# generator: layouts and bit positions are mechanical output of the
+# generator: layouts, bit positions and property names are mechanical
 # generator: payload carries the complete serialized record when the
 # generator: plain alias per the 2026-10-14 ruling — never re-declare as a
 # generator: presentIf-driven section presence — the conditional

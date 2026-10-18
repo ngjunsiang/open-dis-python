@@ -2538,13 +2538,6 @@ BITFIELD_CLASS_NAMES = {
     190: "MinefieldStateAppearance",  # "Minefield State-Appearance Bit Map"
 }
 
-# (bitfield uid, REF-010 row name) -> property name where sanitization
-# alone misses the exemplar's name
-BITFIELD_RENAMES = {
-    (31, "Is Smoke Emanating"): "isSmokeEmitting",
-    (32, "Is Smoke Emanating"): "isSmokeEmitting",
-}
-
 BITFIELD_DOCSTRINGS = {
     31: """Entity Appearance layout for land platforms [UID 31].
 
@@ -2583,10 +2576,9 @@ the same uint32 wire field. Kinds without a capability table
 (life forms, environmental, cultural, supply, radio, expendable,
 sensor/emitter) keep the raw integer.
 
-# generator: layouts and bit positions are mechanical output of the
-# SISO-REF-010 bitfield tables; the row-name to camelCase property
-# sanitization ("Spot/Search Light #1 On" -> spotSearchLight1On) needs a
-# name-mapping table in the generator.""",
+# generator: layouts, bit positions and property names are mechanical
+# output consumed from the pinned siso-ref-010-python package (which
+# derives them from the SISO-REF-010 XML); nothing here renames rows.""",
     "minefield": "Minefield-family bitfield view classes (see package docstring).",
     "simulation_management": "Simulation-management bitfield view classes (see package docstring).",
     "warfare": "Warfare-family bitfield view classes (see package docstring).",

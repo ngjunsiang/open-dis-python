@@ -1,31 +1,37 @@
-"""Targeted SISO-REF-010 loader (bitfield layouts, enum table names, rows).
+"""Targeted SISO-REF-010 adapter over the siso-ref-010-python package.
 
-The mirror XML (never hand-edited; git-bound tag per the spec-repo
-rulings) is the single source for bit layouts: bitfieldrow bit_position
-is 0-based (verified against the exemplar layouts) and `length` is
-absent on single-bit rows. Enum table names feed the generated
-`[UID N] Name` property docstrings. Enum rows ({uid: {value: label}})
-drive the context-bitfield derivation (EntityAppearance/EntityCapabilities
-tables are kind/domain-qualified by NAME — "Land Platform Appearance",
-"Munition Appearance"); the mirror carries row labels in the
-`description` attribute (its `name` is empty).
+The pinned siso-ref-010-python dependency is the single REF-010 input
+(ruled 2026-10-18: dis7-ng follows the package, which follows the XML;
+the retired hand exemplar's convenience spellings — isSmokeEmitting,
+nvgMode-style acronym lowering — no longer override the derived
+names). Layouts arrive as derived camelCase property names + bit
+structure + verbatim descriptions; enum table names feed the generated
+``[UID N] Name`` property docstrings; enum rows ({uid: {value:
+label}}) drive the context-bitfield derivation (EntityAppearance/
+EntityCapabilities tables are kind/domain-qualified by NAME — "Land
+Platform Appearance", "Munition Appearance").
+
+``siso_ref010.wire`` pins the dis7-consumed subset (22 layouts, the
+uid-7/8 dispatch enums) under a sha256 digest. ``_check_wire_pin``
+reserializes that pin from the adapted data at load time — a lossy
+adaptation of the package surface cannot pass silently.
 """
 
 from __future__ import annotations
 
 import re
-import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-from pathlib import Path
+
+from siso_ref010 import bitfields, registry, wire
 
 
 @dataclass(frozen=True)
 class BitRow:
-    name: str
+    name: str  # final property name as derived by the package
     shift: int  # 0-based bit position
-    width: int  # bits; 1 when the length attribute is absent
+    width: int  # bits; 1 when the XML length attribute is absent
     xref_uid: int | None
-    description: str | None
+    description: str  # verbatim from the XML row
 
 
 @dataclass(frozen=True)
@@ -36,55 +42,104 @@ class BitfieldTable:
     rows: tuple[BitRow, ...]
 
 
-def _local(tag: str) -> str:
-    return tag.rsplit("}", 1)[-1]
+# v37 uids live below 1000; by_uid probes return None past the last
+# table, so the exact bound only needs to be an upper bound. A future
+# REF-010 that outgrows it fails loud in the wire pin / view lookups.
+_UID_SPACE = 1000
 
 
-def load_ref010(
-    path: str | Path,
-) -> tuple[dict[int, BitfieldTable], dict[int, str], dict[int, dict[int, str]]]:
+def load_ref010() -> tuple[
+    dict[int, BitfieldTable], dict[int, str], dict[int, dict[int, str]]
+]:
     """Return ({uid: BitfieldTable}, {enum uid: table name},
-    {enum uid: {value: label}}). Namespace-agnostic: the mirror's root
-    carries the SISO default namespace, so tags are matched by local
-    name."""
-    root = ET.parse(path).getroot()
-    bitfields: dict[int, BitfieldTable] = {}
+    {enum uid: {value: label}}) adapted from the package registries."""
+    tables: dict[int, BitfieldTable] = {}
     enum_names: dict[int, str] = {}
     enum_rows: dict[int, dict[int, str]] = {}
-    for el in root.iter():
-        tag = _local(el.tag)
-        if tag == "bitfield":
-            uid = int(el.get("uid"))
-            rows = []
-            for child in el:
-                if _local(child.tag) != "bitfieldrow":
-                    continue
-                xref = child.get("xref")
-                rows.append(
-                    BitRow(
-                        name=child.get("name"),
-                        shift=int(child.get("bit_position")),
-                        width=int(child.get("length", "1")),
-                        xref_uid=int(xref) if xref else None,
-                        description=(child.get("description") or "").strip() or None,
-                    )
-                )
-            bitfields[uid] = BitfieldTable(
-                uid=uid, name=el.get("name"), size=int(el.get("size")), rows=tuple(rows)
+    for uid in range(_UID_SPACE):
+        view = bitfields.by_uid(uid)
+        if view is None:
+            continue
+        rows = tuple(
+            BitRow(
+                name=prop,
+                shift=shift,
+                width=width,
+                xref_uid=xref,
+                description=description,
             )
-        elif tag == "enum":
-            uid = int(el.get("uid"))
-            enum_names[uid] = el.get("name")
-            rows: dict[int, str] = {}
-            for child in el:
-                if _local(child.tag) != "enumrow":
-                    continue
-                label = child.get("name") or child.get("description") or ""
-                label = label.strip()
-                if label:
-                    rows[int(child.get("value"))] = label
-            enum_rows[uid] = rows
-    return bitfields, enum_names, enum_rows
+            for prop, shift, width, xref, description in view._FIELDS
+        )
+        tables[view._siso_uid] = BitfieldTable(
+            uid=view._siso_uid, name=view._siso_name, size=view._WIDTH, rows=rows
+        )
+    for uid in range(_UID_SPACE):
+        table = registry.by_uid(uid)
+        if table is None:
+            continue
+        enum_names[table._siso_uid] = table._siso_name
+        enum_rows[table._siso_uid] = {int(member): member.description for member in table}
+    _check_wire_pin(tables, enum_names, enum_rows)
+    return tables, enum_names, enum_rows
+
+
+# -- wire pin (D16 downstream cross-check) ------------------------------------
+#
+# siso_ref010.wire serializes the dis7-consumed subset (layouts in uid
+# order, rows in bit-position order; dispatch enums in value order)
+# under a pinned sha256. Reserializing the same lines from the adapted
+# data proves the adaptation above is lossless for identity, bit
+# structure, property names and descriptions — anything the emitters
+# bake.
+
+
+def _pin_lines(
+    tables: dict[int, BitfieldTable],
+    enum_names: dict[int, str],
+    enum_rows: dict[int, dict[int, str]],
+) -> list[str]:
+    lines: list[str] = []
+    for uid in wire.DIS7_LAYOUT_UIDS:
+        table = tables.get(uid)
+        if table is None:
+            raise ValueError(f"wire pin lists layout uid {uid} missing from the package")
+        lines.append(f"L {uid} {table.size} {table.name!r}")
+        for row in sorted(table.rows, key=lambda r: r.shift):
+            lines.append(
+                f"R {row.shift} {row.width} {row.xref_uid} "
+                f"{row.name!r} {row.description!r}"
+            )
+    for uid in wire.DIS7_ENUM_UIDS:
+        if uid not in enum_rows:
+            raise ValueError(f"wire pin lists enum uid {uid} missing from the package")
+        lines.append(f"E {uid} {enum_names[uid]!r}")
+        for value in sorted(enum_rows[uid]):
+            lines.append(f"M {value} {enum_rows[uid][value]!r}")
+    return lines
+
+
+def _check_wire_pin(
+    tables: dict[int, BitfieldTable],
+    enum_names: dict[int, str],
+    enum_rows: dict[int, dict[int, str]],
+) -> None:
+    ours = _pin_lines(tables, enum_names, enum_rows)
+    pinned = list(wire.canonical_lines())
+    if ours != pinned:
+        diffs = [
+            f"  adapter: {a!r}\n  pinned: {b!r}"
+            for a, b in zip(ours, pinned, strict=False)
+            if a != b
+        ][:5]
+        head = "wire pin mismatch" + (
+            f" ({len(ours)} vs {len(pinned)} lines)"
+            if len(ours) != len(pinned)
+            else ""
+        )
+        raise ValueError(
+            f"{head}: the adapter diverges from siso_ref010.wire — first diffs:\n"
+            + "\n".join(diffs)
+        )
 
 
 # -- context-bitfield derivation (bucket-C items 5+6) ------------------------
